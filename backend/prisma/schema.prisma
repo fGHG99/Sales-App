@@ -1,0 +1,144 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum OrderStatus {
+  INPROGRESS
+  ONTHEWAY
+  SUCCESS
+  CANCELLED
+}
+
+model Users {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  phone        String?    @unique
+  sex          Sex?
+  picture_url  String?   // optional
+  is_deleted   Boolean   @default(false)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  password     String
+  verifyToken  String?
+  isVerified   Boolean   @default(false)
+
+  // created_by → user yang membuat user ini (misal admin membuat customer)
+  created_by   String?  
+  createdBy    Users?    @relation("UserCreatedUsers", fields: [created_by], references: [id])
+  createdUsers Users[]   @relation("UserCreatedUsers")
+
+  // relation dengan Orders
+  orders       Orders[]       @relation("UserOrders") // sebagai pembeli
+  courierOrders Orders[]      @relation("CourierOrders") // sebagai kurir
+
+  // relation dengan Address
+  addresses    Address[]
+
+  // relation dengan Roles
+  roleId       String?
+  role         Roles?         @relation(fields: [roleId], references: [id])
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  label        String
+  street       String
+  sub_district String
+  district     String
+  city         String
+  province     String
+  country      String
+  postal_code  String
+
+  // relation dengan Users
+  userId String
+  user   Users   @relation(fields: [userId], references: [id])
+}
+
+model Roles {
+  id         String    @id @default(uuid())
+  name       String
+  created_at DateTime  @default(now())
+
+  // relation dengan Users
+  users      Users[]
+  
+  // relation dengan AccessPermissions
+  permissions AccessPermissions[]
+}
+
+model AccessPermissions {
+  id          String   @id @default(cuid())
+  acccess_key String
+  is_deleted  Boolean  @default(false)
+
+  // relation dengan Roles
+  roleId String
+  role   Roles @relation(fields: [roleId], references: [id])
+}
+
+model Orders {
+  id           String       @id @default(uuid())
+  order_status OrderStatus
+  is_deleted   Boolean      @default(false)
+  created_at   DateTime     @default(now())
+
+  // user yang buat order
+  userId String
+  user   Users   @relation("UserOrders", fields: [userId], references: [id])
+
+  // courier yang terima order
+  courierId String?
+  courier   Users?  @relation("CourierOrders", fields: [courierId], references: [id])
+}
+
+model Products {
+  id          String   @id @default(uuid())
+  name        String
+  sku         String   @unique
+  description String?
+  stock       Int
+  unit        String?
+  price       Float
+  cost        Float
+  picture_url String
+  is_active   Boolean  @default(true)
+  is_deleted  Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // relation dengan Category
+  categoryId String?
+  category   Categories? @relation(fields: [categoryId], references: [id])
+}
+
+model Categories {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  picture_url String?
+  is_deleted  Boolean    @default(false)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  // relation dengan Products
+  products    Products[]
+}
+
