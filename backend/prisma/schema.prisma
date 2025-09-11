@@ -19,9 +19,10 @@ enum Sex {
 }
 
 enum OrderStatus {
-  INPROGRESS
-  ONTHEWAY
-  SUCCESS
+  PENDING
+  PAID
+  SHIPPED
+  COMPLETED
   CANCELLED
 }
 
@@ -54,18 +55,44 @@ model Users {
   // relation dengan Roles
   roleId       String?
   role         Roles?         @relation(fields: [roleId], references: [id])
+
+  //relation dengan cart
+  cart Cart? @relation("UserCart")
+}
+
+model Cart {
+  id  String @id @default(uuid())
+  userId String @unique
+  user Users @relation("UserCart", fields: [userId], references: [id])
+
+  items CartItem[]
+}
+
+model CartItem {
+  cartId String
+  productId String
+  quantity Int
+
+  cart Cart @relation(fields: [cartId], references:[id])
+  product Products @relation(fields: [productId], references:[id])
+
+  @@id([cartId, productId])
 }
 
 model Address {
   id           String   @id @default(uuid())
   label        String
-  street       String
-  sub_district String
-  district     String
-  city         String
+  fullAddress       String
+  sub_district String?
+  district     String?
+  city         String?
   province     String
   country      String
   postal_code  String
+
+  //menambahkan fields lat dan lng untuk tracking lokasi user secara realtime untuk kemudahan kurir dengan mapbox api
+  latitude     Float
+  longitude    Float
 
   // relation dengan Users
   userId String
@@ -107,6 +134,21 @@ model Orders {
   // courier yang terima order
   courierId String?
   courier   Users?  @relation("CourierOrders", fields: [courierId], references: [id])
+
+  //detail item yang di order
+  items OrderItem[]
+}
+
+model OrderItem {
+  orderId String 
+  productId String
+  quantity Int
+  price Float 
+  
+  order Orders @relation(fields:[orderId], references:[id])
+  product Products @relation(fields:[productId], references:[id])
+
+  @@id([orderId, productId])
 }
 
 model Products {
@@ -127,6 +169,12 @@ model Products {
   // relation dengan Category
   categoryId String?
   category   Categories? @relation(fields: [categoryId], references: [id])
+
+  //relation dengan cartItem
+  cartItems CartItem[]
+
+  //relation dengan OrderItem
+  orderItems OrderItem[]
 }
 
 model Categories {

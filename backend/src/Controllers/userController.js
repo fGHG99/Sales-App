@@ -1,8 +1,9 @@
-import express from "express";
+import router from "../../utils/express.js"; 
 import prisma from "../../utils/prisma.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-const router = express.Router();
+import { authorize, authenticate } from "../Middlewares/accessControl.js";
+
 
 router.post("/create", async (req, res) => {
     try {
@@ -51,6 +52,10 @@ router.post("/create", async (req, res) => {
         console.error("Registration error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
+});
+
+router.get("/test", authenticate, authorize("VIEW_TEST"), async (req, res) => {
+    res.send("hi")
 });
 
 export default router;

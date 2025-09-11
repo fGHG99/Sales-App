@@ -1,18 +1,23 @@
 import express from 'express'
+import http from 'http';
+import cookieParser from 'cookie-parser'
 import userRoute from './Controllers/userController.js';
 import authRoute from './Controllers/authController.js';
+import addressRoute from './Controllers/addressCont.js';
+import courierLoc from "./Controllers/courierLocCont.js";
+import { PORT, HOST } from '../utils/serverConf.js';
+
 const app = express();
-
-
-import http from 'http';
 const server = http.createServer(app);
 app.use(express.json());
+app.use(cookieParser())
 
 app.use('/users', userRoute);
 app.use('/auth', authRoute);
+app.use('/address', addressRoute);
+app.use('/courier', courierLoc);
 
-const PORT = process.env.PORT || 4000;
-const HOST = 'localhost';
+// CORS middleware
 
 // Start the server
 server.listen(PORT, HOST, () => {
