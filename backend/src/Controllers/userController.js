@@ -10,7 +10,7 @@ router.post("/create", async (req, res) => {
         const { name, email, password } = req.body;
 
         // Check if user already exists
-        const existingUser = await prisma.users.findUnique({
+        const existingUser = await prisma.user.findUnique({
             where: { email }
         });
 
@@ -23,7 +23,7 @@ router.post("/create", async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // Create user
-        const user = await prisma.users.create({
+        const user = await prisma.user.create({
             data: {
                 name,
                 email,

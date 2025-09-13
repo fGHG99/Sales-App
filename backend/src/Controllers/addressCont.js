@@ -6,16 +6,63 @@ import prisma from "../../utils/prisma.js";
 const LOCATIONIQ_KEY = process.env.LOCATIONIQ_KEY;
 
 /**
- * Registrasi alamat user
- * - Jika user kasih lat/lng saja → reverse geocoding untuk detail alamat
- * - Jika user kasih alamat saja (tanpa lat/lng) → forward geocoding untuk dapat lat/lng
+ * get alamat user dengan menggunakan reverse geocoding untuk menambahkan alamat ke dalam form
+ * 
+ */
+router.get("/", async (req, res) => {
+  try {
+    const { lat, lon } = req.query;
+
+    if (!lat || !lon) {
+      return res.status(400).json({ error: "lat and lon are required" });
+    }
+
+    const response = await axios.get("https://us1.locationiq.com/v1/reverse", {
+      params: {
+        key: LOCATIONIQ_KEY,
+        lat,
+        lon,
+        format: "json",
+        addressdetails: 1,
+      },
+    });
+
+    const address = response.data.address;
+
+    // Mapping agar sesuai dengan kebutuhan
+    const result = {
+      sub_district: address.suburb || address.village || address.hamlet || null, 
+      district: address.city_district || address.county || null,
+      city: address.city || address.town || address.municipality || null,
+      province: address.state || null,
+      country: address.country || null,
+      postal_code: address.postcode || null,
+      latitude : lat,
+      longitude : lon,
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to fetch reverse geocode" });
+  }
+});
+/**
+ * registrasi alamat user secara manual setelah user mendapatkan detail alamat dari reverse geocode
+ * atau router get diataas
  */
 router.post("/", async (req, res) => {
   try {
     const {
       userId,
       label,
-      fullAddress, // alamat lengkap isi manual oleh user
+      fullAddress,
+      subDistrict,
+      district,
+      city,
+      province,
+      country,
+      postalCode,
       latitude,
       longitude,
     } = req.body;
@@ -26,80 +73,35 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "userId is required" });
     }
 
-    if (!latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        message: "latitude dan longitude wajib diberikan",
-      });
+    if (!fullAddress) {
+      return res
+        .status(400)
+        .json({ success: false, message: "fullAddress wajib diberikan" });
     }
 
-    // Default values
-    let finalSubDistrict = "";
-    let finalDistrict = "";
-    let finalCity="";
-    let finalProvince = "";
-    let finalCountry = "";
-    let finalPostal = "";
-
-    // Ambil detail administratif berdasarkan lat/lng
-    const response = await axios.get(
-      "https://us1.locationiq.com/v1/reverse.php",
-      {
-        params: {
-          key: LOCATIONIQ_KEY,
-          lat: latitude,
-          lon: longitude,
-          format: "json",
-        },
-      }
-    );
-
-    const data = response.data;
-    if (data && data.address) {
-      finalSubDistrict =
-        data.address.town ||
-        data.address.suburb ||
-        data.address.village ||
-        data.address.neighbourhood ||
-        "";
-
-      finalDistrict = data.address.subdistrict || data.address.town || "";
-
-      finalCity =
-        data.address.city || // kota besar
-        data.address.county || // biasanya bisa dipakai untuk kota/kabupaten
-        data.address.town || // kota kecil
-        data.address.municipality || // kota administratif di OSM
-        "";
-
-      finalProvince = data.address.state || "";
-      finalCountry = data.address.country || "Unknown";
-      finalPostal = data.address.postcode || "00000";
-
-      console.log("Reverse geocoding result:", data.address);
-    }
-
-    // Simpan ke database
-    const address = await prisma.address.create({
+    // Simpan ke database (semua field manual dari user)
+    const newAddress = await prisma.address.create({
       data: {
         user: { connect: { id: userId } },
         label,
-        fullAddress, // pakai alamat manual dari user
-        sub_district: finalSubDistrict,
-        district: finalDistrict,
-        city: finalCity,
-        province: finalProvince,
-        country: finalCountry,
-        postal_code: finalPostal,
+        fullAddress,
+        subDistrict,
+        district,
+        city,
+        province,
+        country,
+        postalCode,
         latitude,
         longitude,
       },
     });
 
-    res.json({ success: true, data: address });
+    res.json({ success: true, data: newAddress });
   } catch (error) {
     console.error("Error membuat alamat:", error.message);
-    res.status(500).json({ success: false, message: "Gagal membuat alamat" });
+    res
+      .status(500)
+      .json({ success: false, message: "Gagal membuat alamat" });
   }
 });
 

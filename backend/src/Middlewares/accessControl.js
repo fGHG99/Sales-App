@@ -17,7 +17,7 @@ export function authorize(accessKey) {
       }
 
       // Cari user beserta role dan permissions
-      const user = await prisma.users.findUnique({
+      const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
           role: {

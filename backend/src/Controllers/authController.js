@@ -1,4 +1,4 @@
-import router from "../../utils/express.js"; 
+import router from "../../utils/express.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
@@ -13,29 +13,87 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
     // cek kalau email sudah ada
-    const existing = await prisma.users.findUnique({ where: { email } });
-    if (existing) return res.status(400).json({ message: "Email already registered" });
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
 
-    // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // buat user (verified default false)
-    const user = await prisma.users.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        isVerified: false,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      // buat user dulu (tapi transaksi belum commit)
+      const user = await tx.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          isVerified: false,
+        },
+      });
+
+      // set createdById ke diri sendiri
+      await tx.user.update({
+        where: { id: user.id },
+        data: { createdById: user.id },
+      });
+
+      // generate token
+      const token = jwt.sign(
+        { userId: user.id, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      const verifyUrl = `http://localhost:3000/auth/verify/${token}`;
+
+      // kirim email → kalau gagal, lempar error biar trx rollback
+      await transporter.sendMail({
+        from: `"Sales App" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: "Verify your email",
+        html: `<p>Hi ${user.name},</p>
+               <p>Please verify your email by clicking the link below:</p>
+               <a href="${verifyUrl}">${verifyUrl}</a>`,
+      });
+
+      // kalau semua berhasil, return user
+      return user;
     });
 
-    // buat token verifikasi
+    res.status(201).json({
+      message: "User registered, please check your email for verification",
+      userId: result.id,
+    });
+  } catch (error) {
+    console.error("Registration failed:", error);
+    res
+      .status(500)
+      .json({ message: "Registration failed, email not sent or db error" });
+  }
+});
+
+//router untuk mengirimkan ulang email verifikasi jika user belum menerima email verifikasi atau gagal terkirim
+router.post("/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: "User already verified" });
+    }
+
+    // buat token baru
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET,
@@ -44,20 +102,19 @@ router.post("/register", async (req, res) => {
 
     const verifyUrl = `http://localhost:3000/auth/verify/${token}`;
 
-    // kirim email
     await transporter.sendMail({
       from: `"Sales App" <${process.env.EMAIL_USER}>`,
       to: user.email,
-      subject: "Verify your email",
+      subject: "Verify your email (resend)",
       html: `<p>Hi ${user.name},</p>
              <p>Please verify your email by clicking the link below:</p>
              <a href="${verifyUrl}">${verifyUrl}</a>`,
     });
 
-    res.status(201).json({ message: "User registered, please check your email for verification" });
+    res.json({ message: "Verification email resent" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Registration failed" });
+    console.error("Resend failed:", error);
+    res.status(500).json({ message: "Failed to resend verification email" });
   }
 });
 
@@ -67,7 +124,7 @@ router.get("/verify/:token", async (req, res) => {
     const { token } = req.params;
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    await prisma.users.update({
+    await prisma.user.update({
       where: { id: decoded.userId },
       data: { isVerified: true },
     });
@@ -85,12 +142,9 @@ router.post("/login", async (req, res) => {
 
   try {
     // 1. cari user berdasarkan email atau phone
-    const user = await prisma.users.findFirst({
+    const user = await prisma.user.findFirst({
       where: {
-        OR: [
-          { email: identifier },
-          { phone: identifier }
-        ]
+        OR: [{ email: identifier }, { phone: identifier }],
       },
     });
 
@@ -116,18 +170,16 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    const refreshToken = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: rememberMe ? "30d" : "1d" }
-    );
+    const refreshToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: rememberMe ? "30d" : "1d",
+    });
 
     // 5. set refresh token di httpOnly cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production", // pakai HTTPS only di production
       sameSite: "strict",
-      maxAge: rememberMe ? 30*24*60*60*1000 : 24*60*60*1000, // 30d / 1d
+      maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000, // 30d / 1d
     });
 
     // 6. kirim access token + user info
@@ -137,7 +189,6 @@ router.post("/login", async (req, res) => {
       accessToken,
       user: userWithoutPassword,
     });
-
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -148,7 +199,9 @@ router.post("/login", async (req, res) => {
 router.post("/refresh", (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) {
-    return res.status(401).json({ message: "No refresh token provided, try re-logging" });
+    return res
+      .status(401)
+      .json({ message: "No refresh token provided, try re-logging" });
   }
 
   try {
@@ -162,7 +215,9 @@ router.post("/refresh", (req, res) => {
 
     res.json({ NewAccessToken: newAccessToken });
   } catch (err) {
-    return res.status(403).json({ message: "Invalid or expired refresh token" });
+    return res
+      .status(403)
+      .json({ message: "Invalid or expired refresh token" });
   }
 });
 

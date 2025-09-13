@@ -5,6 +5,8 @@ import userRoute from './Controllers/userController.js';
 import authRoute from './Controllers/authController.js';
 import addressRoute from './Controllers/addressCont.js';
 import courierLoc from "./Controllers/courierLocCont.js";
+import cartRoutes from './Controllers/cartController.js';
+import orderRoutes from './Controllers/orderController.js';
 import { PORT, HOST } from '../utils/serverConf.js';
 
 const app = express();
@@ -16,6 +18,8 @@ app.use('/users', userRoute);
 app.use('/auth', authRoute);
 app.use('/address', addressRoute);
 app.use('/courier', courierLoc);
+app.use('/cart', cartRoutes);
+app.use('/order', orderRoutes);
 
 // CORS middleware
 
