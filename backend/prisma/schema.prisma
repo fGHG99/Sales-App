@@ -18,6 +18,13 @@ enum Sex {
   FEMALE
 }
 
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
 enum OrderStatus {
   PENDING
   PAID
@@ -26,167 +33,275 @@ enum OrderStatus {
   CANCELLED
 }
 
-model Users {
-  id           String    @id @default(uuid())
-  name         String
-  email        String    @unique
-  phone        String?    @unique
-  sex          Sex?
-  picture_url  String?   // optional
-  is_deleted   Boolean   @default(false)
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-  password     String
-  verifyToken  String?
+enum BatchStatus {
+  AVAILABLE
+  EXPIRED
+  SOLD_OUT
+}
+
+enum MovementType {
+  IN
+  OUT 
+  ADJUSTMENT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  OTHER
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String    @db.VarChar(100)
+  email        String    @unique @db.VarChar(100)
+  password     String    @db.VarChar(100)
+  phone        String    @unique @db.VarChar(20)
+  sex          Sex
+
+  verifyToken  String?   @db.VarChar(100)
+  isDeleted    Boolean   @default(false)
   isVerified   Boolean   @default(false)
 
-  // created_by → user yang membuat user ini (misal admin membuat customer)
-  created_by   String?  
-  createdBy    Users?    @relation("UserCreatedUsers", fields: [created_by], references: [id])
-  createdUsers Users[]   @relation("UserCreatedUsers")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  // relation dengan Orders
-  orders       Orders[]       @relation("UserOrders") // sebagai pembeli
-  courierOrders Orders[]      @relation("CourierOrders") // sebagai kurir
+  createdById   String?   @db.Uuid
+  createdBy    User?    @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  usersCreated User[]   @relation("UserCreatedBy")
 
-  // relation dengan Address
   addresses    Address[]
+  orders       Order[]       @relation("UserOrders")
+  courierOrders Order[]      @relation("CourierOrders")
 
-  // relation dengan Roles
   roleId       String?
-  role         Roles?         @relation(fields: [roleId], references: [id])
+  role         Role?         @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
-  //relation dengan cart
   cart Cart? @relation("UserCart")
+
+  imageId String? @unique @db.Uuid
+  image   Image?  @relation("UserImage", fields: [imageId], references:[id], onDelete: SetNull)
+
+  auditLogs AuditLog[]
+
+  @@map("users")
 }
 
 model Cart {
-  id  String @id @default(uuid())
-  userId String @unique
-  user Users @relation("UserCart", fields: [userId], references: [id])
+  id  String @id @default(uuid()) @db.Uuid
+  totalAmount BigInt @db.BigInt
 
-  items CartItem[]
+  createdAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  userId String @unique @db.Uuid
+  user User @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
+
+  cartItems CartItem[]
+
+  @@map("carts")
 }
 
 model CartItem {
-  cartId String
-  productId String
+  id String @id @default(uuid()) @db.Uuid
   quantity Int
+  createdAt DateTime @default(now())
 
-  cart Cart @relation(fields: [cartId], references:[id])
-  product Products @relation(fields: [productId], references:[id])
+  cartId String @db.Uuid
+  cart Cart @relation(fields: [cartId], references:[id], onDelete: Cascade)
 
-  @@id([cartId, productId])
+  productId String @db.Uuid
+  product Product @relation(fields: [productId], references:[id], onDelete: Cascade)
+
+  @@map("cart_items")
 }
 
 model Address {
-  id           String   @id @default(uuid())
-  label        String
-  fullAddress       String
-  sub_district String?
-  district     String?
-  city         String?
-  province     String
-  country      String
-  postal_code  String
-
-  //menambahkan fields lat dan lng untuk tracking lokasi user secara realtime untuk kemudahan kurir dengan mapbox api
+  id           String   @id @default(uuid()) @db.Uuid
+  label        String @db.VarChar(100)
+  fullAddress  String @db.VarChar(100)
+  subDistrict  String? @db.VarChar(100)
+  district     String? @db.VarChar(100)
+  city         String? @db.VarChar(100)
+  province     String @db.VarChar(100)
+  country      String @db.VarChar(100)
+  postalCode   String @db.VarChar(100)
   latitude     Float
   longitude    Float
 
-  // relation dengan Users
-  userId String
-  user   Users   @relation(fields: [userId], references: [id])
+  userId String @db.Uuid 
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orders Order[] @relation("OrderDeliveryAddress")
+
+  @@map("addresses")
 }
 
-model Roles {
-  id         String    @id @default(uuid())
-  name       String
-  created_at DateTime  @default(now())
+model Role {
+  id         String    @id @default(cuid())
+  name       String @db.VarChar(50)
+  createdAt DateTime  @default(now())
+  users      User[]
+  permissions AccessPermissions[] @relation("RolePermissions")
 
-  // relation dengan Users
-  users      Users[]
-  
-  // relation dengan AccessPermissions
-  permissions AccessPermissions[]
+  @@map("roles")
 }
 
 model AccessPermissions {
   id          String   @id @default(cuid())
-  acccess_key String
-  is_deleted  Boolean  @default(false)
+  acccessKey String
+  isDeleted  Boolean  @default(false)
 
-  // relation dengan Roles
-  roleId String
-  role   Roles @relation(fields: [roleId], references: [id])
+  role   Role[] @relation("RolePermissions")
+
+  @@map("access_permissions")
 }
 
-model Orders {
-  id           String       @id @default(uuid())
-  order_status OrderStatus
-  is_deleted   Boolean      @default(false)
-  created_at   DateTime     @default(now())
+model Order {
+  id           String       @id @default(uuid()) @db.Uuid
+  paymentStatus PaymentStatus @default(PENDING)
+  orderStatus OrderStatus @default(PENDING)
 
-  // user yang buat order
-  userId String
-  user   Users   @relation("UserOrders", fields: [userId], references: [id])
+  isDeleted   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updateAt    DateTime     @updatedAt
 
-  // courier yang terima order
-  courierId String?
-  courier   Users?  @relation("CourierOrders", fields: [courierId], references: [id])
+  deliveryAddressId String @db.Uuid
+  deliveryAddress Address @relation("OrderDeliveryAddress", fields: [deliveryAddressId], references:[id], onDelete: Cascade)
 
-  //detail item yang di order
+  userId String @db.Uuid
+  user   User   @relation("UserOrders", fields: [userId], references: [id], onDelete: Cascade)
+
+  courierId String? @db.Uuid
+  courier   User?  @relation("CourierOrders", fields: [courierId], references: [id], onDelete: SetNull)
+
   items OrderItem[]
+
+  @@map("orders")
 }
 
 model OrderItem {
-  orderId String 
-  productId String
-  quantity Int
-  price Float 
-  
-  order Orders @relation(fields:[orderId], references:[id])
-  product Products @relation(fields:[productId], references:[id])
+  id String @id @default(uuid()) @db.Uuid
+  quantity  Int
+  unitPrice BigInt @db.BigInt
+  subtotal  BigInt @db.BigInt
+  createdAt DateTime @default(now())
 
-  @@id([orderId, productId])
+  orderId String @db.Uuid
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
 }
 
-model Products {
-  id          String   @id @default(uuid())
-  name        String
-  sku         String   @unique
-  description String?
-  stock       Int
-  unit        String?
-  price       Float
-  cost        Float
-  picture_url String
-  is_active   Boolean  @default(true)
-  is_deleted  Boolean  @default(false)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(100)
+  barcode     String?  @unique @db.VarChar(50)
+  description String?  @db.Text
+  unit        String   @default("pcs") @db.VarChar(20)
+  sellingPrice BigInt @db.BigInt
+  totalQuantity Int @default(0)
+  isPerishable Boolean @default(false)
+  isActive Boolean @default(true)
+  isDeleted Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedat  DateTime @updatedAt
 
-  // relation dengan Category
   categoryId String?
-  category   Categories? @relation(fields: [categoryId], references: [id])
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  //relation dengan cartItem
+  images Image[] @relation("ProductImages")
+  batches        ProductBatch[]
+  stockMovements StockMovement[]
   cartItems CartItem[]
-
-  //relation dengan OrderItem
   orderItems OrderItem[]
+
+  @@map("products")
 }
 
-model Categories {
-  id          String     @id @default(uuid())
-  name        String
-  description String?
-  picture_url String?
-  is_deleted  Boolean    @default(false)
-  created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
+model ProductBatch {
+  id String @id @default(uuid()) @db.Uuid
+  quantity  Int
+  costPrice BigInt      @db.BigInt
+  status    BatchStatus @default(AVAILABLE)
 
-  // relation dengan Products
-  products    Products[]
+  receivedAt DateTime? @default(now())
+  expiredAt  DateTime?
+  createdAt DateTime @default(now())
+
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  stockMovements StockMovement[]
+
+  @@map("product_batches")
+}
+
+model StockMovement {
+  id String @id @default(uuid()) @db.Uuid
+  quantity     Int
+  movementType MovementType
+  note         String?      @db.Text
+  createdAt DateTime @default(now())
+
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  productBatchId String?       @db.Uuid
+  productBatch   ProductBatch? @relation(fields: [productBatchId], references: [id], onDelete: SetNull)
+
+  @@map("stock_movements")
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String @db.VarChar(100)
+  description String? @db.Text
+  isDeleted  Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  products    Product[]
+
+  imageId String? @unique @db.Uuid
+  image   Image?  @relation("CategoryImage", fields: [imageId], references:[id], onDelete: SetNull)
+
+  @@map("categories")
+}
+
+model Image {
+  id String @id @default(uuid()) @db.Uuid
+  url       String   @db.VarChar(255)
+  altText   String?  @db.VarChar(255)
+  createdAt DateTime @default(now())
+
+  user User? @relation("UserImage")
+  category Category? @relation("CategoryImage")
+
+  productId String?  @db.Uuid
+  product   Product? @relation("ProductImages", fields: [productId], references: [id], onDelete: SetNull)
+
+  @@map("images")
+}
+
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  action AuditAction
+  entity   String @db.VarChar(100)
+  entityId String @db.VarChar(100)
+  oldValues Json?
+  newValues Json?
+  createdAt DateTime @default(now())
+
+  userId String? @db.Uuid
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
 }
 
