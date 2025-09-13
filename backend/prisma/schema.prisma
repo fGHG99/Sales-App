@@ -108,7 +108,6 @@ model Cart {
 model CartItem {
   id String @id @default(uuid()) @db.Uuid
   quantity Int
-  createdAt DateTime @default(now())
 
   cartId String @db.Uuid
   cart Cart @relation(fields: [cartId], references:[id], onDelete: Cascade)
@@ -186,9 +185,6 @@ model Order {
 model OrderItem {
   id String @id @default(uuid()) @db.Uuid
   quantity  Int
-  unitPrice BigInt @db.BigInt
-  subtotal  BigInt @db.BigInt
-  createdAt DateTime @default(now())
 
   orderId String @db.Uuid
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
