@@ -41,7 +41,7 @@ enum BatchStatus {
 
 enum MovementType {
   IN
-  OUT 
+  OUT
   ADJUSTMENT
 }
 
@@ -55,35 +55,35 @@ enum AuditAction {
 }
 
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  name         String    @db.VarChar(100)
-  email        String    @unique @db.VarChar(100)
-  password     String    @db.VarChar(100)
-  phone        String?    @unique @db.VarChar(20)
-  sex          Sex?
+  id       String  @id @default(uuid()) @db.Uuid
+  name     String  @db.VarChar(100)
+  email    String  @unique @db.VarChar(100)
+  password String  @db.VarChar(100)
+  phone    String? @unique @db.VarChar(20)
+  sex      Sex?
 
-  verifyToken  String?   @db.VarChar(100)
-  isDeleted    Boolean   @default(false)
-  isVerified   Boolean   @default(false)
+  verifyToken String? @db.VarChar(100)
+  isDeleted   Boolean @default(false)
+  isVerified  Boolean @default(false)
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  createdById   String?   @db.Uuid
-  createdBy    User?    @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  usersCreated User[]   @relation("UserCreatedBy")
+  createdById  String? @db.Uuid
+  createdBy    User?   @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  usersCreated User[]  @relation("UserCreatedBy")
 
-  addresses    Address[]
-  orders       Order[]       @relation("UserOrders")
-  courierOrders Order[]      @relation("CourierOrders")
+  addresses     Address[]
+  orders        Order[]   @relation("UserOrders")
+  courierOrders Order[]   @relation("CourierOrders")
 
-  roleId       String?
-  role         Role?         @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  roleId String?
+  role   Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
   cart Cart? @relation("UserCart")
 
   imageId String? @unique @db.Uuid
-  image   Image?  @relation("UserImage", fields: [imageId], references:[id], onDelete: SetNull)
+  image   Image?  @relation("UserImage", fields: [imageId], references: [id], onDelete: SetNull)
 
   auditLogs AuditLog[]
 
@@ -91,13 +91,13 @@ model User {
 }
 
 model Cart {
-  id  String @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
   createdAt DateTime @default(now())
-  updateAt DateTime @updatedAt
+  updateAt  DateTime @updatedAt
 
   userId String @unique @db.Uuid
-  user User @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
 
   cartItems CartItem[]
 
@@ -105,32 +105,32 @@ model Cart {
 }
 
 model CartItem {
-  id String @id @default(uuid()) @db.Uuid
+  id       String @id @default(uuid()) @db.Uuid
   quantity Int
 
   cartId String @db.Uuid
-  cart Cart @relation(fields: [cartId], references:[id], onDelete: Cascade)
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
-  productId String @db.Uuid
-  product Product @relation(fields: [productId], references:[id], onDelete: Cascade)
+  productId String  @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@map("cart_items")
 }
 
 model Address {
-  id           String   @id @default(uuid()) @db.Uuid
-  label        String @db.VarChar(100)
-  fullAddress  String @db.VarChar(100)
-  subDistrict  String? @db.VarChar(100)
-  district     String? @db.VarChar(100)
-  city         String? @db.VarChar(100)
-  province     String @db.VarChar(100)
-  country      String @db.VarChar(100)
-  postalCode   String @db.VarChar(100)
-  latitude     Float
-  longitude    Float
+  id          String  @id @default(uuid()) @db.Uuid
+  label       String  @db.VarChar(100)
+  fullAddress String  @db.VarChar(100)
+  subDistrict String? @db.VarChar(100)
+  district    String? @db.VarChar(100)
+  city        String? @db.VarChar(100)
+  province    String  @db.VarChar(100)
+  country     String  @db.VarChar(100)
+  postalCode  String  @db.VarChar(100)
+  latitude    Float
+  longitude   Float
 
-  userId String @db.Uuid 
+  userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   orders Order[] @relation("OrderDeliveryAddress")
@@ -139,42 +139,42 @@ model Address {
 }
 
 model Role {
-  id         String    @id @default(cuid())
-  name       String @db.VarChar(50)
-  createdAt DateTime  @default(now())
-  users      User[]
-  permissions AccessPermissions[] @relation("RolePermissions")
+  id          String             @id @default(cuid())
+  name        String             @db.VarChar(50)
+  createdAt   DateTime           @default(now())
+  users       User[]
+  permissions AccessPermission[] @relation("RolePermissions")
 
   @@map("roles")
 }
 
-model AccessPermissions {
-  id          String   @id @default(cuid())
+model AccessPermission {
+  id         String  @id @default(cuid())
   acccessKey String
-  isDeleted  Boolean  @default(false)
+  isDeleted  Boolean @default(false)
 
-  role   Role[] @relation("RolePermissions")
+  role Role[] @relation("RolePermissions")
 
   @@map("access_permissions")
 }
 
 model Order {
-  id           String       @id @default(uuid()) @db.Uuid
+  id            String        @id @default(uuid()) @db.Uuid
   paymentStatus PaymentStatus @default(PENDING)
-  orderStatus OrderStatus @default(PENDING)
+  orderStatus   OrderStatus   @default(PENDING)
 
-  isDeleted   Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updateAt    DateTime     @updatedAt
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updateAt  DateTime @updatedAt
 
-  deliveryAddressId String @db.Uuid
-  deliveryAddress Address @relation("OrderDeliveryAddress", fields: [deliveryAddressId], references:[id], onDelete: Cascade)
+  deliveryAddressId String  @db.Uuid
+  deliveryAddress   Address @relation("OrderDeliveryAddress", fields: [deliveryAddressId], references: [id], onDelete: Cascade)
 
   userId String @db.Uuid
   user   User   @relation("UserOrders", fields: [userId], references: [id], onDelete: Cascade)
 
   courierId String? @db.Uuid
-  courier   User?  @relation("CourierOrders", fields: [courierId], references: [id], onDelete: SetNull)
+  courier   User?   @relation("CourierOrders", fields: [courierId], references: [id], onDelete: SetNull)
 
   items OrderItem[]
 
@@ -182,8 +182,8 @@ model Order {
 }
 
 model OrderItem {
-  id String @id @default(uuid()) @db.Uuid
-  quantity  Int
+  id       String @id @default(uuid()) @db.Uuid
+  quantity Int
 
   orderId String @db.Uuid
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -195,40 +195,39 @@ model OrderItem {
 }
 
 model Product {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @db.VarChar(100)
-  barcode     String?  @unique @db.VarChar(50)
-  description String?  @db.Text
-  unit        String   @default("pcs") @db.VarChar(20)
-  sellingPrice BigInt @db.BigInt
-  totalQuantity Int @default(0)
-  isPerishable Boolean @default(false)
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
-  createdAt  DateTime @default(now())
-  updatedat  DateTime @updatedAt
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(100)
+  barcode      String?  @unique @db.VarChar(50)
+  description  String?  @db.Text
+  unit         String   @default("pcs") @db.VarChar(20)
+  sellingPrice BigInt   @db.BigInt
+  isPerishable Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedat    DateTime @updatedAt
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  images Image[] @relation("ProductImages")
+  images         Image[]         @relation("ProductImages")
   batches        ProductBatch[]
   stockMovements StockMovement[]
-  cartItems CartItem[]
-  orderItems OrderItem[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
 
   @@map("products")
 }
 
 model ProductBatch {
-  id String @id @default(uuid()) @db.Uuid
+  id        String      @id @default(uuid()) @db.Uuid
   quantity  Int
   costPrice BigInt      @db.BigInt
   status    BatchStatus @default(AVAILABLE)
 
   receivedAt DateTime? @default(now())
   expiredAt  DateTime?
-  createdAt DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   productId String  @db.Uuid
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -239,11 +238,11 @@ model ProductBatch {
 }
 
 model StockMovement {
-  id String @id @default(uuid()) @db.Uuid
+  id           String       @id @default(uuid()) @db.Uuid
   quantity     Int
   movementType MovementType
   note         String?      @db.Text
-  createdAt DateTime @default(now())
+  createdAt    DateTime     @default(now())
 
   productId String  @db.Uuid
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -255,28 +254,28 @@ model StockMovement {
 }
 
 model Category {
-  id          String     @id @default(cuid())
-  name        String @db.VarChar(100)
-  description String? @db.Text
-  isDeleted  Boolean    @default(false)
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  products    Product[]
+  products Product[]
 
   imageId String? @unique @db.Uuid
-  image   Image?  @relation("CategoryImage", fields: [imageId], references:[id], onDelete: SetNull)
+  image   Image?  @relation("CategoryImage", fields: [imageId], references: [id], onDelete: SetNull)
 
   @@map("categories")
 }
 
 model Image {
-  id String @id @default(uuid()) @db.Uuid
+  id        String   @id @default(uuid()) @db.Uuid
   url       String   @db.VarChar(255)
   altText   String?  @db.VarChar(255)
   createdAt DateTime @default(now())
 
-  user User? @relation("UserImage")
+  user     User?     @relation("UserImage")
   category Category? @relation("CategoryImage")
 
   productId String?  @db.Uuid
@@ -286,17 +285,16 @@ model Image {
 }
 
 model AuditLog {
-  id String @id @default(uuid()) @db.Uuid
-  action AuditAction
-  entity   String @db.VarChar(100)
-  entityId String @db.VarChar(100)
+  id        String      @id @default(uuid()) @db.Uuid
+  action    AuditAction
+  entity    String      @db.VarChar(100)
+  entityId  String      @db.VarChar(100)
   oldValues Json?
   newValues Json?
-  createdAt DateTime @default(now())
+  createdAt DateTime    @default(now())
 
   userId String? @db.Uuid
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("audit_logs")
 }
-

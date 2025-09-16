@@ -4,6 +4,7 @@ import axios from "axios";
 import prisma from "../../utils/prisma.js";
 
 const LOCATIONIQ_KEY = process.env.LOCATIONIQ_KEY;
+const BASE_URL = process.env.BASE_URL;
 
 /**
  * get alamat user dengan menggunakan reverse geocoding untuk menambahkan alamat ke dalam form
@@ -47,6 +48,50 @@ router.get("/", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch reverse geocode" });
   }
 });
+
+// 1. Ambil semua provinsi
+router.get("/provinces", async (req, res) => {
+  try {
+    const { data } = await axios.get(`${BASE_URL}/provinces.json`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: "Gagal mengambil data provinsi", error: err.message });
+  }
+});
+
+// 2. Ambil semua kabupaten/kota berdasarkan ID provinsi
+router.get("/regencies/:provinceId", async (req, res) => {
+  try {
+    const { provinceId } = req.params;
+    const { data } = await axios.get(`${BASE_URL}/regencies/${provinceId}.json`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: "Gagal mengambil data kabupaten/kota", error: err.message });
+  }
+});
+
+// 3. Ambil semua kecamatan berdasarkan ID kabupaten/kota
+router.get("/districts/:regencyId", async (req, res) => {
+  try {
+    const { regencyId } = req.params;
+    const { data } = await axios.get(`${BASE_URL}/districts/${regencyId}.json`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: "Gagal mengambil data kecamatan", error: err.message });
+  }
+});
+
+// 4. Ambil semua kelurahan berdasarkan ID kecamatan
+router.get("/villages/:districtId", async (req, res) => {
+  try {
+    const { districtId } = req.params;
+    const { data } = await axios.get(`${BASE_URL}/villages/${districtId}.json`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ message: "Gagal mengambil data kelurahan", error: err.message });
+  }
+});
+
 /**
  * registrasi alamat user secara manual setelah user mendapatkan detail alamat dari reverse geocode
  * atau router get diataas
@@ -122,18 +167,18 @@ router.get("/user/:userId", async (req, res) => {
 });
 
 // GET /addresses/:id => detail alamat
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const address = await prisma.address.findUnique({ where: { id } });
-    if (!address)
-      return res.status(404).json({ error: "Alamat tidak ditemukan" });
-    return res.json(address);
-  } catch (err) {
-    console.error("GET /addresses/:id error:", err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
+// router.get("/:id", async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const address = await prisma.address.findUnique({ where: { id } });
+//     if (!address)
+//       return res.status(404).json({ error: "Alamat tidak ditemukan" });
+//     return res.json(address);
+//   } catch (err) {
+//     console.error("GET /addresses/:id error:", err);
+//     return res.status(500).json({ error: "Server error" });
+//   }
+// });
 
 // PUT /addresses/:id => update alamat manual (label atau fields)
 router.put("/:id", async (req, res) => {

@@ -4,6 +4,10 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import prisma from "../../utils/prisma.js";
 
+/**
+ * !IMPORTANT PAKE ADD ERROR HANDLING UNTUK VALIDATOR EMAIL, PASSWORD DLL
+ */
+
 // setup transporter
 const transporter = nodemailer.createTransport({
   service: "gmail", // kalau pakai Gmail
