@@ -63,6 +63,7 @@ const Navbar = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center space-x-2">
+            {/* !IMPORANT! ganti logo untuk mobile  */}
               <img
                 src="/image/logo.png"
                 alt="Geek Sales"
@@ -235,7 +236,7 @@ const Navbar = () => {
 
       {/* Login Modal Trigger */}
       {showLoginModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <h2 className="text-xl font-bold mb-4 font-inter">
               Masuk Diperlukan
