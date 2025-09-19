@@ -7,6 +7,8 @@ const ImageSlider = ({ images, autoSlideInterval = 3000 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchEndX, setTouchEndX] = useState(0);
 
   // refs untuk menyimpan nilai yang stabil di RAF loop
   const sliderRef = useRef(null);
@@ -163,6 +165,27 @@ const ImageSlider = ({ images, autoSlideInterval = 3000 }) => {
     return `translateX(-${currentIndex * 100}%)`;
   };
 
+  const handleTouchStart = (e) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEndX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX - touchEndX > 50) {
+      // swipe kiri → next
+      goToNext();
+    }
+    if (touchStartX - touchEndX < -50) {
+      // swipe kanan → previous
+      goToPrevious();
+    }
+    setTouchStartX(0);
+    setTouchEndX(0);
+  };
+
   // mouse enter/leave handlers: pause/resume without resetting progress
   const handleMouseEnter = () => setIsHovered(true);
   const handleMouseLeave = () => setIsHovered(false);
@@ -181,6 +204,9 @@ const ImageSlider = ({ images, autoSlideInterval = 3000 }) => {
       className="relative w-full h-96 overflow-hidden rounded-xl shadow-2xl group select-none bg-gray-100"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Images */}
       <div
