@@ -1,6 +1,14 @@
 import ImageSlider from "./ImageSlider";
 import { mockImages } from "../utils/mockImages";
 import { CategoryGrid } from "./CategoryGrid";
+import TrendingProducts from "./TrendingProducts";
+import NewProduct from "./NewProduct";
+
+const dummyProducts = [
+  { name: "Produk 1", price: "Rp 100.000", image: "https://via.placeholder.com/150", createdAt: "2025-09-15" },
+  { name: "Produk 2", price: "Rp 200.000", image: "https://via.placeholder.com/150", createdAt: "2025-09-18" },
+  { name: "Produk 3", price: "Rp 150.000", image: "https://via.placeholder.com/150", createdAt: "2025-09-10" }, // tidak muncul karena > 1 minggu
+];
 
 const Dashboard = () => {
   return (
@@ -24,7 +32,9 @@ const Dashboard = () => {
             Kategori Belanja
           </h2>
         </div>
-        <CategoryGrid />  
+        <CategoryGrid />
+        <TrendingProducts /> 
+        <NewProduct products={dummyProducts} /> 
         
       </section>
     </div>
