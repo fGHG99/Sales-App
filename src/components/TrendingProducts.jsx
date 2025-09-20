@@ -2,49 +2,7 @@
 import { useState, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import ProductCard from "./ProductCard";
-
-export const trendingProducts = [
-  {
-    id: 1,
-    name: "Indomie Goreng Reng Goreng 200mg asjdansjdnasjdnajsdnajndjasndjandj",
-    price: 3500,
-    img: "/assets/20130807_1.jpg",
-  },
-  {
-    id: 2,
-    name: "Teh Botol Sosro",
-    price: 5000,
-    img: "/assets/20130807_1.jpg",
-  },
-  { id: 3, name: "Beras 5kg", price: 65000, img: "/assets/20130807_1.jpg" },
-  {
-    id: 4,
-    name: "Minyak Goreng 1L",
-    price: 20000,
-    img: "/assets/20130807_1.jpg",
-  },
-  {
-    id: 5,
-    name: "Kopi Kapal Api",
-    price: 15000,
-    img: "/assets/20130807_1.jpg",
-  },
-  { id: 6, name: "Aqua 1.5L", price: 7000, img: "/assets/20130807_1.jpg" },
-  {
-    id: 7,
-    name: "SilverQueen Coklat",
-    price: 25000,
-    img: "/assets/20130807_1.jpg",
-  },
-  { id: 8, name: "Tango Wafer", price: 12000, img: "/assets/20130807_1.jpg" },
-  { id: 9, name: "Fresh Milk", price: 18000, img: "/assets/20130807_1.jpg" },
-  {
-    id: 10,
-    name: "Sampoerna Mild",
-    price: 27000,
-    img: "/assets/20130807_1.jpg",
-  },
-];
+import mockProducts from "../utils/mockDataProduct";
 
 export default function TrendingProducts() {
   const scrollRef = useRef(null);
@@ -137,7 +95,7 @@ export default function TrendingProducts() {
           onMouseMove={handleMouseMove}
           className="flex gap-4 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-y-visible pb-4 px-2"
         >
-          {trendingProducts.map((product) => (
+          {mockProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>

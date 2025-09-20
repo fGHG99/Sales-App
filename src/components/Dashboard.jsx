@@ -3,27 +3,7 @@ import { mockImages } from "../utils/mockImages";
 import { CategoryGrid } from "./CategoryGrid";
 import TrendingProducts from "./TrendingProducts";
 import NewProduct from "./NewProduct";
-
-const dummyProducts = [
-  {
-    name: "Produk 1",
-    price: 100000,
-    img: "/assets/20130807_1.jpg",
-    createdAt: "2025-09-15",
-  },
-  {
-    name: "Produk 2",
-    price: 200000,
-    img: "/assets/20130807_1.jpg",
-    createdAt: "2025-09-18",
-  },
-  {
-    name: "Produk 3",
-    price: 150000,
-    img: "/assets/20130807_3.jpg",
-    createdAt: "2025-09-10",
-  }, // tidak muncul karena > 1 minggu
-];
+import mockProducts from "../utils/mockDataProduct";
 
 const Dashboard = () => {
   return (
@@ -49,7 +29,7 @@ const Dashboard = () => {
         </div>
         <CategoryGrid />
         <TrendingProducts />
-        <NewProduct products={dummyProducts} />
+        <NewProduct products={mockProducts} />
       </section>
     </div>
   );
