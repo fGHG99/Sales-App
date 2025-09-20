@@ -1,4 +1,3 @@
-"use client";
 
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -37,11 +36,12 @@ const Navbar = () => {
   }, []);
 
   const handleCartClick = () => {
-    if (!isAuthenticated()) {
-      setShowLoginModal(true);
-    } else {
-      navigate("/cart");
-    }
+    // if (!isAuthenticated()) {
+    //   setShowLoginModal(true);
+    // } else {
+    //   navigate("/cart");
+    // }
+    navigate("/cart");
   };
 
   const handleSearch = (e) => {
@@ -63,7 +63,7 @@ const Navbar = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center space-x-2">
-            {/* !IMPORANT! ganti logo untuk mobile  */}
+              {/* !IMPORANT! ganti logo untuk mobile  */}
               <img
                 src="/image/logo.png"
                 alt="Geek Sales"

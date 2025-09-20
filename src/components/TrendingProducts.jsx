@@ -1,112 +1,147 @@
 // src/components/TrendingProducts.jsx
-"use client"
-
-import { useRef, useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useState, useRef } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import ProductCard from "./ProductCard";
 
 export const trendingProducts = [
-  { id: 1, name: "Indomie Goreng", price: "Rp 3.500", img: "/assets/indomie.png" },
-  { id: 2, name: "Teh Botol Sosro", price: "Rp 5.000", img: "/assets/tehbotol.png" },
-  { id: 3, name: "Beras 5kg", price: "Rp 65.000", img: "/assets/beras.png" },
-  { id: 4, name: "Minyak Goreng 1L", price: "Rp 20.000", img: "/assets/minyak.png" },
-  { id: 5, name: "Kopi Kapal Api", price: "Rp 15.000", img: "/assets/kopi.png" },
-  { id: 6, name: "Aqua 1.5L", price: "Rp 7.000", img: "/assets/aqua.png" },
-  { id: 7, name: "SilverQueen Coklat", price: "Rp 25.000", img: "/assets/coklat.png" },
-  { id: 8, name: "Tango Wafer", price: "Rp 12.000", img: "/assets/wafer.png" },
-  { id: 9, name: "Fresh Milk", price: "Rp 18.000", img: "/assets/milk.png" },
-  { id: 10, name: "Sampoerna Mild", price: "Rp 27.000", img: "/assets/sampoerna.png" },
-]
+  {
+    id: 1,
+    name: "Indomie Goreng Reng Goreng 200mg asjdansjdnasjdnajsdnajndjasndjandj",
+    price: 3500,
+    img: "/assets/20130807_1.jpg",
+  },
+  {
+    id: 2,
+    name: "Teh Botol Sosro",
+    price: 5000,
+    img: "/assets/20130807_1.jpg",
+  },
+  { id: 3, name: "Beras 5kg", price: 65000, img: "/assets/20130807_1.jpg" },
+  {
+    id: 4,
+    name: "Minyak Goreng 1L",
+    price: 20000,
+    img: "/assets/20130807_1.jpg",
+  },
+  {
+    id: 5,
+    name: "Kopi Kapal Api",
+    price: 15000,
+    img: "/assets/20130807_1.jpg",
+  },
+  { id: 6, name: "Aqua 1.5L", price: 7000, img: "/assets/20130807_1.jpg" },
+  {
+    id: 7,
+    name: "SilverQueen Coklat",
+    price: 25000,
+    img: "/assets/20130807_1.jpg",
+  },
+  { id: 8, name: "Tango Wafer", price: 12000, img: "/assets/20130807_1.jpg" },
+  { id: 9, name: "Fresh Milk", price: 18000, img: "/assets/20130807_1.jpg" },
+  {
+    id: 10,
+    name: "Sampoerna Mild",
+    price: 27000,
+    img: "/assets/20130807_1.jpg",
+  },
+];
 
 export default function TrendingProducts() {
-  const scrollRef = useRef(null)
-  const [showLeft, setShowLeft] = useState(false)
-  const [showRight, setShowRight] = useState(false)
+  const scrollRef = useRef(null);
+  const [showLeftArrow, setShowLeftArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(true);
 
-  const checkScroll = () => {
-    if (!scrollRef.current) return
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current
-    setShowLeft(scrollLeft > 0)
-    setShowRight(scrollLeft + clientWidth < scrollWidth - 1)
-  }
-
-  useEffect(() => {
-    checkScroll()
-    const scrollContainer = scrollRef.current
-    if (scrollContainer) {
-      scrollContainer.addEventListener("scroll", checkScroll)
-    }
-    return () => {
-      if (scrollContainer) {
-        scrollContainer.removeEventListener("scroll", checkScroll)
-      }
-    }
-  }, [])
+  // Drag state
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
 
   const scroll = (direction) => {
-    if (!scrollRef.current) return
-    const { scrollLeft, clientWidth } = scrollRef.current
-    const scrollAmount = direction === "left" ? scrollLeft - clientWidth : scrollLeft + clientWidth
-    scrollRef.current.scrollTo({ left: scrollAmount, behavior: "smooth" })
-  }
+    const container = scrollRef.current;
+    const scrollAmount = 300;
+
+    if (direction === "left") {
+      container.scrollBy({ left: -scrollAmount, behavior: "smooth" });
+    } else {
+      container.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
+  const handleScroll = () => {
+    const container = scrollRef.current;
+    setShowLeftArrow(container.scrollLeft > 0);
+    setShowRightArrow(
+      container.scrollLeft < container.scrollWidth - container.clientWidth
+    );
+  };
+
+  // Mouse drag handlers
+  const handleMouseDown = (e) => {
+    isDragging.current = true;
+    startX.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeft.current = scrollRef.current.scrollLeft;
+  };
+
+  const handleMouseLeave = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX.current) * 1.2; // multiplier for speed
+    scrollRef.current.scrollLeft = scrollLeft.current - walk;
+  };
 
   return (
-    <div className="mt-10 relative w-full bg-[#FFF9AF] py-10">
+    <div className="mt-10 w-full py-10">
       {/* Section Title */}
-      <h2 className="text-xl font-bold mb-6 px-6">🔥 Sedang Trend</h2>
+      <h2 className="text-xl font-bold mb-6 px-6 select-none">
+        🔥 Sedang Trend
+      </h2>
 
-      {/* Left Button */}
-      {showLeft && (
-        <button
-          onClick={() => scroll("left")}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white rounded-full shadow-md p-2"
-          aria-label="Scroll Left"
-        >
-          <ChevronLeft className="w-6 h-6 text-gray-700" />
-        </button>
-      )}
+      {/* Product Grid with Scroll */}
+      <div className="px-6 relative">
+        {/* Left Arrow */}
+        {showLeftArrow && (
+          <button
+            onClick={() => scroll("left")}
+            className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
 
-      {/* Scrollable Product List */}
-      <div className="overflow-x-hidden px-6">
+        {/* Right Arrow */}
+        {showRightArrow && (
+          <button
+            onClick={() => scroll("right")}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 transition-colors"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Scrollable Container with Drag Support */}
         <div
           ref={scrollRef}
-          className="flex space-x-4 transition-transform duration-500 ease-in-out"
+          onScroll={handleScroll}
+          onMouseDown={handleMouseDown}
+          onMouseLeave={handleMouseLeave}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+          className="flex gap-4 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-y-visible pb-4 px-2"
         >
           {trendingProducts.map((product) => (
-            <div
-              key={product.id}
-              className="relative min-w-[140px] md:min-w-[160px] lg:min-w-[180px] 
-              h-[260px] md:h-[300px] flex-shrink-0 bg-white rounded-lg shadow-md p-4 cursor-pointer 
-              transition-all duration-300 hover:scale-105 hover:shadow-xl hover:z-10"
-            >
-              <img
-                src={product.img}
-                alt={product.name}
-                className="w-full h-36 object-contain mb-2"
-              />
-              <h3 className="text-sm font-semibold line-clamp-2">
-                {product.name}
-              </h3>
-              <p className="text-sm text-primary font-bold mt-1">{product.price}</p>
-              <button
-                className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1 rounded-[20px] transition-colors"
-              >
-                + Tambah
-              </button>
-            </div>
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </div>
-
-      {/* Right Button */}
-      {showRight && (
-        <button
-          onClick={() => scroll("right")}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-white/80 hover:bg-white rounded-full shadow-md p-2"
-          aria-label="Scroll Right"
-        >
-          <ChevronRight className="w-6 h-6 text-gray-700" />
-        </button>
-      )}
     </div>
-  )
+  );
 }

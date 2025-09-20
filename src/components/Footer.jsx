@@ -11,11 +11,8 @@ const Footer = () => {
           {/* Company Info */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 text-white" />
+              <img src="/image/logo.png" alt="Logo" className="w-40 h-40" />
               </div>
-              <span className="text-xl font-bold">Geek Sales</span>
-            </div>
             <p className="text-gray-400 leading-relaxed">
               Platform e-commerce terpercaya yang menyediakan berbagai produk
               berkualitas dengan layanan terbaik untuk pelanggan di seluruh

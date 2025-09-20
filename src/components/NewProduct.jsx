@@ -1,39 +1,70 @@
 // src/components/NewProduct.jsx
-import React, { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import ProductCard from "./ProductCard";
 
 const NewProduct = ({ products }) => {
   const scrollRef = useRef(null);
-  const [showLeft, setShowLeft] = useState(false);
-  const [showRight, setShowRight] = useState(false);
+  const [showLeftArrow, setShowLeftArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(false);
 
-  // cek posisi scroll
-  const checkScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setShowLeft(el.scrollLeft > 0);
-    setShowRight(el.scrollWidth > el.clientWidth + el.scrollLeft);
+  // Drag state
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+
+  // Check scroll position
+  const handleScroll = () => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    setShowLeftArrow(container.scrollLeft > 0);
+    setShowRightArrow(
+      container.scrollLeft < container.scrollWidth - container.clientWidth - 1
+    );
   };
 
   useEffect(() => {
-    checkScroll();
-    const el = scrollRef.current;
-    if (el) {
-      el.addEventListener("scroll", checkScroll);
-    }
-    return () => {
-      if (el) el.removeEventListener("scroll", checkScroll);
-    };
-  }, []);
+    handleScroll();
+  }, [products]);
 
-  const scroll = (dir) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const scrollAmount = 250; // geser per klik
-    el.scrollBy({ left: dir === "left" ? -scrollAmount : scrollAmount, behavior: "smooth" });
+  // Scroll with buttons
+  const scroll = (direction) => {
+    const container = scrollRef.current;
+    const scrollAmount = 300;
+    if (!container) return;
+
+    if (direction === "left") {
+      container.scrollBy({ left: -scrollAmount, behavior: "smooth" });
+    } else {
+      container.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
   };
 
-  // ambil hanya produk 1 minggu terakhir
+  // Drag handlers
+  const handleMouseDown = (e) => {
+    isDragging.current = true;
+    startX.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeft.current = scrollRef.current.scrollLeft;
+  };
+
+  const handleMouseLeave = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX.current) * 1.2; // drag speed multiplier
+    scrollRef.current.scrollLeft = scrollLeft.current - walk;
+  };
+
+  // Filter products within 1 week
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
@@ -42,59 +73,50 @@ const NewProduct = ({ products }) => {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   return (
-    <div className="w-full bg-[#2596be] py-6 relative">
-      <div className="max-w-7xl mx-auto px-4">
-        <h2 className="text-white text-xl font-semibold mb-4">Produk Baru</h2>
+    <div className="mt-10 w-full py-10">
+      {/* Section Title */}
+      <h2 className="text-xl font-bold mb-6 px-6 select-none">🆕 Produk Baru</h2>
 
-        <div className="relative">
-          {/* tombol kiri */}
-          {showLeft && (
-            <button
-              onClick={() => scroll("left")}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white p-2 rounded-full shadow"
-            >
-              <ChevronLeft className="w-5 h-5 text-[#2596be]" />
-            </button>
-          )}
-
-          {/* wrapper scroll */}
-          <div
-            ref={scrollRef}
-            className="flex space-x-4 overflow-x-auto scrollbar-hide scroll-smooth"
+      <div className="px-6 relative">
+        {/* Left Arrow */}
+        {showLeftArrow && (
+          <button
+            onClick={() => scroll("left")}
+            className="absolute left-2 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 transition-colors"
           >
-            {recentProducts.map((product, idx) => (
-              <div
-                key={idx}
-                className="relative min-w-[140px] md:min-w-[160px] lg:min-w-[180px] h-[260px] md:h-[300px] bg-white rounded-xl shadow flex flex-col items-center justify-center p-4"
-              >
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="w-full h-40 object-cover rounded-md mb-2"
-                />
-                <h3 className="text-sm font-medium text-gray-800 truncate">
-                  {product.name}
-                </h3>
-                <p className="text-gray-600 text-sm">{product.price}</p>
-              </div>
-            ))}
-          </div>
+            <ChevronLeft className="w-5 h-5 text-[#2596be]" />
+          </button>
+        )}
 
-          {/* tombol kanan */}
-          {showRight && (
-            <button
-              onClick={() => scroll("right")}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white p-2 rounded-full shadow"
-            >
-              <ChevronRight className="w-5 h-5 text-[#2596be]" />
-            </button>
-          )}
+        {/* Right Arrow */}
+        {showRightArrow && (
+          <button
+            onClick={() => scroll("right")}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 z-10 bg-white shadow-lg rounded-full p-2 hover:bg-gray-100 transition-colors"
+          >
+            <ChevronRight className="w-5 h-5 text-[#2596be]" />
+          </button>
+        )}
+
+        {/* Scrollable Container with Drag Support */}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          onMouseDown={handleMouseDown}
+          onMouseLeave={handleMouseLeave}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+          className="flex gap-4 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-y-visible pb-4 px-2"
+        >
+          {recentProducts.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
         </div>
 
-        {/* tombol lihat semua */}
+        {/* Lihat Semua */}
         {recentProducts.length > 10 && (
-          <div className="mt-4 text-center">
-            <button className="px-4 py-2 bg-white text-[#2596be] font-medium rounded-lg shadow hover:bg-gray-100">
+          <div className="mt-4 text-left">
+            <button className="px-4 py-2 bg-white text-[#2596be] font-medium rounded-lg shadow hover:bg-gray-100 select-none">
               Lihat Semua
             </button>
           </div>

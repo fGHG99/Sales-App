@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
+import ShoppingCart from './components/Cart';
 
 // Mock category and other pages
 const CategoryPage = ({ categoryName }) => (
@@ -88,16 +89,7 @@ function App() {
           <Route path="search" element={<SearchPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
-          <Route path="cart" element={
-            <div className="min-h-screen bg-gray-50 py-16">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">Shopping Cart</h1>
-                <div className="bg-white rounded-lg shadow-md p-12">
-                  <p className="text-gray-500 text-xl">Your cart items will be displayed here</p>
-                </div>
-              </div>
-            </div>
-          } />
+          <Route path="cart" element={<ShoppingCart />} />
           {/* Catch all route */}
           <Route path="*" element={
             <div className="min-h-screen bg-gray-50 py-16">
