@@ -3,6 +3,10 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import ShoppingCart from './components/Cart';
+import Register from './components/Register';
+import Login from './components/Login';
+import AuthLayout from './components/AuthLayout';
+import TermsConditions from './components/TermsCon';
 
 // Mock category and other pages
 const CategoryPage = ({ categoryName }) => (
@@ -50,32 +54,6 @@ const SearchPage = () => {
   );
 };
 
-const LoginPage = () => (
-  <div className="min-h-screen bg-gray-50 py-16">
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-        Halaman Login
-      </h1>
-      <p className="text-gray-600 text-center">
-        Login functionality is integrated into the navbar cart modal
-      </p>
-    </div>
-  </div>
-);
-
-const RegisterPage = () => (
-  <div className="min-h-screen bg-gray-50 py-16">
-    <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-        Halaman Registrasi
-      </h1>
-      <p className="text-gray-600 text-center">
-        Registration functionality is integrated into the navbar cart modal
-      </p>
-    </div>
-  </div>
-);
-
 function App() {
   return (
     <Router>
@@ -87,9 +65,8 @@ function App() {
             element={<CategoryPage categoryName={window.location.pathname.split('/').pop()} />} 
           />
           <Route path="search" element={<SearchPage />} />
-          <Route path="login" element={<LoginPage />} />
-          <Route path="register" element={<RegisterPage />} />
           <Route path="cart" element={<ShoppingCart />} />
+          <Route path="terms-conditions" element={<TermsConditions />} />
           {/* Catch all route */}
           <Route path="*" element={
             <div className="min-h-screen bg-gray-50 py-16">
@@ -99,6 +76,11 @@ function App() {
               </div>
             </div>
           } />
+        </Route>
+        <Route path="/" element={<AuthLayout />}>
+          {/* Auth routes with different layout */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
         </Route>
       </Routes>
     </Router>
