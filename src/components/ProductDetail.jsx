@@ -118,11 +118,11 @@ const ProductDetail = () => {
             {/* Price */}
             <div className="flex items-baseline space-x-3">
               <span className="text-4xl font-bold text-gray-900">
-                ${product.price}
+                Rp {product.price.toLocaleString("id-ID")}
               </span>
               {product.originalPrice && (
                 <span className="text-xl text-gray-500 line-through">
-                  ${product.originalPrice}
+                  Rp {product.originalPrice.toLocaleString("id-ID")}
                 </span>
               )}
             </div>
@@ -188,7 +188,7 @@ const ProductDetail = () => {
                 >
                   <ShoppingCart className="w-6 h-6 mr-2" />
                   {product.inStock
-                    ? `Add to Cart - $${(product.price * quantity).toFixed(2)}`
+                    ? `Add to Cart - Rp ${(product.price * quantity).toLocaleString("id-ID")}`
                     : "Out of Stock"}
                 </button>
               </div>

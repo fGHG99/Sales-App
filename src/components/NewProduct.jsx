@@ -64,18 +64,57 @@ const NewProduct = ({ products }) => {
     scrollRef.current.scrollLeft = scrollLeft.current - walk;
   };
 
-  // Filter products within 1 week
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  // Function to get products with error handling
+  const getRecentProducts = () => {
+    if (!products || products.length === 0) {
+      return [];
+    }
 
-  const recentProducts = products
-    .filter((p) => new Date(p.createdAt) >= oneWeekAgo)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Filter products within 1 week
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const recentProducts = products
+      .filter((p) => new Date(p.createdAt) >= oneWeekAgo)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Error handler: If no products found within 1 week, return newest products
+    if (recentProducts.length === 0) {
+      console.log(
+        "⚠️ No products found within 1 week, showing newest products instead"
+      );
+
+      // Return the 5 most recent products regardless of date
+      return products
+        .filter((p) => p.createdAt) // Ensure createdAt exists
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 5); // Limit to 5 newest products
+    }
+
+    return recentProducts;
+  };
+
+  const displayProducts = getRecentProducts();
+
+  // Don't render if no products at all
+  if (displayProducts.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="mt-10 w-full py-10">
-      {/* Section Title */}
-      <h2 className="text-xl font-bold mb-6 px-6 select-none">🆕 Produk Baru</h2>
+    <div className="w-full py-8">
+      {/* Section Title with fallback indicator */}
+      <div className="flex items-center gap-3 mb-8">
+        {/* Logo */}
+        <img
+          src="/assets/New_product_icon.png"
+          alt="New Product Icon"
+          className="w-10 h-10"
+        />
+        <h2 className="text-2xl font-extrabold text-gray-900">
+          Produk Baru Ditambahkan
+        </h2>
+      </div>
 
       <div className="px-6 relative">
         {/* Left Arrow */}
@@ -108,13 +147,13 @@ const NewProduct = ({ products }) => {
           onMouseMove={handleMouseMove}
           className="flex gap-4 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-y-visible pb-4 px-2"
         >
-          {recentProducts.map((product) => (
+          {displayProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
 
-        {/* Lihat Semua */}
-        {recentProducts.length > 10 && (
+        {/* Lihat Semua - Only show if more than 10 products */}
+        {displayProducts.length >= 5 && (
           <div className="mt-4 text-left">
             <button className="px-4 py-2 bg-white text-[#2596be] font-medium rounded-lg shadow hover:bg-gray-100 select-none">
               Lihat Semua

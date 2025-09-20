@@ -57,11 +57,18 @@ export default function TrendingProducts() {
   };
 
   return (
-    <div className="mt-10 w-full py-10">
-      {/* Section Title */}
-      <h2 className="text-xl font-bold mb-6 px-6 select-none">
-        🔥 Sedang Trend
-      </h2>
+    <div className="mt-10 w-full bg-[#]">
+      <div className="flex items-center gap-3 mb-8">
+        {/* Logo */}
+        <img
+          src="/assets/Trending_icon.png"
+          alt="Trending Icon"
+          className="w-10 h-10"
+        />
+        <h2 className="text-2xl font-extrabold text-gray-900">
+          Sedang Trending
+        </h2>
+      </div>
 
       {/* Product Grid with Scroll */}
       <div className="px-6 relative">
@@ -99,6 +106,15 @@ export default function TrendingProducts() {
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
+
+        {/* Lihat Semua - Only show if more than 10 products */}
+        {mockProducts.length >= 5 && (
+          <div className="mt-4 text-left">
+            <button className="px-4 py-2 bg-white text-[#2596be] font-medium rounded-lg shadow hover:bg-gray-100 select-none">
+              Lihat Semua
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
