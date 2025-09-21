@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
 
 export default function Register() {
   const [formData, setFormData] = useState({
-    email: '',
-    password: ''
+    email: "",
+    password: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +17,7 @@ export default function Register() {
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    console.log('Register attempt:', formData);
+    console.log("Register attempt:", formData);
     setIsLoading(false);
   };
 
@@ -52,7 +52,9 @@ export default function Register() {
       <div className="flex-1 lg:w-full w-full flex items-center justify-center px-6 sm:px-8">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 sm:p-10">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Create Account</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              Create Account
+            </h2>
             <p className="text-gray-600 text-sm sm:text-base">
               Start your journey with us today
             </p>
@@ -95,7 +97,7 @@ export default function Register() {
                 <input
                   id="password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   required
                   value={formData.password}
                   onChange={handleInputChange}
@@ -136,7 +138,7 @@ export default function Register() {
           {/* Terms & Login */}
           <div className="mt-6 space-y-4">
             <p className="text-xs sm:text-sm text-gray-600 text-center">
-              By creating an account, you agree to our{' '}
+              By creating an account, you agree to our{" "}
               <Link
                 to="/terms-conditions"
                 className="text-blue-600 hover:text-blue-700 font-medium"
@@ -147,10 +149,10 @@ export default function Register() {
 
             <div className="text-center">
               <span className="text-gray-600 text-sm">
-                Already have an account?{' '}
+                Already have an account?{" "}
               </span>
               <Link
-                to="/login"
+                to="/auth/signin"
                 className="text-blue-600 hover:text-blue-700 font-medium"
               >
                 Sign in here

@@ -1,20 +1,10 @@
-import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Star,
-  ShoppingCart,
-  Heart,
-  Share,
-  Truck,
-  Shield,
-  RotateCcw,
-} from "lucide-react";
+import { useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import {ShoppingCart} from "lucide-react";
 import { getProductBySlug } from "../utils/mockDataProduct";
 
 const ProductDetail = () => {
   const { productname } = useParams();
-  const navigate = useNavigate();
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [quantity, setQuantity] = useState(1);
 
@@ -30,12 +20,12 @@ const ProductDetail = () => {
           <p className="text-gray-600 mb-6">
             The product you're looking for doesn't exist.
           </p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          <Link
+            to="/"
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-block"
           >
             Back to Products
-          </button>
+          </Link>
         </div>
       </div>
     );
@@ -59,12 +49,12 @@ const ProductDetail = () => {
       <header className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <nav className="flex items-center space-x-2 text-sm">
-            <button
-              onClick={() => navigate("/")}
+            <Link
+              to="/"
               className="text-gray-600 hover:text-gray-800 transition-colors"
             >
               Home
-            </button>
+            </Link>
             <span className="text-gray-400">{">"}</span>
             <span className="text-gray-800 font-medium">
               {product?.name || "Product"}
