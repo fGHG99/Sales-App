@@ -103,6 +103,39 @@ export default function Cart() {
     distance: "2.3 miles",
   };
 
+  const mockStores = [
+    {
+      id: "1",
+      name: "TechStore Manhattan",
+      address: "100 Tech Plaza, Manhattan, NY 10003",
+      openHour: "09:00",
+      closeHour: "21:00",
+      distance: "2.3 miles",
+      distanceValue: 2.3,
+      coordinates: { lat: 40.7589, lng: -73.9851 },
+    },
+    {
+      id: "2",
+      name: "TechStore Brooklyn",
+      address: "456 Brooklyn Ave, Brooklyn, NY 11201",
+      openHour: "08:00",
+      closeHour: "22:00",
+      distance: "4.7 miles",
+      distanceValue: 4.7,
+      coordinates: { lat: 40.6892, lng: -73.9442 },
+    },
+    {
+      id: "3",
+      name: "TechStore Queens",
+      address: "789 Queens Blvd, Queens, NY 11373",
+      openHour: "10:00",
+      closeHour: "20:00",
+      distance: "8.1 miles",
+      distanceValue: 8.1,
+      coordinates: { lat: 40.7282, lng: -73.7949 },
+    },
+  ];
+
   const formatIDR = (amount) =>
     new Intl.NumberFormat("id-ID", {
       style: "currency",
@@ -150,6 +183,7 @@ export default function Cart() {
                   deliveryOption={deliveryOption}
                   setDeliveryModalOpen={setDeliveryModalOpen}
                   formatIDR={formatIDR}
+                  mockStores={mockStores}
                 />
 
                 <PaymentSection

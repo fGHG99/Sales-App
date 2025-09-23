@@ -6,12 +6,22 @@ export default function DeliverySection({
   deliveryOption,
   setDeliveryModalOpen,
   formatIDR,
+  mockStores
 }) {
   const getDeliveryDisplayText = () => {
     if (deliveryOption.type === "courier") {
       return "Fast Courier Delivery (1-2 business days)";
+    } else {
+      const selectedStore = mockStores.find(
+        (s) => s.id === deliveryOption.storeId
+      );
+      const timeDisplay = deliveryOption.pickupTime
+        ? ` at ${deliveryOption.pickupTime}`
+        : "";
+      return `Store Pickup${
+        selectedStore ? ` from ${selectedStore.name}` : ""
+      }${timeDisplay}`;
     }
-    return "Store Pickup";
   };
 
   return (

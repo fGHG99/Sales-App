@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, Search, ShoppingCart, Menu, X } from "lucide-react";
+import SearchBar from "./SearchBar";
 
 const categories = [
   "Elektronik",
@@ -103,25 +104,11 @@ const Navbar = () => {
                 )}
               </div>
 
-              <form onSubmit={handleSearch} className="flex-1 max-w-2xl">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Cari Barang"
-                    className="w-full pl-4 pr-10 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-200 font-inter text-sm"
-                    aria-label="Search products"
-                  />
-                  <button
-                    type="submit"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-blue-600 transition-colors duration-200"
-                    aria-label="Search"
-                  >
-                    <Search className="w-4 h-4" />
-                  </button>
-                </div>
-              </form>
+              <SearchBar
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                onSelect={(product) => navigate(`/p/${product.id}`)}
+              />
             </div>
 
             <div className="hidden lg:flex items-center">
