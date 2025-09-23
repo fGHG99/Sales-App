@@ -96,26 +96,27 @@ export default function OrderItemsSection({
                 {formatIDR(item.price)} each
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 bg-transparent"
-                onClick={() => updateQuantity(item.id, item.quantity - 1)}
-              >
-                <Minus className="w-3 h-3" />
-              </Button>
-              <span className="w-8 text-center font-medium text-card-foreground">
-                {item.quantity}
-              </span>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 bg-transparent"
-                onClick={() => updateQuantity(item.id, item.quantity + 1)}
-              >
-                <Plus className="w-3 h-3" />
-              </Button>
+            {/* Fixed width quantity selector */}
+            <div className="w-28 flex-shrink-0">
+              <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
+                <button
+                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                  className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+
+                <span className="flex-1 text-center text-sm font-medium text-gray-800 border-x border-gray-300">
+                  {item.quantity}
+                </span>
+
+                <button
+                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                  className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div className="text-right">
               <p className="font-semibold text-card-foreground">
@@ -140,8 +141,7 @@ export default function OrderItemsSection({
 
         <div className="flex justify-between items-center text-lg font-semibold">
           <span className="text-card-foreground">
-            Subtotal{" "}
-            {selectedItems.size > 0 && `(${selectedItems.size} items)`}
+            Subtotal {selectedItems.size > 0 && `(${selectedItems.size} items)`}
           </span>
           <span className="text-card-foreground">{formatIDR(subtotal)}</span>
         </div>
