@@ -24,7 +24,7 @@ import { PaymentOptionsModal } from "./modal/payment-option";
 export default function Cart() {
   const [deliveryOption, setDeliveryOption] = useState({
     type: "courier",
-    cost: 12.99,
+    cost: 12000,
   });
 
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
@@ -40,21 +40,21 @@ export default function Cart() {
     {
       id: "1",
       name: "Premium Wireless Headphones",
-      price: 299.99,
+      price: 29999,
       quantity: 1,
       image: "/wireless-headphones.png",
     },
     {
       id: "2",
       name: "Smart Fitness Watch",
-      price: 199.99,
+      price: 19999,
       quantity: 2,
       image: "/fitness-watch.png",
     },
     {
       id: "3",
       name: "Bluetooth Speaker",
-      price: 89.99,
+      price: 8999,
       quantity: 1,
       image: "/bluetooth-speaker.png",
     },
@@ -88,13 +88,13 @@ export default function Cart() {
     distance: "2.3 miles",
   };
 
-  const paymentMethods = [
-    { id: "card-1", name: "Visa ending in 4242", icon: CreditCard },
-    { id: "card-2", name: "Mastercard ending in 8888", icon: CreditCard },
-    { id: "paypal", name: "PayPal", icon: CreditCard },
-    { id: "gopay", name: "GoPay", icon: CreditCard },
-    { id: "ovo", name: "OVO", icon: CreditCard },
-  ];
+  const formatIDR = (amount) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
   const subtotal = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -102,10 +102,6 @@ export default function Cart() {
   );
   const deliveryCost = deliveryOption.cost;
   const total = subtotal + deliveryCost;
-
-  const updateQuantity = (itemId, newQuantity) => {
-    console.log(`Update item ${itemId} to quantity ${newQuantity}`);
-  };
 
   const mockStores = [
     {
@@ -132,14 +128,6 @@ export default function Cart() {
         selectedStore ? ` from ${selectedStore.name}` : ""
       }${timeDisplay}`;
     }
-  };
-
-  const formatIDR = (amount) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
   };
 
   const getPaymentDisplayText = () => {
@@ -201,7 +189,7 @@ export default function Cart() {
                         <p className="text-sm text-muted-foreground">
                           {deliveryOption.cost === 0
                             ? "Free"
-                            : `$${deliveryOption.cost.toFixed(2)}`}{" "}
+                            : `${formatIDR(deliveryOption.cost)}`}{" "}
                           • Click to change
                         </p>
                       </div>
@@ -346,18 +334,21 @@ export default function Cart() {
                         {item.name}
                       </h4>
                       <p className="text-sm text-muted-foreground">
-                        ${item.price.toFixed(2)} each
+                        {formatIDR(item.price)} each
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {/* kode ini perbaiki ya !IMPORTANT! */}
-                      <span className="w-8 text-center font-medium text-card-foreground">
+
+                    {/* Fixed width for quantity */}
+                    <div className="w-12 text-center">
+                      <span className="font-medium text-card-foreground">
                         {item.quantity}
                       </span>
                     </div>
-                    <div className="text-right">
+
+                    {/* Fixed width for total price, aligned right */}
+                    <div className="w-24 text-right">
                       <p className="font-semibold text-card-foreground">
-                        ${(item.price * item.quantity).toFixed(2)}
+                        {formatIDR(item.price * item.quantity)}
                       </p>
                     </div>
                   </div>
@@ -368,7 +359,7 @@ export default function Cart() {
                 <div className="flex justify-between items-center text-lg font-semibold">
                   <span className="text-card-foreground">Subtotal</span>
                   <span className="text-card-foreground">
-                    ${subtotal.toFixed(2)}
+                    {formatIDR(subtotal)}
                   </span>
                 </div>
               </CardContent>
@@ -388,7 +379,7 @@ export default function Cart() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
                     <span className="text-card-foreground">
-                      ${subtotal.toFixed(2)}
+                      {formatIDR(subtotal)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -398,22 +389,20 @@ export default function Cart() {
                         : "Pickup"}
                     </span>
                     <span className="text-card-foreground">
-                      {deliveryCost === 0
-                        ? "Free"
-                        : `$${deliveryCost.toFixed(2)}`}
+                      {deliveryCost === 0 ? "Free" : formatIDR(deliveryCost)}
                     </span>
                   </div>
                   <Separator className="bg-border" />
                   <div className="flex justify-between font-semibold text-lg">
                     <span className="text-card-foreground">Total</span>
                     <span className="text-card-foreground">
-                      ${total.toFixed(2)}
+                      {formatIDR(total)}
                     </span>
                   </div>
                 </div>
 
                 <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 text-lg font-semibold">
-                  Checkout • ${total.toFixed(2)}
+                  Checkout • {formatIDR(total)}
                 </Button>
 
                 <div className="text-xs text-muted-foreground text-center">
@@ -440,7 +429,7 @@ export default function Cart() {
         onOpenChange={setPaymentModalOpen}
         onPaymentSelect={setSelectedPayment}
         currentSelection={selectedPayment}
-        subtotal={subtotal}
+        subtotal={total}
       />
     </div>
   );

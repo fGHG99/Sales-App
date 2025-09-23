@@ -5,13 +5,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Truck, MapPin, Clock, Navigation } from "lucide-react"
+import { Truck, MapPin, Clock, Navigation, Store } from "lucide-react"
 
 export default function DeliveryOptionsModal({
   open,
   onOpenChange,
   onDeliverySelect,
-  currentSelection,
 }) {
   const [selectedOption, setSelectedOption] = useState("courier")
   const [selectedStore, setSelectedStore] = useState("")
@@ -20,7 +19,7 @@ export default function DeliveryOptionsModal({
   const [loading, setLoading] = useState(false)
   const [showMap, setShowMap] = useState(null)
 
-  // Mock store data - in real app, this would come from API
+  // Mock store data
   const mockStores = [
     {
       id: "1",
@@ -57,7 +56,6 @@ export default function DeliveryOptionsModal({
   useEffect(() => {
     if (open && selectedOption === "pickup") {
       setLoading(true)
-      // Simulate API call
       setTimeout(() => {
         const sortedStores = [...mockStores].sort((a, b) => a.distanceValue - b.distanceValue)
         setStores(sortedStores)
@@ -82,7 +80,7 @@ export default function DeliveryOptionsModal({
 
   const handleConfirm = () => {
     if (selectedOption === "courier") {
-      onDeliverySelect({ type: "courier", cost: 12.99 })
+      onDeliverySelect({ type: "courier", cost: 12000 })
     } else if (selectedOption === "pickup" && selectedStore && selectedTime) {
       onDeliverySelect({
         type: "pickup",
@@ -106,7 +104,9 @@ export default function DeliveryOptionsModal({
         <div className="space-y-4">
           <div className="bg-muted rounded-lg p-4">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-5 h-5 text-muted-foreground">Store Icon</div>
+              <div className="w-5 h-5 text-muted-foreground">
+                <Store className="w-5 h-5" />
+              </div>
               <div>
                 <p className="font-medium">{store.name}</p>
                 <p className="text-sm text-muted-foreground">{store.address}</p>
@@ -158,7 +158,11 @@ export default function DeliveryOptionsModal({
                 className={`cursor-pointer transition-all ${
                   selectedOption === "courier" ? "ring-2 ring-primary bg-accent" : "hover:bg-accent/50"
                 }`}
-                onClick={() => setSelectedOption("courier")}
+                onClick={() => {
+                  setSelectedOption("courier")
+                  setSelectedStore("")
+                  setSelectedTime("")
+                }}
               >
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-3">
@@ -168,7 +172,7 @@ export default function DeliveryOptionsModal({
                   <p className="text-muted-foreground mb-2">Fast delivery to your address</p>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">1-2 business days</span>
-                    <Badge variant="secondary">$12.99</Badge>
+                    <Badge variant="secondary">Rp 12.000</Badge>
                   </div>
                 </CardContent>
               </Card>
@@ -177,11 +181,17 @@ export default function DeliveryOptionsModal({
                 className={`cursor-pointer transition-all ${
                   selectedOption === "pickup" ? "ring-2 ring-primary bg-accent" : "hover:bg-accent/50"
                 }`}
-                onClick={() => setSelectedOption("pickup")}
+                onClick={() => {
+                  setSelectedOption("pickup")
+                  setSelectedStore("")
+                  setSelectedTime("")
+                }}
               >
                 <CardContent className="p-6">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-6 h-6 text-primary">Store Icon</div>
+                    <div className="w-6 h-6 text-primary">
+                      <Store className="w-6 h-6" />
+                    </div>
                     <h3 className="font-semibold text-lg">Store Pickup</h3>
                   </div>
                   <p className="text-muted-foreground mb-2">Pick up from nearest store</p>
@@ -218,77 +228,79 @@ export default function DeliveryOptionsModal({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {stores.map((store) => (
-                      <Card
-                        key={store.id}
-                        className={`cursor-pointer transition-all ${
-                          selectedStore === store.id ? "ring-2 ring-primary bg-accent" : "hover:bg-accent/50"
-                        }`}
-                        onClick={() => setSelectedStore(store.id)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg">
-                              <div className="w-6 h-6 text-primary">Store Icon</div>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h4 className="font-medium">{store.name}</h4>
-                                <Badge variant="outline" className="text-xs">
-                                  {store.distance}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground mb-1">{store.address}</p>
-                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  <span>
-                                    {store.openHour} - {store.closeHour}
-                                  </span>
+                    {stores.map((store) => {
+                      const isExpanded = selectedStore === store.id
+                      return (
+                        <Card
+                          key={store.id}
+                          className={`cursor-pointer transition-all ${
+                            isExpanded ? "ring-2 ring-primary bg-accent" : "hover:bg-accent/50"
+                          }`}
+                          onClick={() => {
+                            setSelectedStore(store.id)
+                            setSelectedTime("")
+                          }}
+                        >
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg">
+                                <div className="w-6 h-6 text-primary">
+                                  <Store className="w-6 h-6" />
                                 </div>
                               </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-medium">{store.name}</h4>
+                                  <Badge variant="outline" className="text-xs">
+                                    {store.distance}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground mb-1">{store.address}</p>
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    <span>
+                                      {store.openHour} - {store.closeHour}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setShowMap(store.id)
+                                }}
+                              >
+                                View Map
+                              </Button>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setShowMap(store.id)
-                              }}
-                            >
-                              View Map
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
 
-                {/* Time Selection */}
-                {selectedStore && !loading && (
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Select Pickup Time</h4>
-                    <Select value={selectedTime} onValueChange={setSelectedTime}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choose pickup time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(() => {
-                          const selectedStoreData = stores.find((s) => s.id === selectedStore)
-                          if (!selectedStoreData) return null
-
-                          return generateTimeSlots(
-                            selectedStoreData.openHour,
-                            selectedStoreData.closeHour
-                          ).map((slot) => (
-                            <SelectItem key={slot.value} value={slot.value}>
-                              {slot.display}
-                            </SelectItem>
-                          ))
-                        })()}
-                      </SelectContent>
-                    </Select>
+                            {/* Time Selection shown only if expanded */}
+                            {isExpanded && (
+                              <div className="pt-3 border-t">
+                                <h4 className="font-medium mb-2">Select Pickup Time</h4>
+                                <Select value={selectedTime} onValueChange={setSelectedTime}>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Choose pickup time" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {generateTimeSlots(store.openHour, store.closeHour).map(
+                                      (slot) => (
+                                        <SelectItem key={slot.value} value={slot.value}>
+                                          {slot.display}
+                                        </SelectItem>
+                                      )
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -305,7 +317,10 @@ export default function DeliveryOptionsModal({
               </Button>
               <Button
                 onClick={handleConfirm}
-                disabled={selectedOption === "pickup" && (!selectedStore || !selectedTime)}
+                disabled={
+                  (selectedOption === "pickup" && (!selectedStore || !selectedTime)) ||
+                  (selectedOption === "courier" && false)
+                }
                 className="flex-1"
               >
                 Confirm Selection
