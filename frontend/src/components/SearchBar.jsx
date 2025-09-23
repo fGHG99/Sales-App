@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { mockProducts } from "../utils/mockDataProduct";
 
@@ -27,6 +28,7 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
   const [results, setResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = useRef(null);
+  const navigate = useNavigate();
 
   const debouncedQuery = useDebouncedThrottle(searchQuery);
 
@@ -65,6 +67,12 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
     if (onSelect) onSelect(product); // parent can navigate if needed
   };
 
+  const handleSearch = () => {
+    if (debouncedQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(debouncedQuery)}`);
+    }
+  };
+
   return (
     <div className="relative flex-1 max-w-2xl" ref={searchRef}>
       <div className="relative">
@@ -82,17 +90,14 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
         />
         {/* this search icon when clicked need to trigger search to get product that have the provided keyword, for example when user search "susu", it will also
         fetch "susu coklat dancow" etc !IMPORTANT */}
-        {results.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => handleSelect(item)}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-blue-600 transition-colors duration-200"
-            aria-label="Search"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-        ))}
+        <button
+          type="button"
+          onClick={handleSearch}
+          className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-blue-600 transition-colors duration-200"
+          aria-label="Search"
+        >
+          <Search className="w-4 h-4" />
+        </button>
       </div>
 
       {/* 🔹 Expand dropdown */}

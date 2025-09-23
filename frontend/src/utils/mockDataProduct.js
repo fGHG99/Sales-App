@@ -155,6 +155,19 @@ export const mockProducts = [
         description:
             "Take your aerial photography to new heights with this professional-grade drone. Equipped with a 4K gimbal camera and advanced flight modes, it captures cinematic footage with precision. The intelligent obstacle avoidance and extended flight time make it perfect for professional photographers and videographers.",
     },
+    {
+        id: 13,
+        name: "Premium Wireless Speakers",
+        price: 2999000,
+        rating: 4.8,
+        reviews: 324,
+        category: "electronics",
+        img: "/assets/20130807_1.jpg",
+        inStock: true,
+        createdAt: "2024-01-15T10:30:00Z",
+        description:
+            "Experience superior sound quality with our premium wireless speakers. Featuring advanced noise cancellation technology, these speakers deliver crystal-clear audio whether you're listening to music, taking calls, or watching movies. The ergonomic design ensures comfortable wearing for extended periods, while the long-lasting battery provides up to 30 hours of continuous playback. Perfect for audiophiles and casual listeners alike.",
+    },
 ];
 
 export const getProductBySlug = (slug) => {

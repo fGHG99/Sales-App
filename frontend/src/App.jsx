@@ -12,6 +12,7 @@ import TermsConditions from "./components/TermsCon";
 import ProductDetail from "./components/ProductDetail";
 import Cart from "./components/cart/Cart";
 import NotFound from "./components/NotFound";
+import ProductPageResult from "./components/ProductSearchResult";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -68,7 +69,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
       { path: "category/:categoryName", element: <CategoryPage /> },
-      { path: "search", element: <SearchPage /> },
+      { path: "search", element: <ProductPageResult /> },
       { path: "cart", element: <Cart /> },
       { path: "terms-conditions", element: <TermsConditions /> },
       { path: "p/:productname", element: <ProductDetail /> },
