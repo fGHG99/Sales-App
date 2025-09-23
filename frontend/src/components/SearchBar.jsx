@@ -23,10 +23,10 @@ const useDebouncedThrottle = (value, delay = 400, throttleDelay = 800) => {
   return debouncedValue;
 };
 
-//use garbage cleanup later !IMPORTANT!
 export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
   const [results, setResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchHistory, setSearchHistory] = useState([]);
   const searchRef = useRef(null);
   const navigate = useNavigate();
 
@@ -35,7 +35,6 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
   useEffect(() => {
     if (!debouncedQuery.trim()) {
       setResults([]);
-      setShowDropdown(false);
       return;
     }
 
@@ -44,7 +43,6 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
       p.name.toLowerCase().includes(debouncedQuery.toLowerCase())
     );
     setResults(filtered);
-    setShowDropdown(true);
   }, [debouncedQuery]);
 
   // Click outside handler
@@ -61,15 +59,28 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
     };
   }, []);
 
+  const addToHistory = (query) => {
+    if (!query.trim()) return;
+    setSearchHistory((prev) => {
+      const newHistory = [query, ...prev.filter((item) => item !== query)];
+      return newHistory.slice(0, 3); // keep only last 3
+    });
+  };
+
   const handleSelect = (product) => {
     setSearchQuery(product.name);
     setShowDropdown(false);
-    if (onSelect) onSelect(product); // parent can navigate if needed
+    addToHistory(product.name);
+    if (onSelect) onSelect(product);
   };
 
-  const handleSearch = () => {
-    if (debouncedQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(debouncedQuery)}`);
+  const handleSearch = (query) => {
+    const searchTerm = (query && query.trim()) || debouncedQuery.trim();
+    if (searchTerm) {
+      addToHistory(searchTerm);
+      navigate(`/search?q=${encodeURIComponent(searchTerm)}`);
+      setSearchQuery(searchTerm);
+      setShowDropdown(false);
     }
   };
 
@@ -85,11 +96,20 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
               setShowDropdown(true);
             }
           }}
+          onFocus={() => {
+            if (searchHistory.length > 0) {
+              setShowDropdown(true);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSearch();
+            }
+          }}
           placeholder="Cari Barang"
           className="w-full pl-4 pr-10 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-200 font-inter text-sm"
         />
-        {/* this search icon when clicked need to trigger search to get product that have the provided keyword, for example when user search "susu", it will also
-        fetch "susu coklat dancow" etc !IMPORTANT */}
         <button
           type="button"
           onClick={handleSearch}
@@ -100,25 +120,44 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
         </button>
       </div>
 
-      {/* 🔹 Expand dropdown */}
-      {showDropdown && results.length > 0 && (
+      {/* 🔹 Dropdown */}
+      {showDropdown && (
         <div className="absolute mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
-          {results.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => handleSelect(item)}
-              className="px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer"
-            >
-              {item.name}
+          {/* 🔹 History (only show when there's no query) */}
+          {!debouncedQuery.trim() && searchHistory.length > 0 && (
+            <div className="border-b border-gray-200">
+              <p className="px-4 py-2 text-xs text-gray-400">
+                Riwayat Pencarian
+              </p>
+              {searchHistory.map((item, idx) => (
+                <div
+                  key={`history-${idx}`}
+                  onClick={() => handleSearch(item)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 cursor-pointer"
+                >
+                  {item}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* 🔹 No results */}
-      {showDropdown && results.length === 0 && debouncedQuery.trim() && (
-        <div className="absolute mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 px-4 py-2 text-sm text-gray-500">
-          Tidak ada produk dengan nama "{debouncedQuery}"
+          {/* 🔹 Results (only show when there’s a query) */}
+          {debouncedQuery.trim() &&
+            (results.length > 0 ? (
+              results.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => handleSearch(item.name)}
+                  className="px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 cursor-pointer"
+                >
+                  {item.name}
+                </div>
+              ))
+            ) : (
+              <div className="px-4 py-2 text-sm text-gray-500">
+                Tidak ada produk dengan nama "{debouncedQuery}"
+              </div>
+            ))}
         </div>
       )}
     </div>

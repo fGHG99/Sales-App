@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, Search, ShoppingCart, Menu, X } from "lucide-react";
 import SearchBar from "./SearchBar";
+import AuthSection from "./AuthNavbar";
 
 const categories = [
   "Elektronik",
@@ -16,13 +17,14 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Mock authentication state set to true to show authenticated navbar
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   // Mock authentication check
-  const isAuthenticated = () => {
-    return document.cookie.includes("refresh_token");
-  };
+  // const isAuthenticated = () => {
+  //   return document.cookie.includes("refresh_token");
+  // };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -107,36 +109,30 @@ const Navbar = () => {
               <SearchBar
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
-                onSelect={(product) => navigate(`/p/${product.name.replace(/\s+/g, "-").toLowerCase()}`)}
+                onSelect={(product) =>
+                  navigate(
+                    `/p/${product.name.replace(/\s+/g, "-").toLowerCase()}`
+                  )
+                }
               />
             </div>
 
-            <div className="hidden lg:flex items-center">
+            <div className="hidden lg:flex items-center space-x-6">
               {/* Cart Section */}
               <button
                 onClick={handleCartClick}
-                className="p-2 mr-6 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
                 aria-label="Shopping cart"
               >
                 <ShoppingCart className="w-6 h-6" />
               </button>
 
+              {/* !IMPORANT! make it beautiful later */}
               {/* Auth Section */}
-              <div className="flex items-center space-x-3">
-                <Link
-                  to="/auth/signin"
-                  className="px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors duration-200 font-inter font-medium"
-                >
-                  Masuk
-                </Link>
-
-                <Link
-                  to="/auth/signup"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-inter font-medium"
-                >
-                  Daftar
-                </Link>
-              </div>
+              <AuthSection
+                isAuthenticated={isAuthenticated}
+                user={{ name: "User" }}
+              />
             </div>
 
             {/* Mobile Menu Button */}
