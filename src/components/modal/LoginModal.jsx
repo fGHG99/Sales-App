@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 
+// not used yet
+
 const LoginModal = ({ isOpen, onClose }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);

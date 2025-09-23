@@ -1,497 +1,447 @@
-import { useState } from "react"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  MapPin,
+  StoreIcon,
+  CreditCard,
+  Truck,
+  Settings,
+  Banknote,
+} from "lucide-react";
+import DeliveryOptionsModal from "./modal/delivery-option";
+import { PaymentOptionsModal } from "./modal/payment-option";
 
-const ShoppingCart = () => {
-  // State management
-  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState("")
-  const [selectedPaymentOption, setSelectedPaymentOption] = useState("")
-  const [selectedStore, setSelectedStore] = useState(null)
-  const [selectedPickupTime, setSelectedPickupTime] = useState("")
-  const [customCashAmount, setCustomCashAmount] = useState("")
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [showAddressModal, setShowAddressModal] = useState(false)
-  const [shakeError, setShakeError] = useState(false)
+export default function Cart() {
+  const [deliveryOption, setDeliveryOption] = useState({
+    type: "courier",
+    cost: 12.99,
+  });
+
+  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false); // Added payment modal state
+  const [selectedPayment, setSelectedPayment] = useState({
+    type: "method",
+    methodId: "card-1",
+  });
+  const [selectedAddress, setSelectedAddress] = useState("1");
 
   // Mock data
-  const subtotal = 125000
-  const stores = [
-    {
-      id: "ST001",
-      name: "Toko Elektronik Jakarta",
-      address: "Jl. PEJAMBON GAMBIR GAMBIR JAKARTA PUSAT",
-      roadAddress: "Jl. Pejambon No. 15",
-      distance: "2.5 km",
-      status: "open",
-      openHours: "08:00",
-      closeHours: "20:00",
-    },
-    {
-      id: "ST002",
-      name: "Toko Elektronik Pusat",
-      address: "Jl. KEBON SIRIH MENTENG JAKARTA PUSAT",
-      roadAddress: "Jl. Kebon Sirih No. 22",
-      distance: "3.2 km",
-      status: "open",
-      openHours: "09:00",
-      closeHours: "21:00",
-    },
-  ]
-
-  const cashOptions = [150000, 200000, 250000, 300000, 500000]
-
   const cartItems = [
     {
-      id: 1,
-      name: "Smartphone Samsung Galaxy A54",
-      price: 75000,
+      id: "1",
+      name: "Premium Wireless Headphones",
+      price: 299.99,
       quantity: 1,
-      image: "/modern-smartphone.png",
+      image: "/wireless-headphones.png",
     },
     {
-      id: 2,
-      name: "Earphone Wireless",
-      price: 50000,
-      quantity: 1,
-      image: "/wireless-earphone.jpg",
+      id: "2",
+      name: "Smart Fitness Watch",
+      price: 199.99,
+      quantity: 2,
+      image: "/fitness-watch.png",
     },
-  ]
+    {
+      id: "3",
+      name: "Bluetooth Speaker",
+      price: 89.99,
+      quantity: 1,
+      image: "/bluetooth-speaker.png",
+    },
+  ];
 
-  const selectedAddress = {
-    label: "Rumah",
-    fullAddress: "Jl. Sudirman No. 123, Menteng, Jakarta Pusat",
-    recipient: "John Doe",
-    phone: "+62 812-3456-7890",
-  }
+  const deliveryAddresses = [
+    {
+      id: "1",
+      name: "Home",
+      address: "123 Main Street, New York, NY 10001",
+      isDefault: true,
+    },
+    {
+      id: "2",
+      name: "Office",
+      address: "456 Business Ave, New York, NY 10002",
+      isDefault: false,
+    },
+    {
+      id: "3",
+      name: "Parents House",
+      address: "789 Family Lane, Brooklyn, NY 11201",
+      isDefault: false,
+    },
+  ];
 
-  // Helper functions
-  const generateTimeSlots = (openHour, closeHour) => {
-    const slots = []
-    const start = Number.parseInt(openHour.split(":")[0])
-    const end = Number.parseInt(closeHour.split(":")[0])
+  const store = {
+    id: "1",
+    name: "TechStore Manhattan",
+    address: "100 Tech Plaza, Manhattan, NY 10003",
+    distance: "2.3 miles",
+  };
 
-    for (let i = start; i < end; i++) {
-      slots.push(`${i.toString().padStart(2, "0")}:00 - ${(i + 1).toString().padStart(2, "0")}:00`)
+  const paymentMethods = [
+    { id: "card-1", name: "Visa ending in 4242", icon: CreditCard },
+    { id: "card-2", name: "Mastercard ending in 8888", icon: CreditCard },
+    { id: "paypal", name: "PayPal", icon: CreditCard },
+    { id: "gopay", name: "GoPay", icon: CreditCard },
+    { id: "ovo", name: "OVO", icon: CreditCard },
+  ];
+
+  const subtotal = cartItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const deliveryCost = deliveryOption.cost;
+  const total = subtotal + deliveryCost;
+
+  const updateQuantity = (itemId, newQuantity) => {
+    console.log(`Update item ${itemId} to quantity ${newQuantity}`);
+  };
+
+  const mockStores = [
+    {
+      id: "1",
+      name: "TechStore Manhattan",
+      address: "100 Tech Plaza, Manhattan, NY 10003",
+      openHour: "09:00",
+      closeHour: "21:00",
+      distance: "2.3 miles",
+    },
+  ];
+
+  const getDeliveryDisplayText = () => {
+    if (deliveryOption.type === "courier") {
+      return "Fast Courier Delivery (1-2 business days)";
+    } else {
+      const selectedStore = mockStores.find(
+        (s) => s.id === deliveryOption.storeId
+      );
+      const timeDisplay = deliveryOption.pickupTime
+        ? ` at ${deliveryOption.pickupTime}`
+        : "";
+      return `Store Pickup${
+        selectedStore ? ` from ${selectedStore.name}` : ""
+      }${timeDisplay}`;
     }
-    return slots
-  }
+  };
 
-  const handleCustomCashInput = (value) => {
-    setCustomCashAmount(value)
-    if (Number.parseInt(value) < subtotal && value !== "") {
-      setShakeError(true)
-      setTimeout(() => setShakeError(false), 500)
+  const formatIDR = (amount) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getPaymentDisplayText = () => {
+    if (selectedPayment.type === "cash") {
+      return `Cash Payment • ${formatIDR(selectedPayment.cashAmount || 0)}`;
+    } else {
+      const methodNames = {
+        "card-1": "Visa ending in 4242",
+        "card-2": "Mastercard ending in 8888",
+        paypal: "PayPal",
+        gopay: "GoPay",
+        ovo: "OVO",
+      };
+      return methodNames[selectedPayment.methodId || ""] || "Digital Payment";
     }
-  }
-
-  const isConfirmButtonEnabled = () => {
-    return selectedDeliveryOption && selectedPaymentOption
-  }
-
-  // Modal Components
-  const DeliveryModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-popover rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-popover-foreground">Opsi Pengiriman</h3>
-          <button onClick={() => setShowDeliveryModal(false)} className="text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <button
-            onClick={() => setSelectedDeliveryOption("kurir")}
-            className={`w-full p-4 rounded-lg border text-left transition-colors ${
-              selectedDeliveryOption === "kurir"
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border hover:border-primary/50"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🚚</span>
-              <span className="font-medium">Kurir</span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setSelectedDeliveryOption("ambil_ke_toko")}
-            className={`w-full p-4 rounded-lg border text-left transition-colors ${
-              selectedDeliveryOption === "ambil_ke_toko"
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border hover:border-primary/50"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🏪</span>
-              <span className="font-medium">Ambil ke Toko</span>
-            </div>
-          </button>
-        </div>
-
-        {selectedDeliveryOption === "ambil_ke_toko" && (
-          <div className="mt-4 space-y-3">
-            <h4 className="font-medium text-popover-foreground">Pilih Toko:</h4>
-            {stores.map((store) => (
-              <div key={store.id} className="border rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setSelectedStore(store)}
-                  className={`w-full p-4 text-left transition-colors ${
-                    selectedStore?.id === store.id ? "bg-primary/10 border-primary" : "hover:bg-muted"
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h5 className="font-medium text-card-foreground">{store.roadAddress}</h5>
-                    <span
-                      className={`px-2 py-1 rounded text-xs ${
-                        store.status === "open" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {store.status === "open" ? "Buka" : "Tutup"}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {store.openHours} - {store.closeHours} • {store.distance}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{store.address}</p>
-                </button>
-
-                {selectedStore?.id === store.id && (
-                  <div className="p-4 bg-muted border-t">
-                    <h6 className="font-medium mb-2 text-card-foreground">Pilih Waktu Pengambilan:</h6>
-                    <div className="grid grid-cols-2 gap-2">
-                      {generateTimeSlots(store.openHours, store.closeHours).map((slot) => (
-                        <button
-                          key={slot}
-                          onClick={() => setSelectedPickupTime(slot)}
-                          className={`p-2 rounded text-sm transition-colors ${
-                            selectedPickupTime === slot
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-background border border-border hover:border-primary/50"
-                          }`}
-                        >
-                          {slot}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <button
-          onClick={() => setShowDeliveryModal(false)}
-          disabled={selectedDeliveryOption === "ambil_ke_toko" && (!selectedStore || !selectedPickupTime)}
-          className={`w-full mt-4 py-3 rounded-lg font-medium transition-colors ${
-            selectedDeliveryOption === "kurir" ||
-            (selectedDeliveryOption === "ambil_ke_toko" && selectedStore && selectedPickupTime)
-              ? "bg-primary text-primary-foreground hover:bg-primary/90"
-              : "bg-muted text-muted-foreground cursor-not-allowed"
-          }`}
-        >
-          Konfirmasi
-        </button>
-      </div>
-    </div>
-  )
-
-  const PaymentModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-popover rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-popover-foreground">Opsi Pembayaran</h3>
-          <button onClick={() => setShowPaymentModal(false)} className="text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <button
-              onClick={() => setSelectedPaymentOption("cash")}
-              className={`w-full p-4 rounded-lg border text-left transition-colors ${
-                selectedPaymentOption === "cash"
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-xl">💵</span>
-                <span className="font-medium">Tunai</span>
-              </div>
-            </button>
-
-            {selectedPaymentOption === "cash" && (
-              <div className="mt-3 space-y-3">
-                <p className="text-sm text-muted-foreground">Subtotal: Rp {subtotal.toLocaleString("id-ID")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {cashOptions.map((amount) => (
-                    <button
-                      key={amount}
-                      onClick={() => setCustomCashAmount(amount.toString())}
-                      className={`p-2 rounded text-sm transition-colors ${
-                        customCashAmount === amount.toString()
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-background border border-border hover:border-primary/50"
-                      }`}
-                    >
-                      Rp {amount.toLocaleString("id-ID")}
-                    </button>
-                  ))}
-                </div>
-                <div className={`${shakeError ? "shake" : ""}`}>
-                  <input
-                    type="number"
-                    placeholder="Nominal custom"
-                    value={customCashAmount}
-                    onChange={(e) => handleCustomCashInput(e.target.value)}
-                    className={`w-full p-3 border rounded-lg bg-input ${
-                      Number.parseInt(customCashAmount) < subtotal && customCashAmount !== ""
-                        ? "border-destructive"
-                        : "border-border"
-                    }`}
-                  />
-                  {Number.parseInt(customCashAmount) < subtotal && customCashAmount !== "" && (
-                    <p className="text-destructive text-sm mt-1">Nominal harus lebih besar dari subtotal</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={() => setSelectedPaymentOption("ewallet")}
-            className={`w-full p-4 rounded-lg border text-left transition-colors ${
-              selectedPaymentOption === "ewallet"
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border hover:border-primary/50"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">📱</span>
-              <span className="font-medium">E-Wallet & Kartu</span>
-            </div>
-          </button>
-
-          {selectedPaymentOption === "ewallet" && (
-            <div className="mt-3 space-y-2">
-              {["GoPay", "OVO", "DANA", "ShopeePay", "Visa/Mastercard", "Debit"].map((method) => (
-                <div key={method} className="flex items-center gap-3 p-2 border rounded hover:bg-muted">
-                  <span className="text-sm">{method}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={() => setShowPaymentModal(false)}
-          disabled={
-            !selectedPaymentOption ||
-            (selectedPaymentOption === "cash" && (!customCashAmount || Number.parseInt(customCashAmount) < subtotal))
-          }
-          className={`w-full mt-4 py-3 rounded-lg font-medium transition-colors ${
-            selectedPaymentOption &&
-            (selectedPaymentOption !== "cash" || (customCashAmount && Number.parseInt(customCashAmount) >= subtotal))
-              ? "bg-primary text-primary-foreground hover:bg-primary/90"
-              : "bg-muted text-muted-foreground cursor-not-allowed"
-          }`}
-        >
-          Konfirmasi
-        </button>
-      </div>
-    </div>
-  )
-
-  const AddressModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-popover rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-popover-foreground">Pilih Alamat</h3>
-          <button onClick={() => setShowAddressModal(false)} className="text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div className="border rounded-lg p-4 bg-primary/5 border-primary">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-medium">
-                  {selectedAddress.label}
-                </span>
-                <p className="font-medium mt-2 text-card-foreground">{selectedAddress.recipient}</p>
-                <p className="text-sm text-muted-foreground">{selectedAddress.phone}</p>
-                <p className="text-sm text-muted-foreground mt-1">{selectedAddress.fullAddress}</p>
-              </div>
-              <span className="text-primary">✓</span>
-            </div>
-          </div>
-
-          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-            <div className="text-4xl mb-2">📍</div>
-            <p className="text-muted-foreground mb-3">Tambah alamat baru</p>
-            <div className="bg-muted rounded-lg p-4 mb-3">
-              <p className="text-sm text-muted-foreground">🗺️ LocationIQ Map akan muncul di sini</p>
-            </div>
-            <button className="bg-secondary text-secondary-foreground px-4 py-2 rounded-lg hover:bg-secondary/90 transition-colors">
-              Pilih di Peta
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={() => setShowAddressModal(false)}
-          className="w-full mt-4 py-3 rounded-lg font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          Konfirmasi Alamat
-        </button>
-      </div>
-    </div>
-  )
+  };
 
   return (
-    <div className="max-w-2xl mx-auto p-4 bg-background">
-      <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-        {/* Header */}
-        <div className="bg-primary text-primary-foreground p-4">
-          <h1 className="text-xl font-bold">Keranjang Belanja</h1>
+    <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Shopping Cart
+          </h1>
+          <p className="text-muted-foreground">
+            Review your order and complete your purchase
+          </p>
         </div>
 
-        {/* Options Section */}
-        <div className="p-4 border-b border-border">
-          <div className="grid grid-cols-3 gap-3">
-            <button
-              onClick={() => setShowDeliveryModal(true)}
-              className={`p-3 rounded-lg border text-center transition-colors ${
-                selectedDeliveryOption
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <div className="text-2xl mb-1">🚚</div>
-              <div className="text-xs font-medium">Opsi Pengiriman</div>
-            </button>
-
-            <button
-              onClick={() => setShowPaymentModal(true)}
-              className={`p-3 rounded-lg border text-center transition-colors ${
-                selectedPaymentOption
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <div className="text-2xl mb-1">💳</div>
-              <div className="text-xs font-medium">Opsi Pembayaran</div>
-            </button>
-
-            <button className="p-3 rounded-lg border border-border hover:border-primary/50 text-center transition-colors">
-              <div className="text-2xl mb-1">⚙️</div>
-              <div className="text-xs font-medium">Lainnya</div>
-            </button>
-          </div>
-        </div>
-
-        {/* Address Section */}
-        <div className="p-4 border-b border-border">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <h3 className="font-semibold mb-2 text-card-foreground">Alamat Pengiriman</h3>
-              <div className="bg-muted rounded-lg p-3">
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">📍</span>
-                  <div className="flex-1">
-                    <span className="bg-accent text-accent-foreground px-2 py-1 rounded text-xs font-medium">
-                      {selectedAddress.label}
-                    </span>
-                    <p className="font-medium mt-1 text-card-foreground">{selectedAddress.recipient}</p>
-                    <p className="text-sm text-muted-foreground">{selectedAddress.phone}</p>
-                    <p className="text-sm text-muted-foreground">{selectedAddress.fullAddress}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Cart Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Options Section */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-card-foreground">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    1
+                  </div>
+                  Select your options
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Delivery Options */}
+                <div>
+                  <h3 className="font-semibold text-card-foreground mb-3 flex items-center gap-2">
+                    <Truck className="w-4 h-4" />
+                    Delivery Options
+                  </h3>
+                  <div
+                    className="p-4 rounded-lg border border-border hover:border-muted-foreground cursor-pointer transition-colors bg-accent"
+                    onClick={() => setDeliveryModalOpen(true)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex-1">
+                        <p className="font-medium text-card-foreground">
+                          {getDeliveryDisplayText()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {deliveryOption.cost === 0
+                            ? "Free"
+                            : `$${deliveryOption.cost.toFixed(2)}`}{" "}
+                          • Click to change
+                        </p>
+                      </div>
+                      <Settings className="w-4 h-4 text-muted-foreground" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowAddressModal(true)}
-              className="ml-3 px-3 py-1 text-sm border border-border rounded hover:border-primary/50 transition-colors"
-            >
-              Ubah
-            </button>
-          </div>
-        </div>
 
-        {/* Order Section */}
-        <div className="p-4">
-          <h3 className="font-semibold mb-3 text-card-foreground">Pesanan Anda</h3>
-
-          {/* Store Info */}
-          <div className="bg-muted rounded-lg p-3 mb-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🏪</span>
-              <div>
-                <p className="font-medium text-card-foreground">Toko Elektronik Jakarta (ST001)</p>
-                <p className="text-sm text-muted-foreground">2.5 km dari lokasi Anda</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Cart Items */}
-          <div className="space-y-3 mb-4">
-            {cartItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 p-3 border border-border rounded-lg">
-                <img
-                  src={item.image || "/placeholder.svg"}
-                  alt={item.name}
-                  className="w-15 h-15 object-cover rounded"
-                />
-                <div className="flex-1">
-                  <h4 className="font-medium text-card-foreground">{item.name}</h4>
-                  <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                {/* Payment Methods */}
+                <div>
+                  <h3 className="font-semibold text-card-foreground mb-3 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" />
+                    Payment Method
+                  </h3>
+                  <div
+                    className="p-4 rounded-lg border border-border hover:border-muted-foreground cursor-pointer transition-colors bg-accent"
+                    onClick={() => setPaymentModalOpen(true)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          {selectedPayment.type === "cash" ? (
+                            <Banknote className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <CreditCard className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          <p className="font-medium text-card-foreground">
+                            {getPaymentDisplayText()}
+                          </p>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Click to change payment method
+                        </p>
+                      </div>
+                      <Settings className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold text-card-foreground">Rp {item.price.toLocaleString("id-ID")}</p>
+              </CardContent>
+            </Card>
+
+            {/* Delivery Address */}
+            {deliveryOption.type === "courier" && (
+              <Card className="bg-card border-border">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-card-foreground">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                      2
+                    </div>
+                    Delivery Address
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select
+                    value={selectedAddress}
+                    onValueChange={setSelectedAddress}
+                  >
+                    <SelectTrigger className="w-full bg-input border-border text-card-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border-border">
+                      {deliveryAddresses.map((address) => (
+                        <SelectItem
+                          key={address.id}
+                          value={address.id}
+                          className="text-popover-foreground"
+                        >
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4" />
+                            <div>
+                              <p className="font-medium">{address.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {address.address}
+                              </p>
+                            </div>
+                            {address.isDefault && (
+                              <Badge variant="secondary" className="ml-2">
+                                Default
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Store Information */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-card-foreground">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    {deliveryOption.type === "courier" ? "3" : "2"}
+                  </div>
+                  Fulfillment Store
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
+                  <StoreIcon className="w-5 h-5 text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="font-medium text-card-foreground">
+                      {store.name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {store.address}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Closest store • {store.distance} away
+                    </p>
+                  </div>
+                  <Badge variant="outline">Auto-selected</Badge>
                 </div>
-              </div>
-            ))}
+              </CardContent>
+            </Card>
+
+            {/* Order Items */}
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-card-foreground">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                    {deliveryOption.type === "courier" ? "4" : "3"}
+                  </div>
+                  Order Items ({cartItems.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {cartItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-4 p-4 bg-muted rounded-lg"
+                  >
+                    <img
+                      src={item.image || "/placeholder.svg"}
+                      alt={item.name}
+                      className="w-20 h-20 object-cover rounded-md"
+                    />
+                    <div className="flex-1">
+                      <h4 className="font-medium text-card-foreground">
+                        {item.name}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        ${item.price.toFixed(2)} each
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* kode ini perbaiki ya !IMPORTANT! */}
+                      <span className="w-8 text-center font-medium text-card-foreground">
+                        {item.quantity}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-card-foreground">
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
+                <Separator className="bg-border" />
+
+                <div className="flex justify-between items-center text-lg font-semibold">
+                  <span className="text-card-foreground">Subtotal</span>
+                  <span className="text-card-foreground">
+                    ${subtotal.toFixed(2)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Summary */}
-          <div className="border-t border-border pt-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium text-card-foreground">Rp {subtotal.toLocaleString("id-ID")}</span>
-            </div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-muted-foreground">Ongkos Kirim</span>
-              <span className="font-medium text-card-foreground">Rp 10.000</span>
-            </div>
-            <div className="flex justify-between items-center text-lg font-bold border-t border-border pt-2">
-              <span className="text-card-foreground">Total</span>
-              <span className="text-primary">Rp {(subtotal + 10000).toLocaleString("id-ID")}</span>
-            </div>
-          </div>
+          {/* Order Summary Sidebar */}
+          <div className="lg:col-span-1">
+            <Card className="bg-card border-border sticky top-8">
+              <CardHeader>
+                <CardTitle className="text-card-foreground">
+                  Order Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-card-foreground">
+                      ${subtotal.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {deliveryOption.type === "courier"
+                        ? "Delivery"
+                        : "Pickup"}
+                    </span>
+                    <span className="text-card-foreground">
+                      {deliveryCost === 0
+                        ? "Free"
+                        : `$${deliveryCost.toFixed(2)}`}
+                    </span>
+                  </div>
+                  <Separator className="bg-border" />
+                  <div className="flex justify-between font-semibold text-lg">
+                    <span className="text-card-foreground">Total</span>
+                    <span className="text-card-foreground">
+                      ${total.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
 
-          {/* Checkout Button */}
-          <button
-            disabled={!isConfirmButtonEnabled()}
-            className={`w-full mt-4 py-4 rounded-lg font-semibold text-lg transition-colors ${
-              isConfirmButtonEnabled()
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-muted text-muted-foreground cursor-not-allowed"
-            }`}
-          >
-            {isConfirmButtonEnabled() ? "Checkout Sekarang" : "Lengkapi Opsi Pengiriman & Pembayaran"}
-          </button>
+                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 text-lg font-semibold">
+                  Checkout • ${total.toFixed(2)}
+                </Button>
+
+                <div className="text-xs text-muted-foreground text-center">
+                  By proceeding to checkout, you agree to our Terms of Service
+                  and Privacy Policy
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
 
-      {/* Modals */}
-      {showDeliveryModal && <DeliveryModal />}
-      {showPaymentModal && <PaymentModal />}
-      {showAddressModal && <AddressModal />}
-    </div>
-  )
-}
+      {/* Delivery Options Modal */}
+      <DeliveryOptionsModal
+        open={deliveryModalOpen}
+        onOpenChange={setDeliveryModalOpen}
+        onDeliverySelect={setDeliveryOption}
+        currentSelection={deliveryOption}
+      />
 
-export default ShoppingCart
+      {/* Payment Options Modal */}
+      <PaymentOptionsModal
+        open={paymentModalOpen}
+        onOpenChange={setPaymentModalOpen}
+        onPaymentSelect={setSelectedPayment}
+        currentSelection={selectedPayment}
+        subtotal={subtotal}
+      />
+    </div>
+  );
+}
