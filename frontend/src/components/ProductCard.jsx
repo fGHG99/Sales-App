@@ -29,7 +29,7 @@ const ProductCard = ({ product, loading = false }) => {
       {/* Product Image */}
       <div className="w-full h-[200px]">
         <Link
-          to={`/p/${productName}`}
+          to={`/p/${product.name.replace(/\s+/g, "-").toLowerCase()}`}
           onMouseDown={(e) => e.preventDefault()} // prevent drag highlighting
         >
           <img
@@ -54,7 +54,7 @@ const ProductCard = ({ product, loading = false }) => {
 
       {/* Product Info */}
       <div className="flex flex-col gap-2 px-2 pt-2 pb-2 flex-grow">
-        <Link to={`/p/${productName}`} onMouseDown={(e) => e.preventDefault()}>
+        <Link to={`/p/${product.name.replace(/\s+/g, "-").toLowerCase()}`} onMouseDown={(e) => e.preventDefault()}>
           <h3
             className="text-m font-regular select-none line-clamp-2 min-h-[48px]"
             style={{

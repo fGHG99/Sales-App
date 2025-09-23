@@ -3,7 +3,7 @@ import { mockImages } from "../utils/mockImages";
 import { CategoryGrid } from "./CategoryGrid";
 import TrendingProducts from "./TrendingProducts";
 import NewProduct from "./NewProduct";
-import mockProducts from "../utils/mockDataProduct";
+import {mockProducts} from "../utils/mockDataProduct";
 
 const Dashboard = () => {
   return (

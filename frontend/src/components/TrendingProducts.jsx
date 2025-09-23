@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import ProductCard from "./ProductCard";
-import mockProducts from "../utils/mockDataProduct";
+import {mockProducts} from "../utils/mockDataProduct";
 
 export default function TrendingProducts() {
   const scrollRef = useRef(null);

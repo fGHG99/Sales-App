@@ -1,19 +1,17 @@
-import React from "react";
 import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
+  createBrowserRouter,
+  RouterProvider,
   useParams,
 } from "react-router-dom";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
-import ShoppingCart from "./components/Cart";
 import Register from "./components/Register";
 import Login from "./components/Login";
 import AuthLayout from "./components/AuthLayout";
 import TermsConditions from "./components/TermsCon";
 import ProductDetail from "./components/ProductDetail";
 import Cart from "./components/cart/Cart";
+import NotFound from "./components/NotFound";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -63,44 +61,32 @@ const SearchPage = () => {
   );
 };
 
-function App() {
-  return (
-    <Router>
-      <Routes>
-        {/* Auth routes - these should come first and not be nested under Layout */}
-        <Route path="/auth" element={<AuthLayout />}>
-          <Route path="signin" element={<Login />} />
-          <Route path="signup" element={<Register />} />
-        </Route>
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Layout />,
+    children: [
+      { index: true, element: <Dashboard /> },
+      { path: "category/:categoryName", element: <CategoryPage /> },
+      { path: "search", element: <SearchPage /> },
+      { path: "cart", element: <Cart /> },
+      { path: "terms-conditions", element: <TermsConditions /> },
+      { path: "p/:productname", element: <ProductDetail /> },
+    ],
+  },
+  {
+    path: "/auth",
+    element: <AuthLayout />,
+    children: [
+      { path: "signin", element: <Login /> },
+      { path: "signup", element: <Register /> },
+    ],
+  },
+  { path: "*", element: <NotFound /> },
+]);
 
-        {/* Main app routes */}
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="category/:categoryName" element={<CategoryPage />} />
-          <Route path="search" element={<SearchPage />} />
-          <Route path="cart" element={<Cart />} />
-          <Route path="terms-conditions" element={<TermsConditions />} />
-          <Route path="p/:productname" element={<ProductDetail />} />
-          {/* Catch all route */}
-          <Route
-            path="*"
-            element={
-              <div className="min-h-screen bg-gray-50 py-16">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                  <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                    404 - Page Not Found
-                  </h1>
-                  <p className="text-lg text-gray-600">
-                    The page you're looking for doesn't exist.
-                  </p>
-                </div>
-              </div>
-            }
-          />
-        </Route>
-      </Routes>
-    </Router>
-  );
+function App() {
+  return <RouterProvider router={router} />;
 }
 
 export default App;

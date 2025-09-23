@@ -107,7 +107,7 @@ const Navbar = () => {
               <SearchBar
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
-                onSelect={(product) => navigate(`/p/${product.id}`)}
+                onSelect={(product) => navigate(`/p/${product.name.replace(/\s+/g, "-").toLowerCase()}`)}
               />
             </div>
 

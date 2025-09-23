@@ -1,4 +1,4 @@
-const mockProducts = [
+export const mockProducts = [
     {
         id: 1,
         name: "Premium Wireless Headphones",
@@ -163,5 +163,3 @@ export const getProductBySlug = (slug) => {
         product.name.toLowerCase() === productName.toLowerCase()
     );
 };
-
-export default mockProducts;
