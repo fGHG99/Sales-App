@@ -13,6 +13,7 @@ import Login from "./components/Login";
 import AuthLayout from "./components/AuthLayout";
 import TermsConditions from "./components/TermsCon";
 import ProductDetail from "./components/ProductDetail";
+import Cart from "./components/cart/Cart";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -77,7 +78,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="category/:categoryName" element={<CategoryPage />} />
           <Route path="search" element={<SearchPage />} />
-          <Route path="cart" element={<ShoppingCart />} />
+          <Route path="cart" element={<Cart />} />
           <Route path="terms-conditions" element={<TermsConditions />} />
           <Route path="p/:productname" element={<ProductDetail />} />
           {/* Catch all route */}

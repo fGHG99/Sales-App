@@ -10,6 +10,17 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   MapPin,
   StoreIcon,
@@ -17,6 +28,9 @@ import {
   Truck,
   Settings,
   Banknote,
+  Trash2,
+  Minus,
+  Plus,
 } from "lucide-react";
 import DeliveryOptionsModal from "./modal/delivery-option";
 import { PaymentOptionsModal } from "./modal/payment-option";
@@ -34,9 +48,10 @@ export default function Cart() {
     methodId: "card-1",
   });
   const [selectedAddress, setSelectedAddress] = useState("1");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
 
-  // Mock data
-  const cartItems = [
+  const [cartItems, setCartItems] = useState([
     {
       id: "1",
       name: "Premium Wireless Headphones",
@@ -58,7 +73,11 @@ export default function Cart() {
       quantity: 1,
       image: "/bluetooth-speaker.png",
     },
-  ];
+  ]);
+
+  const [selectedItems, setSelectedItems] = useState(
+    new Set(cartItems.map((item) => item.id))
+  );
 
   const deliveryAddresses = [
     {
@@ -96,12 +115,45 @@ export default function Cart() {
     }).format(amount);
   };
 
-  const subtotal = cartItems.reduce(
+  const selectedCartItems = cartItems.filter((item) =>
+    selectedItems.has(item.id)
+  );
+  const subtotal = selectedCartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0
   );
   const deliveryCost = deliveryOption.cost;
   const total = subtotal + deliveryCost;
+
+  const updateQuantity = (itemId, newQuantity) => {
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.id === itemId) {
+          if (item.quantity === 1 && newQuantity < 1) {
+            // Instead of removing immediately, show confirmation modal
+            setItemToDelete(itemId);
+            setShowDeleteModal(true);
+            return item; // don't change yet
+          }
+          return { ...item, quantity: Math.max(1, newQuantity) };
+        }
+        return item;
+      })
+    );
+  };
+
+  const confirmDelete = () => {
+    if (itemToDelete) {
+      removeItem(itemToDelete);
+      setItemToDelete(null);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setItemToDelete(null);
+    setShowDeleteModal(false);
+  };
 
   const mockStores = [
     {
@@ -113,6 +165,35 @@ export default function Cart() {
       distance: "2.3 miles",
     },
   ];
+
+  const removeItem = (itemId) => {
+    setCartItems((prev) => prev.filter((item) => item.id !== itemId));
+    setSelectedItems((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(itemId);
+      return newSet;
+    });
+  };
+
+  const toggleItemSelection = (itemId) => {
+    setSelectedItems((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.size === cartItems.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(cartItems.map((item) => item.id)));
+    }
+  };
 
   const getDeliveryDisplayText = () => {
     if (deliveryOption.type === "courier") {
@@ -311,11 +392,29 @@ export default function Cart() {
             {/* Order Items */}
             <Card className="bg-card border-border">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-card-foreground">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                    {deliveryOption.type === "courier" ? "4" : "3"}
+                <CardTitle className="flex items-center justify-between text-card-foreground">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                      {deliveryOption.type === "courier" ? "4" : "3"}
+                    </div>
+                    Order Items ({cartItems.length})
                   </div>
-                  Order Items ({cartItems.length})
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="select-all"
+                      checked={
+                        selectedItems.size === cartItems.length &&
+                        cartItems.length > 0
+                      }
+                      onCheckedChange={toggleSelectAll}
+                    />
+                    <label
+                      htmlFor="select-all"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Select All
+                    </label>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -324,6 +423,10 @@ export default function Cart() {
                     key={item.id}
                     className="flex items-center gap-4 p-4 bg-muted rounded-lg"
                   >
+                    <Checkbox
+                      checked={selectedItems.has(item.id)}
+                      onCheckedChange={() => toggleItemSelection(item.id)}
+                    />
                     <img
                       src={item.image || "/placeholder.svg"}
                       alt={item.name}
@@ -337,27 +440,54 @@ export default function Cart() {
                         {formatIDR(item.price)} each
                       </p>
                     </div>
-
-                    {/* Fixed width for quantity */}
-                    <div className="w-12 text-center">
-                      <span className="font-medium text-card-foreground">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 bg-transparent"
+                        onClick={() =>
+                          updateQuantity(item.id, item.quantity - 1)
+                        }
+                      >
+                        <Minus className="w-3 h-3" />
+                      </Button>
+                      <span className="w-8 text-center font-medium text-card-foreground">
                         {item.quantity}
                       </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 bg-transparent"
+                        onClick={() =>
+                          updateQuantity(item.id, item.quantity + 1)
+                        }
+                      >
+                        <Plus className="w-3 h-3" />
+                      </Button>
                     </div>
-
-                    {/* Fixed width for total price, aligned right */}
-                    <div className="w-24 text-right">
+                    <div className="text-right">
                       <p className="font-semibold text-card-foreground">
                         {formatIDR(item.price * item.quantity)}
                       </p>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 bg-transparent text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      onClick={() => removeItem(item.id)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
                   </div>
                 ))}
 
                 <Separator className="bg-border" />
 
                 <div className="flex justify-between items-center text-lg font-semibold">
-                  <span className="text-card-foreground">Subtotal</span>
+                  <span className="text-card-foreground">
+                    Subtotal{" "}
+                    {selectedItems.size > 0 && `(${selectedItems.size} items)`}
+                  </span>
                   <span className="text-card-foreground">
                     {formatIDR(subtotal)}
                   </span>
@@ -431,6 +561,27 @@ export default function Cart() {
         currentSelection={selectedPayment}
         subtotal={total}
       />
+
+      {showDeleteModal && (
+        <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove the item from your cart.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={cancelDelete}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete}>
+                Remove
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
