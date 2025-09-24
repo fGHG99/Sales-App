@@ -118,20 +118,10 @@ const Navbar = () => {
             </div>
 
             <div className="hidden lg:flex items-center space-x-6">
-              {/* Cart Section */}
-              <button
-                onClick={handleCartClick}
-                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
-                aria-label="Shopping cart"
-              >
-                <ShoppingCart className="w-6 h-6" />
-              </button>
-
-              {/* !IMPORANT! make it beautiful later */}
-              {/* Auth Section */}
               <AuthSection
                 isAuthenticated={isAuthenticated}
                 user={{ name: "User" }}
+                handleCartClick={handleCartClick}
               />
             </div>
 

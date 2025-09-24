@@ -1,9 +1,30 @@
 import { Link } from "react-router-dom";
-import { Bell, Receipt, User } from "lucide-react";
 
-export default function AuthSection({ isAuthenticated, user }) {
+export default function AuthSection({
+  isAuthenticated,
+  user,
+  handleCartClick,
+}) {
   return (
-    <div className="flex items-center space-x-3">
+    <div
+      className={`flex items-center ${
+        isAuthenticated ? "space-x-2" : "space-x-4"
+      }`}
+    >
+      {/* Cart Section (shared) */}
+      <button
+        onClick={handleCartClick}
+        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+        aria-label="Shopping cart"
+      >
+        <img
+          src="/assets/cart_icon.png"
+          alt="Cart"
+          className="w-6 h-6 object-contain"
+        />
+      </button>
+
+      {/* Auth Section */}
       {!isAuthenticated ? (
         <>
           <Link
@@ -23,19 +44,27 @@ export default function AuthSection({ isAuthenticated, user }) {
       ) : (
         <>
           {/* Notification */}
-          <button
-            type="button"
-            className="p-2 text-gray-700 hover:text-blue-600 transition-colors duration-200"
+          <Link
+            to="/notifications"
+            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
           >
-            <Bell className="w-5 h-5" />
-          </button>
+            <img
+              src="/assets/notification_icon.png"
+              alt="Notification"
+              className="w-6 h-6 object-contain"
+            />
+          </Link>
 
           {/* Order History */}
           <Link
             to="/orders"
-            className="p-2 text-gray-700 hover:text-blue-600 transition-colors duration-200"
+            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
           >
-            <Receipt className="w-5 h-5" />
+            <img
+              src="/assets/order_icon.png"
+              alt="Orders"
+              className="w-6 h-6 object-contain"
+            />
           </Link>
 
           {/* Separator */}
@@ -43,21 +72,21 @@ export default function AuthSection({ isAuthenticated, user }) {
 
           {/* User Menu */}
           <div className="flex items-center space-x-1 cursor-pointer hover:text-blue-600 transition-colors duration-200">
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-              <User className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ml-2 overflow-hidden">
+              <img
+                src="/assets/user_icon.png"
+                alt="User"
+                className="w-6 h-6 object-contain"
+              />
             </div>
-            <span className="font-inter text-sm text-gray-700">
-              {user?.name || "User"}
+            <span className="font-regular text-sm text-gray-700 ml-2 overflow-hidden whitespace-nowrap">
+              {(() => {
+                const name = user?.name || "User";
+                return name.length > 4 ? name.slice(0, 4) + "..." : name;
+              })()}
             </span>
-            <svg
-              className="w-4 h-4 text-gray-500"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <path d="M19 9l-7 7-7-7" />
-            </svg>
+
+            <ChevronDown className="w-4 h-4 text-gray-500" />
           </div>
         </>
       )}
