@@ -1,12 +1,18 @@
-import React, { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Banknote, CreditCard, Smartphone, Wallet, AlertCircle } from "lucide-react"
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Card, CardContent } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { Separator } from "../ui/separator";
+import {
+  Banknote,
+  CreditCard,
+  Smartphone,
+  Wallet,
+  AlertCircle,
+} from "lucide-react";
 
 export function PaymentOptionsModal({
   open,
@@ -15,10 +21,14 @@ export function PaymentOptionsModal({
   currentSelection,
   subtotal,
 }) {
-  const [selectedOption, setSelectedOption] = useState(currentSelection.type)
-  const [customCashAmount, setCustomCashAmount] = useState(currentSelection.cashAmount?.toString() || "")
-  const [selectedMethodId, setSelectedMethodId] = useState(currentSelection.methodId || "card-1")
-  const [cashError, setCashError] = useState("")
+  const [selectedOption, setSelectedOption] = useState(currentSelection.type);
+  const [customCashAmount, setCustomCashAmount] = useState(
+    currentSelection.cashAmount?.toString() || ""
+  );
+  const [selectedMethodId, setSelectedMethodId] = useState(
+    currentSelection.methodId || "card-1"
+  );
+  const [cashError, setCashError] = useState("");
 
   const paymentMethods = [
     {
@@ -56,68 +66,72 @@ export function PaymentOptionsModal({
       icon: Smartphone,
       details: "Connected account",
     },
-  ]
+  ];
 
   const formatIDR = (amount) => {
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
       minimumFractionDigits: 0,
-    }).format(amount)
-  }
+    }).format(amount);
+  };
 
   const suggestedCashAmounts = [
     Math.ceil(subtotal / 50000) * 50000,
     Math.ceil(subtotal / 100000) * 100000,
     Math.ceil(subtotal / 100000) * 100000 + 50000,
-  ]
+  ];
 
   const validateCashAmount = (amount) => {
-    const numAmount = Number.parseFloat(amount.replace(/[^\d]/g, ""))
+    const numAmount = Number.parseFloat(amount.replace(/[^\d]/g, ""));
     if (isNaN(numAmount) || numAmount < subtotal) {
-      setCashError(`Amount must be at least ${formatIDR(subtotal)}`)
-      return false
+      setCashError(`Amount must be at least ${formatIDR(subtotal)}`);
+      return false;
     }
-    setCashError("")
-    return true
-  }
+    setCashError("");
+    return true;
+  };
 
   const handleCashAmountChange = (value) => {
-    const cleanValue = value.replace(/[^\d]/g, "")
-    setCustomCashAmount(cleanValue)
+    const cleanValue = value.replace(/[^\d]/g, "");
+    setCustomCashAmount(cleanValue);
 
     if (cleanValue) {
-      validateCashAmount(cleanValue)
+      validateCashAmount(cleanValue);
     } else {
-      setCashError("")
+      setCashError("");
     }
-  }
+  };
 
   const handleConfirm = () => {
     if (selectedOption === "cash") {
-      const amount = Number.parseFloat(customCashAmount.replace(/[^\d]/g, ""))
+      const amount = Number.parseFloat(customCashAmount.replace(/[^\d]/g, ""));
       if (validateCashAmount(customCashAmount)) {
-        onPaymentSelect({ type: "cash", cashAmount: amount })
-        onOpenChange(false)
+        onPaymentSelect({ type: "cash", cashAmount: amount });
+        onOpenChange(false);
       }
     } else {
-      onPaymentSelect({ type: "method", methodId: selectedMethodId })
-      onOpenChange(false)
+      onPaymentSelect({ type: "method", methodId: selectedMethodId });
+      onOpenChange(false);
     }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-card-foreground">Select Payment Method</DialogTitle>
+          <DialogTitle className="text-card-foreground">
+            Select Payment Method
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Cash Payment Option */}
           <Card
             className={`cursor-pointer transition-all ${
-              selectedOption === "cash" ? "border-primary bg-accent" : "border-border hover:border-muted-foreground"
+              selectedOption === "cash"
+                ? "border-primary bg-accent"
+                : "border-border hover:border-muted-foreground"
             }`}
             onClick={() => setSelectedOption("cash")}
           >
@@ -125,8 +139,12 @@ export function PaymentOptionsModal({
               <div className="flex items-center gap-3 mb-4">
                 <Banknote className="w-6 h-6 text-muted-foreground" />
                 <div>
-                  <h3 className="font-semibold text-card-foreground">Cash Payment</h3>
-                  <p className="text-sm text-muted-foreground">Pay with cash on delivery/pickup</p>
+                  <h3 className="font-semibold text-card-foreground">
+                    Cash Payment
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Pay with cash on delivery/pickup
+                  </p>
                 </div>
               </div>
 
@@ -140,9 +158,9 @@ export function PaymentOptionsModal({
                         size="sm"
                         className="text-xs bg-transparent"
                         onClick={(e) => {
-                          e.stopPropagation()
-                          setCustomCashAmount(amount.toString())
-                          setCashError("")
+                          e.stopPropagation();
+                          setCustomCashAmount(amount.toString());
+                          setCashError("");
                         }}
                       >
                         {formatIDR(amount)}
@@ -151,16 +169,27 @@ export function PaymentOptionsModal({
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="cash-amount" className="text-card-foreground">
+                    <Label
+                      htmlFor="cash-amount"
+                      className="text-card-foreground"
+                    >
                       Custom Amount
                     </Label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Rp</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        Rp
+                      </span>
                       <Input
                         id="cash-amount"
                         type="text"
                         placeholder="0"
-                        value={customCashAmount ? Number.parseInt(customCashAmount).toLocaleString("id-ID") : ""}
+                        value={
+                          customCashAmount
+                            ? Number.parseInt(customCashAmount).toLocaleString(
+                                "id-ID"
+                              )
+                            : ""
+                        }
                         onChange={(e) => handleCashAmountChange(e.target.value)}
                         className={`pl-10 bg-input border-border text-card-foreground ${
                           cashError ? "border-destructive" : ""
@@ -182,7 +211,10 @@ export function PaymentOptionsModal({
                     </p>
                     {customCashAmount && !cashError && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        <strong>Change:</strong> {formatIDR(Number.parseInt(customCashAmount) - subtotal)}
+                        <strong>Change:</strong>{" "}
+                        {formatIDR(
+                          Number.parseInt(customCashAmount) - subtotal
+                        )}
                       </p>
                     )}
                   </div>
@@ -194,7 +226,9 @@ export function PaymentOptionsModal({
           {/* Digital Payment Methods */}
           <Card
             className={`cursor-pointer transition-all ${
-              selectedOption === "method" ? "border-primary bg-accent" : "border-border hover:border-muted-foreground"
+              selectedOption === "method"
+                ? "border-primary bg-accent"
+                : "border-border hover:border-muted-foreground"
             }`}
             onClick={() => setSelectedOption("method")}
           >
@@ -202,8 +236,12 @@ export function PaymentOptionsModal({
               <div className="flex items-center gap-3 mb-4">
                 <CreditCard className="w-6 h-6 text-muted-foreground" />
                 <div>
-                  <h3 className="font-semibold text-card-foreground">Digital Payment</h3>
-                  <p className="text-sm text-muted-foreground">Pay with card or digital wallet</p>
+                  <h3 className="font-semibold text-card-foreground">
+                    Digital Payment
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Pay with card or digital wallet
+                  </p>
                 </div>
               </div>
 
@@ -218,15 +256,21 @@ export function PaymentOptionsModal({
                           : "border-border hover:border-muted-foreground"
                       }`}
                       onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedMethodId(method.id)
+                        e.stopPropagation();
+                        setSelectedMethodId(method.id);
                       }}
                     >
                       <div className="flex items-center gap-3">
                         <method.icon className="w-5 h-5 text-muted-foreground" />
                         <div className="flex-1">
-                          <p className="font-medium text-card-foreground">{method.name}</p>
-                          {method.details && <p className="text-sm text-muted-foreground">{method.details}</p>}
+                          <p className="font-medium text-card-foreground">
+                            {method.name}
+                          </p>
+                          {method.details && (
+                            <p className="text-sm text-muted-foreground">
+                              {method.details}
+                            </p>
+                          )}
                         </div>
                         {method.type === "digital" && (
                           <Badge variant="secondary" className="text-xs">
@@ -245,13 +289,19 @@ export function PaymentOptionsModal({
 
           {/* Action Buttons */}
           <div className="flex gap-3">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="flex-1"
+            >
               Cancel
             </Button>
             <Button
               onClick={handleConfirm}
               className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-              disabled={selectedOption === "cash" && (!!cashError || !customCashAmount)}
+              disabled={
+                selectedOption === "cash" && (!!cashError || !customCashAmount)
+              }
             >
               Confirm Payment Method
             </Button>
@@ -259,5 +309,5 @@ export function PaymentOptionsModal({
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

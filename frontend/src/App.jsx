@@ -13,6 +13,8 @@ import ProductDetail from "./components/ProductDetail";
 import Cart from "./components/cart/Cart";
 import NotFound from "./components/NotFound";
 import ProductPageResult from "./components/ProductSearchResult";
+import OrderHistory from "./components/OrderHistory";
+import EditProfile from "./components/EditProfile";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -83,6 +85,13 @@ const router = createBrowserRouter([
       { path: "signup", element: <Register /> },
     ],
   },
+  {
+    path: "/user",
+    element: <Layout />,
+    children: [{ path: "orders", element: <OrderHistory /> }],
+    children: [{ path: "profile", element: <EditProfile /> }],
+  },
+
   { path: "*", element: <NotFound /> },
 ]);
 

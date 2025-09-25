@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
-import NotificationDropdown from "./notification/NotificationDropdown";
+import NotificationDropdown from "./other/NotificationDropdown";
 
 export default function AuthSection({
   isAuthenticated,
@@ -113,7 +113,7 @@ export default function AuthSection({
 
           {/* Order History */}
           <Link
-            to="/orders"
+            to="/user/orders"
             className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
             aria-label="Order history"
           >

@@ -1,23 +1,29 @@
-import { useState, useEffect } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Truck, MapPin, Clock, Navigation, Store } from "lucide-react"
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Button } from "../ui/button";
+import { Card, CardContent } from "../ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import { Badge } from "../ui/badge";
+import { Skeleton } from "../ui/skeleton";
+import { Truck, MapPin, Clock, Navigation, Store } from "lucide-react";
 
 export default function DeliveryOptionsModal({
   open,
   onOpenChange,
   onDeliverySelect,
 }) {
-  const [selectedOption, setSelectedOption] = useState("courier")
-  const [selectedStore, setSelectedStore] = useState("")
-  const [selectedTime, setSelectedTime] = useState("")
-  const [stores, setStores] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [showMap, setShowMap] = useState(null)
+  const [selectedOption, setSelectedOption] = useState("courier");
+  const [selectedStore, setSelectedStore] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showMap, setShowMap] = useState(null);
 
   // Mock store data
   const mockStores = [
@@ -51,46 +57,52 @@ export default function DeliveryOptionsModal({
       distanceValue: 8.1,
       coordinates: { lat: 40.7282, lng: -73.7949 },
     },
-  ]
+  ];
 
   useEffect(() => {
     if (open && selectedOption === "pickup") {
-      setLoading(true)
+      setLoading(true);
       setTimeout(() => {
-        const sortedStores = [...mockStores].sort((a, b) => a.distanceValue - b.distanceValue)
-        setStores(sortedStores)
-        setLoading(false)
-      }, 1000)
+        const sortedStores = [...mockStores].sort(
+          (a, b) => a.distanceValue - b.distanceValue
+        );
+        setStores(sortedStores);
+        setLoading(false);
+      }, 1000);
     }
-  }, [open, selectedOption])
+  }, [open, selectedOption]);
 
   const generateTimeSlots = (openHour, closeHour) => {
-    const slots = []
-    const start = parseInt(openHour.split(":")[0])
-    const end = parseInt(closeHour.split(":")[0])
+    const slots = [];
+    const start = parseInt(openHour.split(":")[0]);
+    const end = parseInt(closeHour.split(":")[0]);
 
     for (let hour = start; hour < end; hour++) {
-      const timeString = `${hour.toString().padStart(2, "0")}:00`
+      const timeString = `${hour.toString().padStart(2, "0")}:00`;
       const displayTime =
-        hour < 12 ? `${hour}:00 AM` : hour === 12 ? "12:00 PM" : `${hour - 12}:00 PM`
-      slots.push({ value: timeString, display: displayTime })
+        hour < 12
+          ? `${hour}:00 AM`
+          : hour === 12
+          ? "12:00 PM"
+          : `${hour - 12}:00 PM`;
+      slots.push({ value: timeString, display: displayTime });
     }
-    return slots
-  }
+    return slots;
+  };
 
   const handleConfirm = () => {
     if (selectedOption === "courier") {
-      onDeliverySelect({ type: "courier", cost: 12000 })
+      onDeliverySelect({ type: "courier", cost: 12000 });
     } else if (selectedOption === "pickup" && selectedStore && selectedTime) {
       onDeliverySelect({
         type: "pickup",
         storeId: selectedStore,
         pickupTime: selectedTime,
         cost: 0,
-      })
+      });
     }
-    onOpenChange(false)
-  }
+    onOpenChange(false);
+  };
 
   const MapModal = ({ store }) => (
     <Dialog open={showMap === store.id} onOpenChange={() => setShowMap(null)}>
@@ -132,13 +144,15 @@ export default function DeliveryOptionsModal({
             <div className="relative z-10 text-center">
               <MapPin className="w-8 h-8 text-red-500 mx-auto mb-2" />
               <p className="font-medium text-foreground">{store.name}</p>
-              <p className="text-sm text-muted-foreground">{store.distance} from your location</p>
+              <p className="text-sm text-muted-foreground">
+                {store.distance} from your location
+              </p>
             </div>
           </div>
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 
   return (
     <>
@@ -156,12 +170,14 @@ export default function DeliveryOptionsModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card
                 className={`cursor-pointer transition-all ${
-                  selectedOption === "courier" ? "ring-2 ring-primary bg-accent" : "hover:bg-accent/50"
+                  selectedOption === "courier"
+                    ? "ring-2 ring-primary bg-accent"
+                    : "hover:bg-accent/50"
                 }`}
                 onClick={() => {
-                  setSelectedOption("courier")
-                  setSelectedStore("")
-                  setSelectedTime("")
+                  setSelectedOption("courier");
+                  setSelectedStore("");
+                  setSelectedTime("");
                 }}
               >
                 <CardContent className="p-6">
@@ -169,9 +185,13 @@ export default function DeliveryOptionsModal({
                     <Truck className="w-6 h-6 text-primary" />
                     <h3 className="font-semibold text-lg">Courier Delivery</h3>
                   </div>
-                  <p className="text-muted-foreground mb-2">Fast delivery to your address</p>
+                  <p className="text-muted-foreground mb-2">
+                    Fast delivery to your address
+                  </p>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">1-2 business days</span>
+                    <span className="text-sm text-muted-foreground">
+                      1-2 business days
+                    </span>
                     <Badge variant="secondary">Rp 12.000</Badge>
                   </div>
                 </CardContent>
@@ -179,12 +199,14 @@ export default function DeliveryOptionsModal({
 
               <Card
                 className={`cursor-pointer transition-all ${
-                  selectedOption === "pickup" ? "ring-2 ring-primary bg-accent" : "hover:bg-accent/50"
+                  selectedOption === "pickup"
+                    ? "ring-2 ring-primary bg-accent"
+                    : "hover:bg-accent/50"
                 }`}
                 onClick={() => {
-                  setSelectedOption("pickup")
-                  setSelectedStore("")
-                  setSelectedTime("")
+                  setSelectedOption("pickup");
+                  setSelectedStore("");
+                  setSelectedTime("");
                 }}
               >
                 <CardContent className="p-6">
@@ -194,9 +216,13 @@ export default function DeliveryOptionsModal({
                     </div>
                     <h3 className="font-semibold text-lg">Store Pickup</h3>
                   </div>
-                  <p className="text-muted-foreground mb-2">Pick up from nearest store</p>
+                  <p className="text-muted-foreground mb-2">
+                    Pick up from nearest store
+                  </p>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Same day available</span>
+                    <span className="text-sm text-muted-foreground">
+                      Same day available
+                    </span>
                     <Badge variant="secondary">Free</Badge>
                   </div>
                 </CardContent>
@@ -206,7 +232,9 @@ export default function DeliveryOptionsModal({
             {/* Store Selection for Pickup */}
             {selectedOption === "pickup" && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-lg">Select Store & Pickup Time</h3>
+                <h3 className="font-semibold text-lg">
+                  Select Store & Pickup Time
+                </h3>
 
                 {loading ? (
                   <div className="space-y-4">
@@ -229,16 +257,18 @@ export default function DeliveryOptionsModal({
                 ) : (
                   <div className="space-y-3">
                     {stores.map((store) => {
-                      const isExpanded = selectedStore === store.id
+                      const isExpanded = selectedStore === store.id;
                       return (
                         <Card
                           key={store.id}
                           className={`cursor-pointer transition-all ${
-                            isExpanded ? "ring-2 ring-primary bg-accent" : "hover:bg-accent/50"
+                            isExpanded
+                              ? "ring-2 ring-primary bg-accent"
+                              : "hover:bg-accent/50"
                           }`}
                           onClick={() => {
-                            setSelectedStore(store.id)
-                            setSelectedTime("")
+                            setSelectedStore(store.id);
+                            setSelectedTime("");
                           }}
                         >
                           <CardContent className="p-4 space-y-3">
@@ -255,7 +285,9 @@ export default function DeliveryOptionsModal({
                                     {store.distance}
                                   </Badge>
                                 </div>
-                                <p className="text-sm text-muted-foreground mb-1">{store.address}</p>
+                                <p className="text-sm text-muted-foreground mb-1">
+                                  {store.address}
+                                </p>
                                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                                   <div className="flex items-center gap-1">
                                     <Clock className="w-3 h-3" />
@@ -269,8 +301,8 @@ export default function DeliveryOptionsModal({
                                 variant="outline"
                                 size="sm"
                                 onClick={(e) => {
-                                  e.stopPropagation()
-                                  setShowMap(store.id)
+                                  e.stopPropagation();
+                                  setShowMap(store.id);
                                 }}
                               >
                                 View Map
@@ -280,26 +312,35 @@ export default function DeliveryOptionsModal({
                             {/* Time Selection shown only if expanded */}
                             {isExpanded && (
                               <div className="pt-3 border-t">
-                                <h4 className="font-medium mb-2">Select Pickup Time</h4>
-                                <Select value={selectedTime} onValueChange={setSelectedTime}>
+                                <h4 className="font-medium mb-2">
+                                  Select Pickup Time
+                                </h4>
+                                <Select
+                                  value={selectedTime}
+                                  onValueChange={setSelectedTime}
+                                >
                                   <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Choose pickup time" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {generateTimeSlots(store.openHour, store.closeHour).map(
-                                      (slot) => (
-                                        <SelectItem key={slot.value} value={slot.value}>
-                                          {slot.display}
-                                        </SelectItem>
-                                      )
-                                    )}
+                                    {generateTimeSlots(
+                                      store.openHour,
+                                      store.closeHour
+                                    ).map((slot) => (
+                                      <SelectItem
+                                        key={slot.value}
+                                        value={slot.value}
+                                      >
+                                        {slot.display}
+                                      </SelectItem>
+                                    ))}
                                   </SelectContent>
                                 </Select>
                               </div>
                             )}
                           </CardContent>
                         </Card>
-                      )
+                      );
                     })}
                   </div>
                 )}
@@ -318,7 +359,8 @@ export default function DeliveryOptionsModal({
               <Button
                 onClick={handleConfirm}
                 disabled={
-                  (selectedOption === "pickup" && (!selectedStore || !selectedTime)) ||
+                  (selectedOption === "pickup" &&
+                    (!selectedStore || !selectedTime)) ||
                   (selectedOption === "courier" && false)
                 }
                 className="flex-1"
@@ -335,5 +377,5 @@ export default function DeliveryOptionsModal({
         <MapModal key={store.id} store={store} />
       ))}
     </>
-  )
+  );
 }
