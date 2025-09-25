@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Button } from './ui/button';
@@ -10,7 +10,7 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { toast } from './hook/useToast';
 import DatePicker from './other/DatePicker';
-import ImageCropModal from './other/ImageCropModal';
+import ImageCropModal from './modal/ImageCropModal';
 import ProfileSkeleton from './other/ProfileSkeleton';
 import {
   Camera,

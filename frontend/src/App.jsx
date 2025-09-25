@@ -88,8 +88,10 @@ const router = createBrowserRouter([
   {
     path: "/user",
     element: <Layout />,
-    children: [{ path: "orders", element: <OrderHistory /> }],
-    children: [{ path: "profile", element: <EditProfile /> }],
+    children: [
+      { path: "orders", element: <OrderHistory /> },
+      { path: "profile", element: <EditProfile /> },
+    ],
   },
 
   { path: "*", element: <NotFound /> },

@@ -1,5 +1,4 @@
-import React from "react";
-import { ShoppingCart, Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();

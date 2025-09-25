@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
 
 // not used yet
