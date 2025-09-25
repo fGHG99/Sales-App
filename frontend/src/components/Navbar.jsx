@@ -17,7 +17,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // Mock authentication state set to true to show authenticated navbar
+  const [isAuthenticated, setIsAuthenticated] = useState(true); // Mock authentication state set to true to show authenticated navbar
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 

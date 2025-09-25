@@ -1,10 +1,41 @@
+import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
+import NotificationDropdown from "./notification/NotificationDropdown";
 
 export default function AuthSection({
   isAuthenticated,
   user,
   handleCartClick,
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const closeTimeoutRef = useRef(null);
+
+  const openDropdown = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    setIsOpen(true);
+  };
+
+  const closeDropdown = () => {
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 100); // 100ms delay untuk memberikan waktu mouse pindah ke dropdown
+  };
+
+  // Cleanup timer saat component unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const hasNotification = true; // Replace with actual notification logic
+  const notif = [1, 2]; // Replace with actual notification data
+
   return (
     <div
       className={`flex items-center ${
@@ -33,7 +64,6 @@ export default function AuthSection({
           >
             Masuk
           </Link>
-
           <Link
             to="/auth/signup"
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-inter font-medium"
@@ -43,22 +73,49 @@ export default function AuthSection({
         </>
       ) : (
         <>
-          {/* Notification */}
-          <Link
-            to="/notifications"
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+          {/* Notification (icon + dropdown container) */}
+          <div
+            className="relative"
+            onMouseEnter={openDropdown}
+            onMouseLeave={closeDropdown}
           >
-            <img
-              src="/assets/notification_icon.png"
-              alt="Notification"
-              className="w-6 h-6 object-contain"
-            />
-          </Link>
+            <button
+              className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+              aria-label="Notifications"
+            >
+              <div className="relative w-6 h-6">
+                {/* Bell Icon */}
+                <img
+                  src="/assets/notification_icon.png"
+                  alt="Notification"
+                  className="w-6 h-6 object-contain"
+                />
+                {/* Red Dot with Number */}
+                {hasNotification && (
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
+                    {notif.length}
+                  </span>
+                )}
+              </div>
+            </button>
+            
+            {/* Dropdown - render tepat di bawah button tanpa gap */}
+            {isOpen && (
+              <div className="absolute top-full left-0 z-50 w-64">
+                <NotificationDropdown
+                  isOpen={isOpen}
+                  onToggle={setIsOpen}
+                  notifications={notif}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Order History */}
           <Link
             to="/orders"
             className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+            aria-label="Order history"
           >
             <img
               src="/assets/order_icon.png"
@@ -85,7 +142,6 @@ export default function AuthSection({
                 return name.length > 4 ? name.slice(0, 4) + "..." : name;
               })()}
             </span>
-
             <ChevronDown className="w-4 h-4 text-gray-500" />
           </div>
         </>

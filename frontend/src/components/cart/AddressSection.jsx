@@ -15,6 +15,8 @@ export default function AddressSection({
   selectedAddress,
   setSelectedAddress,
 }) {
+  const selectedAddressData = deliveryAddresses.find(addr => addr.id === selectedAddress);
+
   return (
     <Card className="bg-card border-border">
       <CardHeader>
@@ -25,19 +27,25 @@ export default function AddressSection({
           Delivery Address
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="w-full">
         <Select value={selectedAddress} onValueChange={setSelectedAddress}>
-          <SelectTrigger className="w-full bg-input border-border text-card-foreground">
+          <SelectTrigger className="w-full px-6 py-5 bg-input border border-border text-card-foreground rounded-lg min-h-[60px] flex items-center justify-start">
             <SelectValue />
+            {selectedAddressData?.isDefault && (
+              <Badge variant="secondary" className="ml-auto mr-2">
+                Default
+              </Badge>
+            )}
           </SelectTrigger>
-          <SelectContent className="bg-popover border-border">
+
+          <SelectContent className="w-[var(--radix-select-trigger-width)] bg-popover border border-border">
             {deliveryAddresses.map((address) => (
               <SelectItem
                 key={address.id}
                 value={address.id}
                 className="text-popover-foreground"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
                   <MapPin className="w-4 h-4" />
                   <div>
                     <p className="font-medium">{address.name}</p>
@@ -45,11 +53,6 @@ export default function AddressSection({
                       {address.address}
                     </p>
                   </div>
-                  {address.isDefault && (
-                    <Badge variant="secondary" className="ml-2">
-                      Default
-                    </Badge>
-                  )}
                 </div>
               </SelectItem>
             ))}
