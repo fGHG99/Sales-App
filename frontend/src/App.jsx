@@ -15,7 +15,7 @@ import NotFound from "./components/NotFound";
 import ProductPageResult from "./components/ProductSearchResult";
 import OrderHistory from "./components/OrderHistory";
 import EditProfile from "./components/User/user-profile/EditProfile";
-import UserDropdown from "./components/User/user-dropdown/UserDropdown";
+import MapTilerDemo from "./components/demo";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -71,7 +71,7 @@ const router = createBrowserRouter([
       { path: "profile", element: <EditProfile /> },
     ],
   },
-  { path: "test", element: <UserDropdown /> },
+  { path: "/demo", element: <MapTilerDemo /> },
   { path: "*", element: <NotFound /> },
 ]);
 
