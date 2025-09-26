@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Badge } from './ui/badge';
-import { Separator } from './ui/separator';
-import { toast } from './hook/useToast';
-import DatePicker from './other/DatePicker';
-import ImageCropModal from './modal/ImageCropModal';
-import ProfileSkeleton from './other/ProfileSkeleton';
+import { useState, useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { Card, CardHeader, CardTitle, CardContent } from "../../ui/card";
+import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
+import { Label } from "../../ui/label";
+import { RadioGroup, RadioGroupItem } from "../../ui/radio-group";
+import { Avatar, AvatarFallback, AvatarImage } from "../../ui/avatar";
+import { Badge } from "../../ui/badge";
+import { Separator } from "../../ui/separator";
+import { toast } from "../../hook/useToast";
+import DatePicker from "./DatePicker";
+import ImageCropModal from "../../modal/ImageCropModal";
+import ProfileSkeleton from "./ProfileSkeleton";
 import {
   Camera,
   Check,
@@ -25,15 +25,21 @@ import {
   Edit2,
   Save,
   Calendar,
-  Trash2
-} from 'lucide-react';
-import { updateField, resendEmailVerification, setLoading } from '../utils/profileSlice';
+  Trash2,
+} from "lucide-react";
+import {
+  updateField,
+  resendEmailVerification,
+  setLoading,
+} from "../../../utils/profileSlice";
 
 const EditProfile = () => {
   const dispatch = useDispatch();
   const { user, loading } = useSelector((state) => state.profile);
   const [profilePicture, setProfilePicture] = useState(user.profilePicture);
-  const [selectedDate, setSelectedDate] = useState(user.dateOfBirth ? new Date(user.dateOfBirth) : null);
+  const [selectedDate, setSelectedDate] = useState(
+    user.dateOfBirth ? new Date(user.dateOfBirth) : null
+  );
   const [showCropModal, setShowCropModal] = useState(false);
   const [tempImageSrc, setTempImageSrc] = useState(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -43,13 +49,13 @@ const EditProfile = () => {
     dispatch(setLoading(true));
     const timer = setTimeout(() => {
       dispatch(setLoading(false));
-    }, 2000);
+    }, 500);
     return () => clearTimeout(timer);
   }, [dispatch]);
 
   const maskPhoneNumber = (phone) => {
     if (phone.length > 3) {
-      return '*'.repeat(phone.length - 3) + phone.slice(-3);
+      return "*".repeat(phone.length - 3) + phone.slice(-3);
     }
     return phone;
   };
@@ -61,8 +67,8 @@ const EditProfile = () => {
   const handleDateChange = (date) => {
     setSelectedDate(date);
     if (date) {
-      const formattedDate = date.toISOString().split('T')[0];
-      handleInputChange('dateOfBirth', formattedDate);
+      const formattedDate = date.toISOString().split("T")[0];
+      handleInputChange("dateOfBirth", formattedDate);
     }
   };
 
@@ -87,7 +93,7 @@ const EditProfile = () => {
     }
 
     // Check file type with more comprehensive validation
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Invalid file format",
@@ -107,7 +113,7 @@ const EditProfile = () => {
 
     if (!validateImageFile(file)) {
       // Clear the input
-      event.target.value = '';
+      event.target.value = "";
       return;
     }
 
@@ -115,14 +121,14 @@ const EditProfile = () => {
 
     // Create preview URL for cropping with error handling
     const reader = new FileReader();
-    
+
     reader.onload = (e) => {
       try {
         setTempImageSrc(e.target.result);
         setShowCropModal(true);
         setIsUploadingImage(false);
       } catch (error) {
-        console.error('Error reading file:', error);
+        console.error("Error reading file:", error);
         toast({
           title: "Error reading file",
           description: "Please try selecting the image again.",
@@ -142,16 +148,16 @@ const EditProfile = () => {
     };
 
     reader.readAsDataURL(file);
-    
+
     // Clear the input to allow re-selection of the same file
-    event.target.value = '';
+    event.target.value = "";
   };
 
   const handleCropComplete = (croppedImageDataUrl) => {
     setProfilePicture(croppedImageDataUrl);
-    handleInputChange('profilePicture', croppedImageDataUrl);
+    handleInputChange("profilePicture", croppedImageDataUrl);
     setTempImageSrc(null);
-    
+
     toast({
       title: "Profile picture updated",
       description: "Your profile picture has been successfully updated.",
@@ -166,7 +172,7 @@ const EditProfile = () => {
   // Remove profile picture
   const handleRemoveProfilePicture = () => {
     setProfilePicture(null);
-    handleInputChange('profilePicture', null);
+    handleInputChange("profilePicture", null);
     toast({
       title: "Profile picture removed",
       description: "Your profile picture has been removed.",
@@ -193,8 +199,12 @@ const EditProfile = () => {
       <div className="max-w-4xl mx-auto">
         {/* Professional Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
-          <p className="text-gray-600">Manage your personal information and account preferences</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Account Settings
+          </h1>
+          <p className="text-gray-600">
+            Manage your personal information and account preferences
+          </p>
         </div>
 
         <Card className="shadow-lg border border-gray-200 bg-white">
@@ -207,18 +217,22 @@ const EditProfile = () => {
               Personal Information
             </CardTitle>
           </CardHeader>
-          
+
           <CardContent className="p-8 space-y-8">
             {/* Enhanced Profile Picture Section */}
             <div className="flex flex-col items-center space-y-6">
               <div className="relative group">
                 <Avatar className="h-32 w-32 border-2 border-gray-200 shadow-sm">
-                  <AvatarImage src={profilePicture} alt="Profile" className="object-cover" />
+                  <AvatarImage
+                    src={profilePicture}
+                    alt="Profile"
+                    className="object-cover"
+                  />
                   <AvatarFallback className="bg-gray-100 text-gray-600 text-2xl font-semibold">
                     {user.username.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                
+
                 {/* Hover overlay with loading state */}
                 <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   {isUploadingImage ? (
@@ -233,7 +247,7 @@ const EditProfile = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <input
                   type="file"
                   accept="image/jpeg,image/jpg,image/png,image/webp"
@@ -242,14 +256,16 @@ const EditProfile = () => {
                   className="absolute inset-0 opacity-0 cursor-pointer rounded-full disabled:cursor-not-allowed"
                 />
               </div>
-              
+
               <div className="text-center space-y-4">
                 <div className="flex gap-3 justify-center">
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-2 border-gray-300 hover:bg-gray-50"
-                    onClick={() => document.querySelector('input[type="file"]').click()}
+                    onClick={() =>
+                      document.querySelector('input[type="file"]').click()
+                    }
                     disabled={isUploadingImage}
                   >
                     {isUploadingImage ? (
@@ -264,7 +280,7 @@ const EditProfile = () => {
                       </>
                     )}
                   </Button>
-                  
+
                   {profilePicture && (
                     <Button
                       variant="outline"
@@ -278,7 +294,7 @@ const EditProfile = () => {
                     </Button>
                   )}
                 </div>
-                
+
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
                   <AlertCircle className="h-4 w-4" />
                   Maximum file size: 5MB • Supported formats: JPEG, PNG, WebP
@@ -293,14 +309,19 @@ const EditProfile = () => {
               <div className="space-y-8">
                 {/* Username */}
                 <div className="space-y-3">
-                  <Label htmlFor="username" className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                  <Label
+                    htmlFor="username"
+                    className="text-sm font-medium text-gray-900 flex items-center gap-2"
+                  >
                     <Edit2 className="h-4 w-4 text-gray-500" />
                     Username
                   </Label>
                   <Input
                     id="username"
                     value={user.username}
-                    onChange={(e) => handleInputChange('username', e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("username", e.target.value)
+                    }
                     className="h-11 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
                     placeholder="Enter your username"
                   />
@@ -309,7 +330,10 @@ const EditProfile = () => {
                 {/* Email with Verification Status */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <Label htmlFor="email" className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                    <Label
+                      htmlFor="email"
+                      className="text-sm font-medium text-gray-900 flex items-center gap-2"
+                    >
                       <Mail className="h-4 w-4 text-gray-500" />
                       Email Address
                     </Label>
@@ -319,7 +343,10 @@ const EditProfile = () => {
                         Verified
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="gap-1 bg-red-100 text-red-800 border-red-200">
+                      <Badge
+                        variant="secondary"
+                        className="gap-1 bg-red-100 text-red-800 border-red-200"
+                      >
                         <X className="h-3 w-3" />
                         Unverified
                       </Badge>
@@ -329,7 +356,7 @@ const EditProfile = () => {
                     id="email"
                     type="email"
                     value={user.email}
-                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
                     className="h-11 border-gray-300 focus:border-gray-500 focus:ring-gray-500"
                     placeholder="Enter your email address"
                   />
@@ -353,7 +380,10 @@ const EditProfile = () => {
                       <Phone className="h-4 w-4 text-gray-500" />
                       Phone Number
                     </Label>
-                    <Badge variant="secondary" className="gap-1 bg-amber-100 text-amber-800 border-amber-200">
+                    <Badge
+                      variant="secondary"
+                      className="gap-1 bg-amber-100 text-amber-800 border-amber-200"
+                    >
                       <Shield className="h-3 w-3" />
                       Protected
                     </Badge>
@@ -382,16 +412,34 @@ const EditProfile = () => {
                   </Label>
                   <RadioGroup
                     value={user.sex}
-                    onValueChange={(value) => handleInputChange('sex', value)}
+                    onValueChange={(value) => handleInputChange("sex", value)}
                     className="flex gap-8"
                   >
                     <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="male" id="male" className="border-gray-400" />
-                      <Label htmlFor="male" className="text-sm font-medium text-gray-700 cursor-pointer">Male</Label>
+                      <RadioGroupItem
+                        value="male"
+                        id="male"
+                        className="border-gray-400"
+                      />
+                      <Label
+                        htmlFor="male"
+                        className="text-sm font-medium text-gray-700 cursor-pointer"
+                      >
+                        Male
+                      </Label>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <RadioGroupItem value="female" id="female" className="border-gray-400" />
-                      <Label htmlFor="female" className="text-sm font-medium text-gray-700 cursor-pointer">Female</Label>
+                      <RadioGroupItem
+                        value="female"
+                        id="female"
+                        className="border-gray-400"
+                      />
+                      <Label
+                        htmlFor="female"
+                        className="text-sm font-medium text-gray-700 cursor-pointer"
+                      >
+                        Female
+                      </Label>
                     </div>
                   </RadioGroup>
                 </div>

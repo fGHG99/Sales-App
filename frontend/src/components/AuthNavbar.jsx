@@ -1,15 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
-import NotificationDropdown from "./other/NotificationDropdown";
+import NotificationDropdown from "./User/user-dropdown/NotificationDropdown";
+import UserDropdown from "./User/user-dropdown/UserDropdown";
 
 export default function AuthSection({
   isAuthenticated,
   user,
   handleCartClick,
 }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const closeTimeoutRef = useRef(null);
+  const userDropdownRef = useRef(null);
 
   const openDropdown = () => {
     if (closeTimeoutRef.current) {
@@ -21,8 +25,22 @@ export default function AuthSection({
   const closeDropdown = () => {
     closeTimeoutRef.current = setTimeout(() => {
       setIsOpen(false);
-    }, 100); // 100ms delay untuk memberikan waktu mouse pindah ke dropdown
+    }, 100);
   };
+
+  // Close user dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+        setIsUserDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Cleanup timer saat component unmount
   useEffect(() => {
@@ -33,8 +51,8 @@ export default function AuthSection({
     };
   }, []);
 
-  const hasNotification = true; // Replace with actual notification logic
-  const notif = [1, 2]; // Replace with actual notification data
+  const hasNotification = true;
+  const notif = [1, 2];
 
   return (
     <div
@@ -84,13 +102,11 @@ export default function AuthSection({
               aria-label="Notifications"
             >
               <div className="relative w-6 h-6">
-                {/* Bell Icon */}
                 <img
                   src="/assets/notification_icon.png"
                   alt="Notification"
                   className="w-6 h-6 object-contain"
                 />
-                {/* Red Dot with Number */}
                 {hasNotification && (
                   <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
                     {notif.length}
@@ -98,8 +114,7 @@ export default function AuthSection({
                 )}
               </div>
             </button>
-            
-            {/* Dropdown - render tepat di bawah button tanpa gap */}
+
             {isOpen && (
               <div className="absolute top-full left-0 z-50 w-64">
                 <NotificationDropdown
@@ -127,22 +142,37 @@ export default function AuthSection({
           {/* Separator */}
           <div className="h-6 w-px bg-gray-300 mx-1" />
 
-          {/* User Menu */}
-          <div className="flex items-center space-x-1 cursor-pointer hover:text-blue-600 transition-colors duration-200">
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ml-2 overflow-hidden">
-              <img
-                src="/assets/user_icon.png"
-                alt="User"
-                className="w-6 h-6 object-contain"
-              />
+          {/* User Menu with Dropdown */}
+          <div className="relative" ref={userDropdownRef}>
+            <div 
+              className="flex items-center space-x-1 cursor-pointer hover:text-blue-600 transition-colors duration-200"
+              onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+            >
+              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ml-2 overflow-hidden">
+                <img
+                  src="/assets/user_icon.png"
+                  alt="User"
+                  className="w-8 h-8 object-contain"
+                />
+              </div>
+              <span className="font-regular text-sm text-gray-700 ml-2 overflow-hidden whitespace-nowrap select-none">
+                {(() => {
+                  const name = user?.name || "User";
+                  return name.length > 4 ? name.slice(0, 4) + "..." : name;
+                })()}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isUserDropdownOpen ? 'rotate-180' : ''}`} />
             </div>
-            <span className="font-regular text-sm text-gray-700 ml-2 overflow-hidden whitespace-nowrap">
-              {(() => {
-                const name = user?.name || "User";
-                return name.length > 4 ? name.slice(0, 4) + "..." : name;
-              })()}
-            </span>
-            <ChevronDown className="w-4 h-4 text-gray-500" />
+
+            {/* User Dropdown Menu */}
+            {isUserDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 z-50">
+                <UserDropdown 
+                  userData={user}
+                  onClose={() => setIsUserDropdownOpen(false)}
+                />
+              </div>
+            )}
           </div>
         </>
       )}

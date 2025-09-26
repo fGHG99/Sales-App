@@ -10,11 +10,12 @@ import Login from "./components/Login";
 import AuthLayout from "./components/AuthLayout";
 import TermsConditions from "./components/TermsCon";
 import ProductDetail from "./components/ProductDetail";
-import Cart from "./components/cart/Cart";
+import Cart from "./components/User/user-cart/Cart";
 import NotFound from "./components/NotFound";
 import ProductPageResult from "./components/ProductSearchResult";
 import OrderHistory from "./components/OrderHistory";
-import EditProfile from "./components/EditProfile";
+import EditProfile from "./components/User/user-profile/EditProfile";
+import UserDropdown from "./components/User/user-dropdown/UserDropdown";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -33,29 +34,6 @@ const CategoryPage = () => {
           <div className="bg-white rounded-lg shadow-md p-12">
             <p className="text-gray-500 text-xl">
               Coming soon - Products will be displayed here
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SearchPage = () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const query = urlParams.get("q");
-
-  return (
-    <div className="min-h-screen bg-gray-50 py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Hasil Pencarian
-          </h1>
-          <p className="text-lg text-gray-600 mb-8">Hasil untuk: "{query}"</p>
-          <div className="bg-white rounded-lg shadow-md p-12">
-            <p className="text-gray-500 text-xl">
-              Coming soon - Search results will be displayed here
             </p>
           </div>
         </div>
@@ -93,7 +71,7 @@ const router = createBrowserRouter([
       { path: "profile", element: <EditProfile /> },
     ],
   },
-
+  { path: "test", element: <UserDropdown /> },
   { path: "*", element: <NotFound /> },
 ]);
 

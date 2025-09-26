@@ -1,6 +1,6 @@
-import { Card, CardHeader, CardContent } from '../ui/card';
-import { Skeleton } from '../ui/skeleton';
-import { Separator } from '../ui/separator';
+import { Card, CardHeader, CardContent } from "../../ui/card";
+import { Skeleton } from "../../ui/skeleton";
+import { Separator } from "../../ui/separator";
 
 const ProfileSkeleton = () => {
   return (
@@ -19,14 +19,14 @@ const ProfileSkeleton = () => {
               <Skeleton className="h-7 w-64 bg-gray-200" />
             </div>
           </CardHeader>
-          
+
           <CardContent className="p-8 space-y-8">
             {/* Profile Picture Skeleton */}
             <div className="flex flex-col items-center space-y-6">
               <div className="relative">
                 <Skeleton className="h-32 w-32 rounded-full bg-gray-200" />
               </div>
-              
+
               <div className="text-center space-y-3">
                 <div className="flex gap-3 justify-center">
                   <Skeleton className="h-9 w-32 bg-gray-200" />

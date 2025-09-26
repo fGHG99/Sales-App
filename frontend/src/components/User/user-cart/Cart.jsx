@@ -1,9 +1,9 @@
 // src/components/cart/Cart.js
 import { useState } from "react";
 import { AlertOctagon } from "lucide-react"; // ⬅️ Import the icon
-import DeliveryOptionsModal from "../modal/delivery-option";
-import { PaymentOptionsModal } from "../modal/payment-option";
-import DeleteConfirmationModal from "../modal/delete-confirmation-cart";
+import DeliveryOptionsModal from "../../modal/delivery-option";
+import { PaymentOptionsModal } from "../../modal/payment-option";
+import DeleteConfirmationModal from "../../modal/delete-confirmation-cart";
 
 // Sections
 import DeliverySection from "./DeliverySection";
