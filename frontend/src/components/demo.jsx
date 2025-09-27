@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from "react";
+import axios from "axios";
 import * as maptilersdk from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
 
@@ -63,6 +64,7 @@ const MapTilerDemo = () => {
         try {
           const address = await reverseGeocode(lat, lng);
           setSelectedAddress(address);
+          console.log("lat and lng: ", lat, lng);
         } catch (error) {
           console.error("Reverse geocoding failed:", error);
         }
@@ -83,18 +85,19 @@ const MapTilerDemo = () => {
 
     setIsSearching(true);
     try {
-      const response = await fetch(
+      const response = await axios.get(
         `https://api.maptiler.com/geocoding/${encodeURIComponent(
           searchQuery
-        )}.json?key=${MAPTILER_API_KEY}&limit=5`
+        )}.json`,
+        {
+          params: {
+            key: MAPTILER_API_KEY,
+            limit: 5,
+          },
+        }
       );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setSearchResults(data.features || []);
+      setSearchResults(response.data.features || []);
     } catch (error) {
       console.error("Geocoding search failed:", error);
       setSearchResults([]);
@@ -106,16 +109,17 @@ const MapTilerDemo = () => {
   // Reverse geocoding function
   const reverseGeocode = async (lat, lng) => {
     try {
-      const response = await fetch(
-        `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_API_KEY}`
+      const response = await axios.get(
+        `https://api.maptiler.com/geocoding/${lng},${lat}.json`,
+        {
+          params: {
+            key: MAPTILER_API_KEY,
+          },
+        }
       );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.features?.[0]?.place_name || "Address not found";
+      console.log("Reverse geocoding result: ", response.data);
+      return response.data.features?.[0]?.place_name || "Address not found";
     } catch (error) {
       console.error("Reverse geocoding failed:", error);
       return "Address not found";
@@ -200,18 +204,86 @@ const MapTilerDemo = () => {
     setSelectedAddress("");
   };
 
-  // Fly to Jakarta
-const flyToJakarta = () => {
+  const flyToWgs = async () => {
     if (map.current) {
-        map.current.flyTo({
-            center: [107.57828605427846, -6.935577536865563],
-            zoom: 12,
-            duration: 2000,
-        });
-        
-        addMarker(107.57828605427846, -6.935577536865563, "WGS");
+      const targetLng = 107.57828605427846;
+      const targetLat = -6.935577536865563;
+
+      map.current.flyTo({
+        center: [targetLng, targetLat],
+        zoom: 12,
+        duration: 2000,
+      });
+
+      // Gunakan koordinat yang sama untuk reverse geocoding
+      const address = await reverseGeocode(targetLat, targetLng);
+      setSelectedAddress(address);
+      addMarker(targetLng, targetLat, "WGS");
     }
-};
+  };
+
+  // Function untuk mendapatkan lokasi user saat ini
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation tidak didukung oleh browser ini.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log("User location:", latitude, longitude);
+
+        if (map.current) {
+          // Fly ke lokasi user
+          map.current.flyTo({
+            center: [longitude, latitude],
+            zoom: 15,
+            duration: 2000,
+          });
+
+          // Tambah marker di lokasi user
+          const markerAdded = await addMarker(
+            longitude,
+            latitude,
+            "Your Location"
+          );
+
+          if (markerAdded) {
+            try {
+              // Dapatkan alamat dari koordinat user
+              const address = await reverseGeocode(latitude, longitude);
+              setSelectedAddress(address);
+            } catch (error) {
+              console.error("Reverse geocoding failed:", error);
+            }
+          }
+        }
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            alert("Akses lokasi ditolak oleh user.");
+            break;
+          case error.POSITION_UNAVAILABLE:
+            alert("Informasi lokasi tidak tersedia.");
+            break;
+          case error.TIMEOUT:
+            alert("Request untuk mendapatkan lokasi timeout.");
+            break;
+          default:
+            alert("Terjadi error yang tidak diketahui saat mengakses lokasi.");
+            break;
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  };
 
   if (!MAPTILER_API_KEY) {
     return (
@@ -336,10 +408,16 @@ const flyToJakarta = () => {
             Clear Marker
           </button>
           <button
-            onClick={flyToJakarta}
+            onClick={getCurrentLocation}
+            className="px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+          >
+            📍 My Location
+          </button>
+          <button
+            onClick={flyToWgs}
             className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
           >
-            Fly to Jakarta
+            Fly to WGS
           </button>
         </div>
       </div>
@@ -349,7 +427,8 @@ const flyToJakarta = () => {
         <h4 className="font-semibold text-sm mb-2">Instructions:</h4>
         <ul className="text-xs text-gray-600 space-y-1">
           <li>• Click on map to add ONE marker only</li>
-          <li>• Clear marker to add a new one</li>
+          <li>• Use "My Location" to find your current position</li>
+          <li>• Clear marker to remove current marker</li>
           <li>• Search for places using the search bar</li>
           <li>• Click marker to see popup</li>
           <li>• Drag to pan, scroll to zoom</li>
