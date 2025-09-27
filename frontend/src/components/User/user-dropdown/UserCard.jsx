@@ -1,31 +1,34 @@
-import React from "react";
-import { Settings, User } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Settings } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "../../ui/avatar";
 
 const UserCard = ({ userData }) => {
+  const [profilePicture, setProfilePicture] = useState(userData.avatar);
+  const user = userData || {
+    name: "User",
+    email: "user@example.com",
+  };
+  const navigate = useNavigate();
+
   const handleSettingsClick = () => {
-    // Navigate to /user/profile
-    window.location.href = "/user/profile";
+    navigate("/user/profile");
   };
 
   return (
     <div className="p-4">
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-300 flex items-center justify-center flex-shrink-0">
-          {userData.avatar ? (
-            <img
-              src={userData.avatar}
-              alt={userData.name}
-              className="w-full h-full object-cover"
+          <Avatar className="h-32 w-32 border-2 border-gray-200 shadow-sm">
+            <AvatarImage
+              src={profilePicture}
+              alt="Profile"
+              className="object-cover"
             />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-              <img
-                src="/assets/user_icon.png"
-                alt="User"
-                className="w-12 h-12 object-contain"
-              />
-            </div>
-          )}
+            <AvatarFallback className="bg-gray-100 text-gray-600 text-xl font-semibold">
+              {user?.username?.charAt(0).toUpperCase() || "U"}{" "}
+            </AvatarFallback>
+          </Avatar>
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 truncate">

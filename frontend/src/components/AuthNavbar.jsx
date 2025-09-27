@@ -1,19 +1,20 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import NotificationDropdown from "./User/user-dropdown/NotificationDropdown";
 import UserDropdown from "./User/user-dropdown/UserDropdown";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 
 export default function AuthSection({
   isAuthenticated,
   user,
   handleCartClick,
 }) {
-  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const closeTimeoutRef = useRef(null);
   const userDropdownRef = useRef(null);
+  const [profilePicture, setProfilePicture] = useState(user.profilePicture);
 
   const openDropdown = () => {
     if (closeTimeoutRef.current) {
@@ -31,14 +32,17 @@ export default function AuthSection({
   // Close user dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
+      if (
+        userDropdownRef.current &&
+        !userDropdownRef.current.contains(event.target)
+      ) {
         setIsUserDropdownOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -144,16 +148,21 @@ export default function AuthSection({
 
           {/* User Menu with Dropdown */}
           <div className="relative" ref={userDropdownRef}>
-            <div 
+            <div
               className="flex items-center space-x-1 cursor-pointer hover:text-blue-600 transition-colors duration-200"
               onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
             >
               <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ml-2 overflow-hidden">
-                <img
-                  src="/assets/user_icon.png"
-                  alt="User"
-                  className="w-8 h-8 object-contain"
-                />
+                <Avatar className="h-32 w-32 border-2 border-gray-200 shadow-sm">
+                  <AvatarImage
+                    src={profilePicture}
+                    alt="Profile"
+                    className="object-cover"
+                  />
+                  <AvatarFallback className="bg-gray-100 text-gray-600 text-base font-semibold">
+                    {user?.username?.charAt(0).toUpperCase() || "U"}{" "}
+                  </AvatarFallback>
+                </Avatar>
               </div>
               <span className="font-regular text-sm text-gray-700 ml-2 overflow-hidden whitespace-nowrap select-none">
                 {(() => {
@@ -161,13 +170,17 @@ export default function AuthSection({
                   return name.length > 4 ? name.slice(0, 4) + "..." : name;
                 })()}
               </span>
-              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isUserDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown
+                className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                  isUserDropdownOpen ? "rotate-180" : ""
+                }`}
+              />
             </div>
 
             {/* User Dropdown Menu */}
             {isUserDropdownOpen && (
               <div className="absolute right-0 top-full mt-2 z-50">
-                <UserDropdown 
+                <UserDropdown
                   userData={user}
                   onClose={() => setIsUserDropdownOpen(false)}
                 />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { LogOut } from 'lucide-react';
 import UserCard from './UserCard';
 import ProfileCompletion from './ProfileCompletion';
