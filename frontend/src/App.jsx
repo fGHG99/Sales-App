@@ -16,6 +16,7 @@ import ProductPageResult from "./components/ProductSearchResult";
 import OrderHistory from "./components/OrderHistory";
 import EditProfile from "./components/User/user-profile/EditProfile";
 import MapTiler from "./components/address/Map";
+import AddressSearchWithHandler from "./components/address/demo/AddressSearchWHandler";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -71,7 +72,7 @@ const router = createBrowserRouter([
       { path: "profile", element: <EditProfile /> },
     ],
   },
-  { path: "/demo", element: <MapTiler /> },
+  { path: "/demo", element: <AddressSearchWithHandler /> },
   { path: "*", element: <NotFound /> },
 ]);
 
