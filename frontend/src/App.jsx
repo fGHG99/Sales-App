@@ -70,9 +70,9 @@ const router = createBrowserRouter([
     children: [
       { path: "orders", element: <OrderHistory /> },
       { path: "profile", element: <EditProfile /> },
+      { path: "addresses", element: <AddressSearchWithHandler /> },
     ],
   },
-  { path: "/demo", element: <AddressSearchWithHandler /> },
   { path: "*", element: <NotFound /> },
 ]);
 

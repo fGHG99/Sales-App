@@ -38,6 +38,298 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
   const [availableDistricts, setAvailableDistricts] = useState([]);
   const [availableSubDistricts, setAvailableSubDistricts] = useState([]);
   const [errors, setErrors] = useState({});
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+
+  // Function to get address from coordinates using Nominatim API
+  const reverseGeocodeWithNominatim = async (lat, lng) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&accept-language=id,en`
+      );
+
+      if (!response.ok) {
+        throw new Error("Nominatim API request failed");
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching address from Nominatim:", error);
+      return null;
+    }
+  };
+
+  // Enhanced function to parse Nominatim response and match with dropdown options
+  const parseNominatimAddress = (nominatimData) => {
+    try {
+      const address = nominatimData.address || {};
+      const displayName = nominatimData.display_name || "";
+
+      let foundProvince = "";
+      let foundCity = "";
+      let foundDistrict = "";
+      let foundSubDistrict = "";
+      let extractedStreetAddress = "";
+      let extractedPostalCode = "";
+
+      // Extract postal code
+      extractedPostalCode = address.postcode || "";
+
+      // Try to match province from Nominatim data
+      const stateOrProvince = address.state || address.province || "";
+      if (stateOrProvince) {
+        const matchedProvince = provinces.find(
+          (p) =>
+            p.name.toLowerCase().includes(stateOrProvince.toLowerCase()) ||
+            stateOrProvince.toLowerCase().includes(p.name.toLowerCase())
+        );
+        if (matchedProvince) {
+          foundProvince = matchedProvince.id;
+        }
+      }
+
+      // Try to match city from Nominatim data
+      const cityName =
+        address.city ||
+        address.town ||
+        address.municipality ||
+        address.county ||
+        "";
+      if (cityName && foundProvince) {
+        const provinceCities = cities[foundProvince] || [];
+        const matchedCity = provinceCities.find(
+          (c) =>
+            c.name.toLowerCase().includes(cityName.toLowerCase()) ||
+            cityName.toLowerCase().includes(c.name.toLowerCase())
+        );
+        if (matchedCity) {
+          foundCity = matchedCity.id;
+        }
+      }
+
+      // If no province found, search all cities
+      if (!foundProvince && cityName) {
+        for (const [provinceId, provinceCities] of Object.entries(cities)) {
+          const matchedCity = provinceCities.find(
+            (c) =>
+              c.name.toLowerCase().includes(cityName.toLowerCase()) ||
+              cityName.toLowerCase().includes(c.name.toLowerCase())
+          );
+          if (matchedCity) {
+            foundProvince = provinceId;
+            foundCity = matchedCity.id;
+            break;
+          }
+        }
+      }
+
+      // Try to match district
+      const districtName =
+        address.suburb || address.neighbourhood || address.village || "";
+      if (districtName && foundCity) {
+        const cityDistricts = districts[foundCity] || [];
+        const matchedDistrict = cityDistricts.find(
+          (d) =>
+            d.name.toLowerCase().includes(districtName.toLowerCase()) ||
+            districtName.toLowerCase().includes(d.name.toLowerCase())
+        );
+        if (matchedDistrict) {
+          foundDistrict = matchedDistrict.id;
+        }
+      }
+
+      // Try to match sub-district
+      if (foundDistrict) {
+        const districtSubDistricts = subDistricts[foundDistrict] || [];
+        const matchedSubDistrict = districtSubDistricts.find(
+          (sd) =>
+            displayName.toLowerCase().includes(sd.name.toLowerCase()) ||
+            (address.hamlet &&
+              address.hamlet.toLowerCase().includes(sd.name.toLowerCase()))
+        );
+        if (matchedSubDistrict) {
+          foundSubDistrict = matchedSubDistrict.id;
+        }
+      }
+
+      // Build street address from components
+      const streetParts = [];
+      if (address.house_number && address.road) {
+        streetParts.push(`${address.road} No. ${address.house_number}`);
+      } else if (address.road) {
+        streetParts.push(address.road);
+      }
+
+      if (address.hamlet && address.hamlet !== districtName) {
+        streetParts.push(address.hamlet);
+      }
+
+      extractedStreetAddress =
+        streetParts.join(", ") || displayName.split(",")[0] || "";
+
+      console.log("Nominatim data:", nominatimData);
+      console.log("Parsed address:", {
+        province: foundProvince,
+        city: foundCity,
+        district: foundDistrict,
+        subDistrict: foundSubDistrict,
+        postalCode: extractedPostalCode,
+        streetAddress: extractedStreetAddress,
+      });
+
+      return {
+        province: foundProvince,
+        city: foundCity,
+        district: foundDistrict,
+        subDistrict: foundSubDistrict,
+        postalCode: extractedPostalCode,
+        streetAddress: extractedStreetAddress,
+      };
+    } catch (error) {
+      console.error("Error parsing Nominatim address:", error);
+      return null;
+    }
+  };
+
+  // Parse address from selectedLocation when it changes using Nominatim API
+  useEffect(() => {
+    const parseLocationAddress = async () => {
+      if (selectedLocation?.lat && selectedLocation?.lng && !initialData) {
+        setIsLoadingAddress(true);
+        try {
+          // Use Nominatim API for reverse geocoding
+          const nominatimData = await reverseGeocodeWithNominatim(
+            selectedLocation.lat,
+            selectedLocation.lng
+          );
+
+          if (nominatimData) {
+            const parsedAddress = parseNominatimAddress(nominatimData);
+
+            if (parsedAddress) {
+              // Update form with parsed data
+              setFormData((prev) => ({
+                ...prev,
+                province: parsedAddress.province || "32", // Fallback to Jawa Barat
+                city: parsedAddress.city || "",
+                district: parsedAddress.district || "",
+                subDistrict: parsedAddress.subDistrict || "",
+                postalCode: parsedAddress.postalCode || "",
+                streetAddress: parsedAddress.streetAddress || "",
+              }));
+
+              // Load cascading dropdowns
+              if (parsedAddress.province) {
+                setAvailableCities(cities[parsedAddress.province] || []);
+              }
+              if (parsedAddress.city) {
+                setAvailableDistricts(districts[parsedAddress.city] || []);
+              }
+              if (parsedAddress.district) {
+                setAvailableSubDistricts(
+                  subDistricts[parsedAddress.district] || []
+                );
+              }
+            }
+          } else {
+            // Fallback to simple string parsing if Nominatim fails
+            parseAddressFromLocation(selectedLocation.address);
+          }
+        } catch (error) {
+          console.error("Error processing location with Nominatim:", error);
+          // Fallback to simple string parsing
+          if (selectedLocation.address) {
+            parseAddressFromLocation(selectedLocation.address);
+          }
+        } finally {
+          setIsLoadingAddress(false);
+        }
+      }
+    };
+
+    parseLocationAddress();
+  }, [selectedLocation]);
+
+  // Function to parse address and auto-fill form
+  const parseAddressFromLocation = async (addressString) => {
+    try {
+      // Split address by comma and clean up
+      const parts = addressString.split(",").map((s) => s.trim());
+
+      // Try to find matching data in our mock data
+      let foundProvince = null;
+      let foundCity = null;
+      let foundDistrict = null;
+      let foundSubDistrict = null;
+      let foundPostalCode = "";
+      let foundStreet = "";
+
+      // Search for province (looking for "Jawa Barat" or similar)
+      foundProvince = provinces.find((p) =>
+        addressString.toLowerCase().includes(p.name.toLowerCase())
+      );
+
+      if (foundProvince) {
+        const provinceCities = cities[foundProvince.id] || [];
+
+        // Search for city
+        foundCity = provinceCities.find((c) =>
+          addressString.toLowerCase().includes(c.name.toLowerCase())
+        );
+
+        if (foundCity) {
+          const cityDistricts = districts[foundCity.id] || [];
+
+          // Search for district
+          foundDistrict = cityDistricts.find((d) =>
+            addressString.toLowerCase().includes(d.name.toLowerCase())
+          );
+
+          if (foundDistrict) {
+            const districtSubDistricts = subDistricts[foundDistrict.id] || [];
+
+            // Search for sub-district
+            foundSubDistrict = districtSubDistricts.find((sd) =>
+              addressString.toLowerCase().includes(sd.name.toLowerCase())
+            );
+          }
+        }
+      }
+
+      // Extract postal code (5 digits)
+      const postalCodeMatch = addressString.match(/\b\d{5}\b/);
+      if (postalCodeMatch) {
+        foundPostalCode = postalCodeMatch[0];
+      }
+
+      // Extract street address (first part before first comma, or use full if can't parse)
+      foundStreet = parts[0] || "";
+
+      // Update form with found data
+      setFormData((prev) => ({
+        ...prev,
+        province: foundProvince?.id || "32",
+        city: foundCity?.id || "",
+        district: foundDistrict?.id || "",
+        subDistrict: foundSubDistrict?.id || "",
+        postalCode: foundPostalCode,
+        streetAddress: foundStreet,
+      }));
+
+      // Load cascading dropdowns
+      if (foundProvince) {
+        setAvailableCities(cities[foundProvince.id] || []);
+      }
+      if (foundCity) {
+        setAvailableDistricts(districts[foundCity.id] || []);
+      }
+      if (foundDistrict) {
+        setAvailableSubDistricts(subDistricts[foundDistrict.id] || []);
+      }
+    } catch (error) {
+      console.error("Error parsing address:", error);
+    }
+  };
 
   useEffect(() => {
     if (initialData) {
@@ -52,35 +344,75 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
         streetAddress: initialData.streetAddress || "",
         label: initialData.label || "home",
       });
+
+      // Load cascading dropdowns for initialData
+      if (initialData.province) {
+        setAvailableCities(cities[initialData.province] || []);
+      }
+      if (initialData.city) {
+        setAvailableDistricts(districts[initialData.city] || []);
+      }
+      if (initialData.district) {
+        setAvailableSubDistricts(subDistricts[initialData.district] || []);
+      }
     }
   }, [initialData]);
 
   useEffect(() => {
     // Load cities when province changes
     if (formData.province) {
-      setAvailableCities(cities[formData.province] || []);
-      setFormData((prev) => ({
-        ...prev,
-        city: "",
-        district: "",
-        subDistrict: "",
-      }));
+      const provinceCities = cities[formData.province] || [];
+      setAvailableCities(provinceCities);
+
+      // Only clear dependent fields if city is not in the new province's cities
+      const cityExists = provinceCities.some((c) => c.id === formData.city);
+      if (!cityExists && !initialData) {
+        setFormData((prev) => ({
+          ...prev,
+          city: "",
+          district: "",
+          subDistrict: "",
+        }));
+      }
     }
   }, [formData.province]);
 
   useEffect(() => {
     // Load districts when city changes
     if (formData.city) {
-      setAvailableDistricts(districts[formData.city] || []);
-      setFormData((prev) => ({ ...prev, district: "", subDistrict: "" }));
+      const cityDistricts = districts[formData.city] || [];
+      setAvailableDistricts(cityDistricts);
+
+      // Only clear dependent fields if district is not in the new city's districts
+      const districtExists = cityDistricts.some(
+        (d) => d.id === formData.district
+      );
+      if (!districtExists && !initialData) {
+        setFormData((prev) => ({
+          ...prev,
+          district: "",
+          subDistrict: "",
+        }));
+      }
     }
   }, [formData.city]);
 
   useEffect(() => {
     // Load sub-districts when district changes
     if (formData.district) {
-      setAvailableSubDistricts(subDistricts[formData.district] || []);
-      setFormData((prev) => ({ ...prev, subDistrict: "" }));
+      const districtSubs = subDistricts[formData.district] || [];
+      setAvailableSubDistricts(districtSubs);
+
+      // Only clear sub-district if it's not in the new district's sub-districts
+      const subDistrictExists = districtSubs.some(
+        (sd) => sd.id === formData.subDistrict
+      );
+      if (!subDistrictExists && !initialData) {
+        setFormData((prev) => ({
+          ...prev,
+          subDistrict: "",
+        }));
+      }
     }
   }, [formData.district]);
 
@@ -95,6 +427,10 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
       newErrors.recipientPhone = "Nomor telepon harus diisi";
     } else if (!/^(\+62|62|0)[0-9]{9,13}$/.test(formData.recipientPhone)) {
       newErrors.recipientPhone = "Format nomor telepon tidak valid";
+    }
+
+    if (!formData.province) {
+      newErrors.province = "Provinsi harus dipilih";
     }
 
     if (!formData.city) {
@@ -125,7 +461,6 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     if (!validateForm()) {
       return;
     }
@@ -152,9 +487,15 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
   };
 
   const handleInputChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
     if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
+      setErrors((prev) => ({
+        ...prev,
+        [field]: "",
+      }));
     }
   };
 
@@ -251,25 +592,55 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {selectedLocation && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              {isLoadingAddress ? (
+                <p className="text-sm text-blue-800">
+                  � Sedang menganalisis alamat dari koordinat yang dipilih...
+                </p>
+              ) : (
+                <p className="text-sm text-blue-800">
+                  �📍 Data alamat telah diisi otomatis dari lokasi yang dipilih
+                  menggunakan API Nominatim. Anda dapat mengedit dropdown di
+                  bawah jika ada yang tidak sesuai.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Administrative Divisions */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Province - Disabled */}
+            {/* Province - Now editable */}
             <div className="space-y-2">
-              <Label>Provinsi</Label>
-              <Select value={formData.province} disabled>
-                <SelectTrigger className="bg-gray-50">
-                  <SelectValue />
+              <Label>Provinsi *</Label>
+              <Select
+                value={formData.province}
+                onValueChange={(value) => handleInputChange("province", value)}
+              >
+                <SelectTrigger
+                  className={errors.province ? "border-red-500" : ""}
+                >
+                  <SelectValue placeholder="Pilih provinsi" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="32">Jawa Barat</SelectItem>
+                  {provinces.map((province) => (
+                    <SelectItem key={province.id} value={province.id}>
+                      {province.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-500">
-                Provinsi tidak dapat diubah
-              </p>
+              {selectedLocation && (
+                <p className="text-xs text-green-600">
+                  Auto-filled dari koordinat peta
+                </p>
+              )}
+              {errors.province && (
+                <p className="text-sm text-red-500">{errors.province}</p>
+              )}
             </div>
 
-            {/* City */}
+            {/* City - Editable */}
             <div className="space-y-2">
               <Label>Kota/Kabupaten *</Label>
               <Select
@@ -287,12 +658,17 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
                   ))}
                 </SelectContent>
               </Select>
+              {selectedLocation && formData.city && (
+                <p className="text-xs text-green-600">
+                  Auto-filled dari koordinat peta
+                </p>
+              )}
               {errors.city && (
                 <p className="text-sm text-red-500">{errors.city}</p>
               )}
             </div>
 
-            {/* District */}
+            {/* District - Editable */}
             <div className="space-y-2">
               <Label>Kecamatan *</Label>
               <Select
@@ -313,12 +689,17 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
                   ))}
                 </SelectContent>
               </Select>
+              {selectedLocation && formData.district && (
+                <p className="text-xs text-green-600">
+                  Auto-filled dari koordinat peta
+                </p>
+              )}
               {errors.district && (
                 <p className="text-sm text-red-500">{errors.district}</p>
               )}
             </div>
 
-            {/* Sub District */}
+            {/* Sub District - Editable */}
             <div className="space-y-2">
               <Label>Kelurahan *</Label>
               <Select
@@ -341,6 +722,11 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
                   ))}
                 </SelectContent>
               </Select>
+              {selectedLocation && formData.subDistrict && (
+                <p className="text-xs text-green-600">
+                  Auto-filled dari koordinat peta
+                </p>
+              )}
               {errors.subDistrict && (
                 <p className="text-sm text-red-500">{errors.subDistrict}</p>
               )}
@@ -357,11 +743,16 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
               maxLength={5}
               value={formData.postalCode}
               onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, ""); // Only allow digits
+                const value = e.target.value.replace(/\D/g, "");
                 handleInputChange("postalCode", value);
               }}
               className={errors.postalCode ? "border-red-500" : ""}
             />
+            {selectedLocation && formData.postalCode && (
+              <p className="text-xs text-green-600">
+                Auto-filled dari koordinat peta
+              </p>
+            )}
             {errors.postalCode && (
               <p className="text-sm text-red-500">{errors.postalCode}</p>
             )}
@@ -380,6 +771,11 @@ const AddressForm = ({ onSubmit, initialData, selectedLocation }) => {
               }
               className={errors.streetAddress ? "border-red-500" : ""}
             />
+            {selectedLocation && formData.streetAddress && (
+              <p className="text-xs text-green-600">
+                Auto-filled dari koordinat peta
+              </p>
+            )}
             {errors.streetAddress && (
               <p className="text-sm text-red-500">{errors.streetAddress}</p>
             )}

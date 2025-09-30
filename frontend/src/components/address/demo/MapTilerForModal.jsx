@@ -1,319 +1,256 @@
-import { useRef, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as maptilersdk from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
-import NotFoundMaptiler from "./NotFoundMaptiler";
-import useDebounce from "../../hook/useDebounce";
-import Instruction from "./Instruction";
-import {
-  handleSearch,
-  performAutocompleteSearch,
-  reverseGeocode,
-  addMarker,
-  handleSearchResultClick,
-  clearMarker,
-  flyToWgs,
-  getCurrentLocation,
-} from "./AddressHandler";
+import { MapPinned, Loader2 } from "lucide-react";
+import { getCurrentLocation, addMarker } from "./AddressHandler";
 
-const MapTilerForModal = ({ onLocationSelect }) => {
+const MAPTILER_API_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
+
+const MapTilerForModal = ({ onLocationSelect, externalSearchResult }) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
-  const [lng, setLng] = useState(107.57828605427846);
-  const [lat, setLat] = useState(-6.935577536865563);
-  const [zoom, setZoom] = useState(12);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const currentMarkerRef = useRef(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [selectedAddress, setSelectedAddress] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
+  const marker = useRef(null);
+  const [processedSearchResult, setProcessedSearchResult] = useState(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
-  const MAPTILER_API_KEY = import.meta.env?.VITE_MAPTILER_API_KEY;
-  const debouncedSearchQuery = useDebounce(searchQuery, 500); // 500ms delay
-
+  // Initialize map once
   useEffect(() => {
-    if (map.current || !mapContainer.current) return; // Initialize map only once
+    if (map.current) return; // Jangan re-init kalau sudah ada
 
-    if (!MAPTILER_API_KEY || MAPTILER_API_KEY === "your_api_key_here") {
-      console.error(
-        "MapTiler API key is missing. Please set VITE_MAPTILER_API_KEY in your .env file"
-      );
-      return;
-    }
-
-    // Set the API key
     maptilersdk.config.apiKey = MAPTILER_API_KEY;
 
-    // Initialize the map
     map.current = new maptilersdk.Map({
       container: mapContainer.current,
       style: maptilersdk.MapStyle.STREETS,
-      center: [lng, lat],
-      zoom: zoom,
+      center: [107.57828605427846, -6.935577536865563], // default Bandung
+      zoom: 13,
     });
 
-    // Map event listeners
-    map.current.on("load", () => {
-      setIsLoaded(true);
-      console.log("Map loaded successfully");
-    });
+    // Function to get address from coordinates using Nominatim
+    const reverseGeocode = async (lat, lng) => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&accept-language=id,en`
+        );
 
-    map.current.on("move", () => {
-      if (map.current) {
-        const center = map.current.getCenter();
-        setLng(Number(center.lng.toFixed(4)));
-        setLat(Number(center.lat.toFixed(4)));
-        setZoom(Number(map.current.getZoom().toFixed(2)));
+        if (!response.ok) {
+          throw new Error("Nominatim API request failed");
+        }
+
+        const data = await response.json();
+        return (
+          data.display_name || `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`
+        );
+      } catch (error) {
+        console.error("Error fetching address:", error);
+        return `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
       }
-    });
+    };
 
+    const onGetCurrentLocation = () => {
+      getCurrentLocation({
+        map,
+        addMarker,
+        reverseGeocode,
+        setSelectedAddress,
+        currentMarkerRef,
+        MAPTILER_API_KEY,
+      });
+    };
+
+    // Handle map click untuk pilih lokasi
     map.current.on("click", async (e) => {
       const { lng, lat } = e.lngLat;
 
-      const markerAdded = await addMarker({
-        lng,
+      // Buat marker baru kalau belum ada
+      if (!marker.current) {
+        marker.current = new maptilersdk.Marker({ color: "red" })
+          .setLngLat([lng, lat])
+          .addTo(map.current);
+      } else {
+        marker.current.setLngLat([lng, lat]);
+      }
+
+      // Get address from coordinates
+      const address = await reverseGeocode(lat, lng);
+
+      // Kirim lokasi ke parent
+      onLocationSelect({
         lat,
-        title: "Custom Location",
-        map,
-        currentMarkerRef,
+        lng,
+        address,
       });
-
-      if (markerAdded) {
-        try {
-          const address = await reverseGeocode(lat, lng, MAPTILER_API_KEY);
-          setSelectedAddress(address);
-          console.log("lat and lng: ", lat, lng);
-          
-          // Call onLocationSelect callback for parent component
-          if (onLocationSelect) {
-            onLocationSelect({
-              lat,
-              lng,
-              address
-            });
-          }
-        } catch (error) {
-          console.error("Reverse geocoding failed:", error);
-        }
-      }
     });
+  }, [onLocationSelect]);
 
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-    };
-  }, [MAPTILER_API_KEY, onLocationSelect]);
-
+  // Update marker ketika ada hasil dari search (HANYA visual update, tidak trigger onLocationSelect)
   useEffect(() => {
-    if (debouncedSearchQuery) {
-      performAutocompleteSearch({
-        query: debouncedSearchQuery,
-        setIsSearching,
-        setSearchResults,
-        setShowDropdown,
-      });
+    if (!map.current || !externalSearchResult) return;
+
+    // Prevent processing the same search result multiple times
+    if (processedSearchResult === externalSearchResult) return;
+
+    // Extract coordinates from the correct structure
+    const { coordinates } = externalSearchResult.geometry;
+    const { display_name } = externalSearchResult.properties;
+
+    // Coordinates are in [lng, lat] format
+    const [lng, lat] = coordinates;
+
+    // Validate coordinates to prevent NaN error
+    if (
+      typeof lng !== "number" ||
+      typeof lat !== "number" ||
+      isNaN(lng) ||
+      isNaN(lat)
+    ) {
+      console.error("Invalid coordinates:", { lng, lat });
+      return;
+    }
+
+    // Update marker position
+    if (!marker.current) {
+      marker.current = new maptilersdk.Marker({ color: "red" })
+        .setLngLat([lng, lat])
+        .addTo(map.current);
     } else {
-      setSearchResults([]);
-      setShowDropdown(false);
+      marker.current.setLngLat([lng, lat]);
     }
-  }, [debouncedSearchQuery]);
 
-  const onSearch = () => {
-    handleSearch({
-      searchQuery,
-      setIsSearching,
-      setSearchResults,
-    });
-  };
+    // Fly to the search result location
+    map.current.flyTo({ center: [lng, lat], zoom: 15 });
 
-  const onSearchResultClick = (result) => {
-    handleSearchResultClick({
-      result,
-      map,
-      addMarker,
-      reverseGeocode,
-      setSelectedAddress: (address) => {
-        setSelectedAddress(address);
-        // Call onLocationSelect callback
-        if (onLocationSelect) {
-          const [lng, lat] = result.geometry.coordinates;
-          onLocationSelect({
-            lat,
-            lng,
-            address
-          });
-        }
-      },
-      setSearchResults,
-      setSearchQuery,
-      currentMarkerRef,
-      MAPTILER_API_KEY,
-    });
-  };
+    // Mark this search result as processed
+    setProcessedSearchResult(externalSearchResult);
 
-  const onClearMarker = () => {
-    clearMarker({
-      currentMarkerRef,
-      setSelectedAddress,
-    });
-    if (onLocationSelect) {
-      onLocationSelect(null);
+    // ❌ REMOVED: onLocationSelect call from here to prevent infinite loop
+    // onLocationSelect will only be called when user actually clicks
+  }, [externalSearchResult]);
+
+  // Function to get user's current location
+  const getCurrentUserLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation tidak didukung oleh browser ini.");
+      return;
     }
-  };
 
-  const onFlyToWgs = () => {
-    flyToWgs({
-      map,
-      reverseGeocode,
-      setSelectedAddress: (address) => {
-        setSelectedAddress(address);
-        if (onLocationSelect) {
+    setIsGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log("User location:", latitude, longitude);
+
+        try {
+          // Get address from coordinates using Nominatim
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1&accept-language=id,en`
+          );
+
+          let address = `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(
+            6
+          )}`;
+
+          if (response.ok) {
+            const data = await response.json();
+            address = data.display_name || address;
+          }
+
+          // Fly to user location
+          if (map.current) {
+            map.current.flyTo({
+              center: [longitude, latitude],
+              zoom: 15,
+              duration: 2000,
+            });
+
+            // Add or update marker
+            if (!marker.current) {
+              marker.current = new maptilersdk.Marker({ color: "red" })
+                .setLngLat([longitude, latitude])
+                .addTo(map.current);
+            } else {
+              marker.current.setLngLat([longitude, latitude]);
+            }
+          }
+
+          // Send location to parent component
           onLocationSelect({
-            lat: -6.935577536865563,
-            lng: 107.57828605427846,
-            address
+            lat: latitude,
+            lng: longitude,
+            address: address,
           });
+        } catch (error) {
+          console.error("Error fetching address:", error);
+          // Still send coordinates even if address fetch fails
+          onLocationSelect({
+            lat: latitude,
+            lng: longitude,
+            address: `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(
+              6
+            )}`,
+          });
+        } finally {
+          setIsGettingLocation(false);
         }
       },
-      addMarker,
-      currentMarkerRef,
-      MAPTILER_API_KEY,
-    });
-  };
+      (error) => {
+        console.error("Error getting location:", error);
+        setIsGettingLocation(false);
 
-  const onGetCurrentLocation = () => {
-    getCurrentLocation({
-      map,
-      addMarker,
-      reverseGeocode,
-      setSelectedAddress: (address) => {
-        setSelectedAddress(address);
-        if (onLocationSelect && map.current) {
-          const center = map.current.getCenter();
-          onLocationSelect({
-            lat: center.lat,
-            lng: center.lng,
-            address
-          });
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            alert(
+              "Akses lokasi ditolak oleh user. Silakan izinkan akses lokasi pada browser."
+            );
+            break;
+          case error.POSITION_UNAVAILABLE:
+            alert("Informasi lokasi tidak tersedia.");
+            break;
+          case error.TIMEOUT:
+            alert("Request untuk mendapatkan lokasi timeout.");
+            break;
+          default:
+            alert("Terjadi error yang tidak diketahui saat mengakses lokasi.");
+            break;
         }
       },
-      currentMarkerRef,
-      MAPTILER_API_KEY,
-    });
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
   };
-
-  if (!MAPTILER_API_KEY || MAPTILER_API_KEY === "your_api_key_here") {
-    return <NotFoundMaptiler />;
-  }
 
   return (
-    <div className="w-full h-96 bg-gray-100 relative rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="absolute top-4 left-4 right-4 z-10 bg-white rounded-lg shadow-lg p-4">
-        <h3 className="text-lg font-bold text-gray-800 mb-3">
-          Pilih Lokasi pada Peta 
-        </h3>
+    <div className="relative">
+      <div
+        ref={mapContainer}
+        className="w-full h-80 rounded-md border border-gray-300"
+      />
 
-        {/* Search Bar */}
-        <div className="flex gap-2 mb-3">
-          <input
-            type="text"
-            placeholder="Cari tempat..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && onSearch()}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-          />
-          <button
-            onClick={onSearch}
-            disabled={isSearching}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 text-sm"
-          >
-            {isSearching ? "Mencari..." : "Cari"}
-          </button>
-        </div>
-
-        {/* Search Results */}
-        {searchResults.length > 0 && showDropdown && (
-          <div className="mb-3">
-            <div className="max-h-32 overflow-y-auto border rounded-md bg-white">
-              {searchResults.map((result, index) => (
-                <div
-                  key={index}
-                  onClick={() => onSearchResultClick(result)}
-                  className="p-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
-                >
-                  <div className="font-medium text-sm">
-                    {result.properties.display_name}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Selected Address */}
-        {selectedAddress && (
-          <div className="mb-3 p-3 bg-blue-50 rounded-md">
-            <h4 className="font-semibold text-blue-800 mb-1 text-sm">
-              Lokasi Terpilih:
-            </h4>
-            <p className="text-sm text-blue-700">{selectedAddress}</p>
-          </div>
-        )}
-
-        {/* Map Info */}
-        <div className="text-xs text-gray-600 flex gap-4 flex-wrap">
-          <span>Lng: {lng}</span>
-          <span>Lat: {lat}</span>
-          <span>Zoom: {zoom}</span>
-          <span
-            className={`px-2 py-1 rounded text-xs ${
-              isLoaded
-                ? "bg-green-100 text-green-800"
-                : "bg-yellow-100 text-yellow-800"
-            }`}
-          >
-            {isLoaded ? "Peta Siap" : "Memuat..."}
-          </span>
-        </div>
+      {/* Get Current Location Button */}
+      <div className="absolute bottom-4 right-4 z-10">
+        <button
+          onClick={getCurrentUserLocation}
+          disabled={isGettingLocation}
+          className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md shadow-lg transition-colors duration-200 flex items-center gap-2 text-sm font-medium"
+          title="Dapatkan Lokasi Saya"
+        >
+          {isGettingLocation ? (
+            <>
+              <Loader2 className="animate-spin w-4 h-4" />
+              Mencari...
+            </>
+          ) : (
+            <>
+              <MapPinned className="w-4 h-4" />
+              Lokasi Saya
+            </>
+          )}
+        </button>
       </div>
-
-      {/* Map Container */}
-      <div ref={mapContainer} className="w-full h-full" />
-
-      {/* Controls */}
-      <div className="absolute bottom-4 right-4 z-10 bg-white rounded-lg shadow-lg p-2">
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={onClearMarker}
-            className={`px-3 py-2 text-white text-sm rounded transition-colors ${
-              currentMarkerRef.current
-                ? "bg-red-500 hover:bg-red-600 cursor-pointer"
-                : "bg-gray-400 cursor-not-allowed"
-            }`}
-            disabled={!currentMarkerRef.current}
-          >
-            Hapus Marker
-          </button>
-          <button
-            onClick={onGetCurrentLocation}
-            className="px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
-          >
-            📍 Lokasi Saya
-          </button>
-          <button
-            onClick={onFlyToWgs}
-            className="px-3 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
-          >
-            Ke WGS
-          </button>
-        </div>
-      </div>
-
     </div>
   );
 };
