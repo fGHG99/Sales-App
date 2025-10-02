@@ -16,6 +16,7 @@ import ProductPageResult from "./components/ProductSearchResult";
 import OrderHistory from "./components/OrderHistory";
 import EditProfile from "./components/User/user-profile/EditProfile";
 import MapTilerDemo from "./components/demo";
+import OrderCheckout from "./components/User/user-order/OrderCheckout";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -69,6 +70,13 @@ const router = createBrowserRouter([
     children: [
       { path: "orders", element: <OrderHistory /> },
       { path: "profile", element: <EditProfile /> },
+    ],
+  },
+  {
+    path: "/order",
+    element: <Layout />,
+    children: [
+      { path: "checkout/:orderId", element: <OrderCheckout /> },
     ],
   },
   { path: "/demo", element: <MapTilerDemo /> },
