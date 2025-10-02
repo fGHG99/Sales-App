@@ -17,6 +17,8 @@ import OrderHistory from "./components/OrderHistory";
 import EditProfile from "./components/User/user-profile/EditProfile";
 import MapTiler from "./components/address/Map";
 import AddressSearchWithHandler from "./components/address/demo/AddressSearchWHandler";
+import OrderCheckout from "./components/User/user-order/OrderCheckout";
+import CourierTracking from "./components/User/user-order/CourierTracking";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -71,6 +73,14 @@ const router = createBrowserRouter([
       { path: "orders", element: <OrderHistory /> },
       { path: "profile", element: <EditProfile /> },
       { path: "addresses", element: <AddressSearchWithHandler /> },
+    ],
+  },
+  {
+    path: "/order",
+    element: <Layout />,
+    children: [
+      { path: "checkout/:orderId", element: <OrderCheckout /> },
+      { path: "track/:orderId", element: <CourierTracking /> },
     ],
   },
   { path: "*", element: <NotFound /> },

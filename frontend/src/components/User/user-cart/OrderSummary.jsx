@@ -1,4 +1,5 @@
 // src/components/cart/sections/OrderSummary.js
+import { useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +11,13 @@ export default function OrderSummary({
   total,
   formatIDR,
 }) {
+  const navigate = useNavigate();
+
+  const handleCheckout = () => {
+    const orderId = `ORD-${Date.now()}`;
+    navigate(`/order/checkout/${orderId}`);
+  };
+
   return (
     <Card className="bg-card border-border sticky top-22">
       <CardHeader>
@@ -38,7 +46,9 @@ export default function OrderSummary({
           </span>
         </div>
 
-        <Button className="w-full">Proceed to Checkout</Button>
+        <Button className="w-full" onClick={handleCheckout}>
+          Proceed to Checkout
+        </Button>
 
         <div className="text-xs text-muted-foreground text-center">
           By proceeding to checkout, you agree to our Terms of Service and
