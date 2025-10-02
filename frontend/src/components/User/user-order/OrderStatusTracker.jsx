@@ -1,6 +1,6 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Circle, Clock } from "lucide-react";
+import { CircleCheck as CheckCircle2, Circle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function OrderStatusTracker({
