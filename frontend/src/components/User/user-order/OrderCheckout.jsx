@@ -284,7 +284,7 @@ export default function OrderCheckout() {
 
                 <div className="pt-4 space-y-2">
                   <Button
-                    className="w-full border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white"
+                    className="w-full bg-blue-500 text-white"
                     variant="outline"
                     onClick={handleTrack}
                   >
