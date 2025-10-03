@@ -24,6 +24,17 @@ import OrderManagement from "./components/Admin/Pages/OrderManagement";
 import DisputesManagement from "./components/Admin/Pages/DisputeManagement";
 import SalesAnalytics from "./components/Admin/Pages/SalesAnalytics";
 import AdminCourierTracking from "./components/Admin/Pages/CourierTracking";
+import SuperAdminLayout from "./components/superAdmin/layout/SuperAdminLayout";
+import SuperAdminDashboard from "./components/superAdmin/page/Dashboard";
+import StoreManagement from "./components/superAdmin/page/StoreManagement";
+import AccountManagement from "./components/superAdmin/page/AccManagement";
+import RoleManagement from "./components/superAdmin/page/RoleManagement";
+import SuperAdminOrderManagement from "./components/superAdmin/page/OrderManagement";
+import ProductManagement from "./components/superAdmin/page/ProductManagement";
+import FeeSetup from "./components/superAdmin/page/FeeSetup";
+import SystemConfiguration from "./components/superAdmin/page/SystemConf";
+import GlobalReports from "./components/superAdmin/page/GlobalReports";
+import AuditLog from "./components/superAdmin/page/AuditLog";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -97,6 +108,22 @@ const router = createBrowserRouter([
       { path: "couriers", element: <AdminCourierTracking /> },
       { path: "disputes", element: <DisputesManagement /> },
       { path: "analytics", element: <SalesAnalytics /> },
+    ],
+  },
+  {
+    path: "/s-admin",
+    element: <SuperAdminLayout />,
+    children: [
+      { index: true, element: <SuperAdminDashboard /> },
+      { path: "stores", element: <StoreManagement /> },
+      { path: "accounts", element: <AccountManagement /> },
+      { path: "roles", element: <RoleManagement /> },
+      { path: "orders", element: <SuperAdminOrderManagement /> },
+      { path: "products", element: <ProductManagement /> },
+      { path: "fees", element: <FeeSetup /> },
+      { path: "system", element: <SystemConfiguration /> },
+      { path: "reports", element: <GlobalReports /> },
+      { path: "audit", element: <AuditLog /> },
     ],
   },
   { path: "*", element: <NotFound /> },
