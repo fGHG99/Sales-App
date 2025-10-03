@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, MapPin, Clock, User, Package } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Button } from '../../ui/button';
-import { Badge } from '../../ui/badge';
-import { Input } from '../../ui/input';
-import { Label } from '../../ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../ui/dialog';
-import { mockAPI } from '../mock/MockData';
-import ConfirmationModal from '../modal/WarningConfirmation';
+import React, { useState, useEffect } from "react";
+import { Plus, Edit2, MapPin, Clock, User, Package } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
+import { Button } from "../../ui/button";
+import { Badge } from "../../ui/badge";
+import { Input } from "../../ui/input";
+import { Label } from "../../ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../ui/dialog";
+import { mockAPI } from "../mock/MockData";
+import ConfirmationModal from "../modal/WarningConfirmation";
 
 const StoreManagement = () => {
   const [stores, setStores] = useState([]);
@@ -15,14 +20,18 @@ const StoreManagement = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedStore, setSelectedStore] = useState(null);
-  const [confirmationModal, setConfirmationModal] = useState({ isOpen: false, action: null, data: null });
+  const [confirmationModal, setConfirmationModal] = useState({
+    isOpen: false,
+    action: null,
+    data: null,
+  });
   const [formData, setFormData] = useState({
-    label: '',
-    address: '',
-    openHour: '',
-    closeHour: '',
-    adminName: '',
-    adminId: ''
+    label: "",
+    address: "",
+    openHour: "",
+    closeHour: "",
+    adminName: "",
+    adminId: "",
   });
 
   useEffect(() => {
@@ -34,7 +43,7 @@ const StoreManagement = () => {
       const response = await mockAPI.storeAPI.getAll();
       setStores(response.data);
     } catch (error) {
-      console.error('Error fetching stores:', error);
+      console.error("Error fetching stores:", error);
     } finally {
       setLoading(false);
     }
@@ -42,22 +51,23 @@ const StoreManagement = () => {
 
   const resetForm = () => {
     setFormData({
-      label: '',
-      address: '',
-      openHour: '',
-      closeHour: '',
-      adminName: '',
-      adminId: ''
+      label: "",
+      address: "",
+      openHour: "",
+      closeHour: "",
+      adminName: "",
+      adminId: "",
     });
   };
 
   const handleAddStore = () => {
     setConfirmationModal({
       isOpen: true,
-      action: 'add',
+      action: "add",
       data: formData,
-      title: 'Confirm Store Addition',
-      message: 'Are you sure you want to add this new store? This will create a new store entry in the system.'
+      title: "Confirm Store Addition",
+      message:
+        "Are you sure you want to add this new store? This will create a new store entry in the system.",
     });
   };
 
@@ -69,7 +79,7 @@ const StoreManagement = () => {
       openHour: store.openHour,
       closeHour: store.closeHour,
       adminName: store.adminName,
-      adminId: store.adminId
+      adminId: store.adminId,
     });
     setIsEditModalOpen(true);
   };
@@ -77,64 +87,65 @@ const StoreManagement = () => {
   const handleUpdateStore = () => {
     setConfirmationModal({
       isOpen: true,
-      action: 'update',
+      action: "update",
       data: { ...selectedStore, ...formData },
-      title: 'Confirm Store Update',
-      message: 'Are you sure you want to update this store data? This may cause problems in the future if not properly configured.'
+      title: "Confirm Store Update",
+      message:
+        "Are you sure you want to update this store data? This may cause problems in the future if not properly configured.",
     });
   };
 
   const handleToggleStatus = (store) => {
-    const newStatus = store.status === 'active' ? 'inactive' : 'active';
+    const newStatus = store.status === "active" ? "inactive" : "active";
     setConfirmationModal({
       isOpen: true,
-      action: 'toggle_status',
+      action: "toggle_status",
       data: { ...store, status: newStatus },
-      title: 'Confirm Status Change',
-      message: `Are you sure you want to ${newStatus === 'active' ? 'activate' : 'deactivate'} this store? This will affect customer access and operations.`
+      title: "Confirm Status Change",
+      message: `Are you sure you want to ${
+        newStatus === "active" ? "activate" : "deactivate"
+      } this store? This will affect customer access and operations.`,
     });
   };
 
   const executeConfirmedAction = () => {
     const { action, data } = confirmationModal;
-    
+
     switch (action) {
-      case 'add':
+      case "add":
         const newStore = {
           id: `store_${Date.now()}`,
           ...data,
-          status: 'active',
+          status: "active",
           productCount: 0,
-          dailySales: 0
+          dailySales: 0,
         };
         setStores([...stores, newStore]);
         setIsAddModalOpen(false);
         resetForm();
         break;
-        
-      case 'update':
-        setStores(stores.map(store => 
-          store.id === selectedStore.id ? data : store
-        ));
+
+      case "update":
+        setStores(
+          stores.map((store) => (store.id === selectedStore.id ? data : store))
+        );
         setIsEditModalOpen(false);
         resetForm();
         setSelectedStore(null);
         break;
-        
-      case 'toggle_status':
-        setStores(stores.map(store =>
-          store.id === data.id ? data : store
-        ));
+
+      case "toggle_status":
+        setStores(stores.map((store) => (store.id === data.id ? data : store)));
         break;
     }
-    
+
     setConfirmationModal({ isOpen: false, action: null, data: null });
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR'
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
     }).format(amount);
   };
 
@@ -144,9 +155,14 @@ const StoreManagement = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h3 className="text-2xl font-bold">Store Management</h3>
-          <p className="text-gray-600">Manage and monitor all store locations</p>
+          <p className="text-gray-600">
+            Manage and monitor all store locations
+          </p>
         </div>
-        <Button onClick={() => setIsAddModalOpen(true)} className="w-full sm:w-auto">
+        <Button
+          onClick={() => setIsAddModalOpen(true)}
+          className="w-full sm:w-auto"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add New Store
         </Button>
@@ -159,7 +175,9 @@ const StoreManagement = () => {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">{store.label}</CardTitle>
-                <Badge variant={store.status === 'active' ? 'success' : 'secondary'}>
+                <Badge
+                  variant={store.status === "active" ? "success" : "secondary"}
+                >
                   {store.status}
                 </Badge>
               </div>
@@ -170,28 +188,32 @@ const StoreManagement = () => {
                   <MapPin className="h-4 w-4" />
                   <span className="truncate">{store.address}</span>
                 </div>
-                
+
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Clock className="h-4 w-4" />
-                  <span>{store.openHour} - {store.closeHour}</span>
+                  <span>
+                    {store.openHour} - {store.closeHour}
+                  </span>
                 </div>
-                
+
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <User className="h-4 w-4" />
                   <span>{store.adminName}</span>
                 </div>
-                
+
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Package className="h-4 w-4" />
                   <span>{store.productCount} products</span>
                 </div>
               </div>
-              
+
               <div className="border-t pt-3">
                 <p className="text-sm text-gray-600 mb-1">Daily Sales</p>
-                <p className="font-bold text-lg">{formatCurrency(store.dailySales)}</p>
+                <p className="font-bold text-lg">
+                  {formatCurrency(store.dailySales)}
+                </p>
               </div>
-              
+
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -203,12 +225,14 @@ const StoreManagement = () => {
                   Edit
                 </Button>
                 <Button
-                  variant={store.status === 'active' ? 'destructive' : 'default'}
+                  variant={
+                    store.status === "active" ? "destructive" : "default"
+                  }
                   size="sm"
                   onClick={() => handleToggleStatus(store)}
                   className="flex-1"
                 >
-                  {store.status === 'active' ? 'Deactivate' : 'Activate'}
+                  {store.status === "active" ? "Deactivate" : "Activate"}
                 </Button>
               </div>
             </CardContent>
@@ -228,7 +252,9 @@ const StoreManagement = () => {
               <Input
                 id="label"
                 value={formData.label}
-                onChange={(e) => setFormData({...formData, label: e.target.value})}
+                onChange={(e) =>
+                  setFormData({ ...formData, label: e.target.value })
+                }
                 placeholder="e.g., Jakarta Central Store"
               />
             </div>
@@ -237,7 +263,9 @@ const StoreManagement = () => {
               <Input
                 id="address"
                 value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
+                onChange={(e) =>
+                  setFormData({ ...formData, address: e.target.value })
+                }
                 placeholder="Full store address"
               />
             </div>
@@ -248,7 +276,9 @@ const StoreManagement = () => {
                   id="openHour"
                   type="time"
                   value={formData.openHour}
-                  onChange={(e) => setFormData({...formData, openHour: e.target.value})}
+                  onChange={(e) =>
+                    setFormData({ ...formData, openHour: e.target.value })
+                  }
                 />
               </div>
               <div>
@@ -257,7 +287,9 @@ const StoreManagement = () => {
                   id="closeHour"
                   type="time"
                   value={formData.closeHour}
-                  onChange={(e) => setFormData({...formData, closeHour: e.target.value})}
+                  onChange={(e) =>
+                    setFormData({ ...formData, closeHour: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -266,12 +298,18 @@ const StoreManagement = () => {
               <Input
                 id="adminName"
                 value={formData.adminName}
-                onChange={(e) => setFormData({...formData, adminName: e.target.value})}
+                onChange={(e) =>
+                  setFormData({ ...formData, adminName: e.target.value })
+                }
                 placeholder="Store admin name"
               />
             </div>
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setIsAddModalOpen(false)} className="flex-1">
+              <Button
+                variant="outline"
+                onClick={() => setIsAddModalOpen(false)}
+                className="flex-1"
+              >
                 Cancel
               </Button>
               <Button onClick={handleAddStore} className="flex-1">
@@ -294,7 +332,9 @@ const StoreManagement = () => {
               <Input
                 id="edit-label"
                 value={formData.label}
-                onChange={(e) => setFormData({...formData, label: e.target.value})}
+                onChange={(e) =>
+                  setFormData({ ...formData, label: e.target.value })
+                }
               />
             </div>
             <div>
@@ -302,7 +342,9 @@ const StoreManagement = () => {
               <Input
                 id="edit-address"
                 value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
+                onChange={(e) =>
+                  setFormData({ ...formData, address: e.target.value })
+                }
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -312,7 +354,9 @@ const StoreManagement = () => {
                   id="edit-openHour"
                   type="time"
                   value={formData.openHour}
-                  onChange={(e) => setFormData({...formData, openHour: e.target.value})}
+                  onChange={(e) =>
+                    setFormData({ ...formData, openHour: e.target.value })
+                  }
                 />
               </div>
               <div>
@@ -321,7 +365,9 @@ const StoreManagement = () => {
                   id="edit-closeHour"
                   type="time"
                   value={formData.closeHour}
-                  onChange={(e) => setFormData({...formData, closeHour: e.target.value})}
+                  onChange={(e) =>
+                    setFormData({ ...formData, closeHour: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -330,11 +376,17 @@ const StoreManagement = () => {
               <Input
                 id="edit-adminName"
                 value={formData.adminName}
-                onChange={(e) => setFormData({...formData, adminName: e.target.value})}
+                onChange={(e) =>
+                  setFormData({ ...formData, adminName: e.target.value })
+                }
               />
             </div>
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setIsEditModalOpen(false)} className="flex-1">
+              <Button
+                variant="outline"
+                onClick={() => setIsEditModalOpen(false)}
+                className="flex-1"
+              >
                 Cancel
               </Button>
               <Button onClick={handleUpdateStore} className="flex-1">
@@ -348,7 +400,9 @@ const StoreManagement = () => {
       {/* Confirmation Modal */}
       <ConfirmationModal
         isOpen={confirmationModal.isOpen}
-        onClose={() => setConfirmationModal({ isOpen: false, action: null, data: null })}
+        onClose={() =>
+          setConfirmationModal({ isOpen: false, action: null, data: null })
+        }
         onConfirm={executeConfirmedAction}
         title={confirmationModal.title}
         message={confirmationModal.message}
