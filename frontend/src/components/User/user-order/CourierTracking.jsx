@@ -97,21 +97,6 @@ const CourierTracking = () => {
               />
             </div>
 
-            {/* Additional Info Card */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Delivery Details
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">ETA</span>
-                  <span className="font-semibold text-blue-600">
-                    {trackingData.estimatedTimeOfArrival}
-                  </span>
-                </div>
-              </div>
-            </div>
-
             {/* Hidden Tracking Info Component - Not displayed but available for reuse */}
             <TrackingInfo
               estimatedArrival={trackingData.estimatedTimeOfArrival}

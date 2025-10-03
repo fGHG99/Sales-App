@@ -15,10 +15,15 @@ import NotFound from "./components/NotFound";
 import ProductPageResult from "./components/ProductSearchResult";
 import OrderHistory from "./components/OrderHistory";
 import EditProfile from "./components/User/user-profile/EditProfile";
-import MapTiler from "./components/address/Map";
 import AddressSearchWithHandler from "./components/address/demo/AddressSearchWHandler";
 import OrderCheckout from "./components/User/user-order/OrderCheckout";
 import CourierTracking from "./components/User/user-order/CourierTracking";
+import AdminLayout from "./components/Admin/Admin-Layout";
+import AdminDashboard from "./components/Admin/Pages/Dashboard";
+import OrderManagement from "./components/Admin/Pages/OrderManagement";
+import DisputesManagement from "./components/Admin/Pages/DisputeManagement";
+import SalesAnalytics from "./components/Admin/Pages/SalesAnalytics";
+import AdminCourierTracking from "./components/Admin/Pages/CourierTracking";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -81,6 +86,17 @@ const router = createBrowserRouter([
     children: [
       { path: "checkout/:orderId", element: <OrderCheckout /> },
       { path: "track/:orderId", element: <CourierTracking /> },
+    ],
+  },
+  {
+    path: "/admin",
+    element: <AdminLayout />,
+    children: [
+      { index: true, element: <AdminDashboard /> },
+      { path: "orders", element: <OrderManagement /> },
+      { path: "couriers", element: <AdminCourierTracking /> },
+      { path: "disputes", element: <DisputesManagement /> },
+      { path: "analytics", element: <SalesAnalytics /> },
     ],
   },
   { path: "*", element: <NotFound /> },

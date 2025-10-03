@@ -284,8 +284,7 @@ export default function OrderCheckout() {
 
                 <div className="pt-4 space-y-2">
                   <Button
-                    className="w-full bg-blue-500 text-white"
-                    variant="outline"
+                    className="w-full bg-blue-600 hover:bg-blue-600 text-white border-2 border-blue-500 hover:border-blue-600 hover:shadow-lg transition-all duration-200"
                     onClick={handleTrack}
                   >
                     Lacak Pesanan
