@@ -35,6 +35,13 @@ import FeeSetup from "./components/superAdmin/page/FeeSetup";
 import SystemConfiguration from "./components/superAdmin/page/SystemConf";
 import GlobalReports from "./components/superAdmin/page/GlobalReports";
 import AuditLog from "./components/superAdmin/page/AuditLog";
+import CourierDashboard from "./components/courier/pages/Dashboard";
+import OrdersPage from "./components/courier/pages/Orders";
+import ProfilePage from "./components/courier/pages/Profile";
+import ForgotPassword from "./components/ForgotPass";
+import MapNavigation from "./components/courier/pages/MapNavigation";
+import Navigation from "./components/courier/pages/Navigation";
+import UserLocation from "./components/courier/pages/UserLocation";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -100,6 +107,18 @@ const router = createBrowserRouter([
     ],
   },
   {
+    path: "/courier",
+    element: <Navigation />,
+    children: [
+      { index: true, element: <CourierDashboard /> },
+      { path: "orders", element: <OrdersPage /> },
+      { path: "profile", element: <ProfilePage /> },
+      { path: "forgot-password", element: <ForgotPassword /> },
+      { path: "order/:orderId", element: <MapNavigation /> },
+      { path: "customer-location/order/:orderId", element: <UserLocation /> },
+    ],
+  },
+  {
     path: "/admin",
     element: <AdminLayout />,
     children: [
@@ -116,14 +135,14 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <SuperAdminDashboard /> },
       { path: "stores", element: <StoreManagement /> },
-      { path: "accounts", element: <AccountManagement /> },
-      { path: "roles", element: <RoleManagement /> },
+      // { path: "accounts", element: <AccountManagement /> },
+      // { path: "roles", element: <RoleManagement /> },
       { path: "orders", element: <SuperAdminOrderManagement /> },
       { path: "products", element: <ProductManagement /> },
       { path: "fees", element: <FeeSetup /> },
-      { path: "system", element: <SystemConfiguration /> },
+      // { path: "system", element: <SystemConfiguration /> },
       { path: "reports", element: <GlobalReports /> },
-      { path: "audit", element: <AuditLog /> },
+      // { path: "audit", element: <AuditLog /> },
     ],
   },
   { path: "*", element: <NotFound /> },

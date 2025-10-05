@@ -25,18 +25,18 @@ const SuperAdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
       icon: Store,
       href: "/s-admin/stores",
     },
-    {
-      id: "accounts",
-      label: "Account Management",
-      icon: Users,
-      href: "/s-admin/accounts",
-    },
-    {
-      id: "roles",
-      label: "Role Management",
-      icon: Shield,
-      href: "/s-admin/roles",
-    },
+    // {
+    //   id: "accounts",
+    //   label: "Account Management",
+    //   icon: Users,
+    //   href: "/s-admin/accounts",
+    // },
+    // {
+    //   id: "roles",
+    //   label: "Role Management",
+    //   icon: Shield,
+    //   href: "/s-admin/roles",
+    // },
     {
       id: "orders",
       label: "Order Management",
@@ -50,24 +50,24 @@ const SuperAdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
       href: "/s-admin/products",
     },
     { id: "fees", label: "Fee Setup", icon: DollarSign, href: "/s-admin/fees" },
-    {
-      id: "system",
-      label: "System Configuration",
-      icon: Settings,
-      href: "/s-admin/system",
-    },
+    // {
+    //   id: "system",
+    //   label: "System Configuration",
+    //   icon: Settings,
+    //   href: "/s-admin/system",
+    // },
     {
       id: "reports",
       label: "Global Reports",
       icon: FileText,
       href: "/s-admin/reports",
     },
-    {
-      id: "audit",
-      label: "Audit Log",
-      icon: ClipboardList,
-      href: "/s-admin/audit",
-    },
+    // {
+    //   id: "audit",
+    //   label: "Audit Log",
+    //   icon: ClipboardList,
+    //   href: "/s-admin/audit",
+    // },
   ];
 
   const isActiveRoute = (href) => {
