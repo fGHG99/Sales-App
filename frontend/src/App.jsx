@@ -42,6 +42,7 @@ import ForgotPassword from "./components/ForgotPass";
 import MapNavigation from "./components/courier/pages/MapNavigation";
 import Navigation from "./components/courier/pages/Navigation";
 import UserLocation from "./components/courier/pages/UserLocation";
+import SupportDashboard from "./components/it-support/pages/SupportDashboard";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -143,6 +144,12 @@ const router = createBrowserRouter([
       // { path: "system", element: <SystemConfiguration /> },
       { path: "reports", element: <GlobalReports /> },
       // { path: "audit", element: <AuditLog /> },
+    ],
+  },
+  {
+    path: "/support",
+    children: [
+      { index: true, element: <SupportDashboard /> },
     ],
   },
   { path: "*", element: <NotFound /> },
