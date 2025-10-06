@@ -9,8 +9,7 @@ const ProfileCompletion = ({ userData }) => {
         { label: 'Email Address', value: userData.email, required: true },
         { label: 'Phone Number', value: userData.phone, required: true },
         { label: 'Home Address', value: userData.address, required: false },
-        { label: 'Date of Birth', value: userData.birthDate, required: false },
-        { label: 'Company', value: userData.company, required: false },
+        { label: 'Date of Birth', value: userData.dob, required: false },
     ];
 
     const completedFields = profileFields.filter(field => field.value && field.value.trim() !== '');

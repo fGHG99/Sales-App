@@ -14,7 +14,43 @@ export default function AuthSection({
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const closeTimeoutRef = useRef(null);
   const userDropdownRef = useRef(null);
-  const [profilePicture, setProfilePicture] = useState(user.profilePicture);
+  const [profilePicture, setProfilePicture] = useState(null);
+  const BE_URL = import.meta.env.VITE_BE_API_URL;
+
+  // Load profile picture from localStorage
+  useEffect(() => {
+    const loadProfilePicture = () => {
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      if (storedUser.image && storedUser.image.url) {
+        setProfilePicture(`${BE_URL}${storedUser.image.url}`);
+      } else {
+        setProfilePicture(null);
+      }
+    };
+
+    loadProfilePicture();
+
+    // Listen for storage changes (when profile picture is updated in EditProfile)
+    const handleStorageChange = (e) => {
+      if (e.key === "user" || e.key === null) {
+        loadProfilePicture();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
+    // Custom event for same-tab updates
+    const handleUserUpdate = () => {
+      loadProfilePicture();
+    };
+
+    window.addEventListener("userUpdated", handleUserUpdate);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("userUpdated", handleUserUpdate);
+    };
+  }, [BE_URL]);
 
   const openDropdown = () => {
     if (closeTimeoutRef.current) {
@@ -152,15 +188,15 @@ export default function AuthSection({
               className="flex items-center space-x-1 cursor-pointer hover:text-blue-600 transition-colors duration-200"
               onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
             >
-              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center ml-2 overflow-hidden">
-                <Avatar className="h-32 w-32 border-2 border-gray-200 shadow-sm">
+              <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
+                <Avatar className="h-8 w-8">
                   <AvatarImage
                     src={profilePicture}
                     alt="Profile"
                     className="object-cover"
                   />
-                  <AvatarFallback className="bg-gray-100 text-gray-600 text-base font-semibold">
-                    {user?.username?.charAt(0).toUpperCase() || "U"}{" "}
+                  <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-semibold">
+                    {user?.name?.charAt(0).toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
               </div>

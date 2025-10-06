@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Search, Plus, MapPin, Edit, Trash2, Phone, User } from "lucide-react";
 import { Input } from "../../ui/input";
 import { Button } from "../../ui/button";
 import { Card, CardContent } from "../../ui/card";
-import { Badge } from "../../ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -14,14 +13,16 @@ import {
 import useDebounce from "../../hook/useDebounce";
 import useThrottle from "../../hook/useThrottle";
 import { performAutocompleteSearch } from "./AddressHandler";
-import { mockAddresses, addressLabels } from "./data/mockDataAddress";
-import AddAddressModal from "./AddAddressModal";
+import AddAddressModal from "../modal/AddAddressModal";
+import api from "../../../utils/api";
 
 const AddressSearchWithHandler = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [addresses, setAddresses] = useState(mockAddresses);
+  const [addresses, setAddresses] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Location search states for real-time search
   const [locationSearchResults, setLocationSearchResults] = useState([]);
@@ -36,6 +37,36 @@ const AddressSearchWithHandler = () => {
 
   // Refs for managing search state
   const searchTimeoutRef = useRef(null);
+
+  // Fetch user addresses from API
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Get user ID from localStorage or your auth context
+        const user = localStorage.getItem("user");
+        const userId = user ? JSON.parse(user).id : null;
+
+        if (!userId) {
+          setError("User not logged in");
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await api.get(`/address/user/${userId}`);
+        setAddresses(response.data);
+      } catch (err) {
+        console.error("Error fetching addresses:", err);
+        setError(err.response?.data?.error || "Failed to fetch addresses");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAddresses();
+  }, []);
 
   // Filter addresses based on search query
   const filteredAddresses = useMemo(() => {
@@ -88,8 +119,14 @@ const AddressSearchWithHandler = () => {
     );
   };
 
-  const handleDeleteAddress = (addressId) => {
-    setAddresses((prev) => prev.filter((addr) => addr.id !== addressId));
+  const handleDeleteAddress = async (addressId) => {
+    try {
+      await api.delete(`/address/${addressId}`);
+      setAddresses((prev) => prev.filter((addr) => addr.id !== addressId));
+    } catch (err) {
+      console.error("Error deleting address:", err);
+      alert(err.response?.data?.error || "Failed to delete address");
+    }
   };
 
   const handleEditAddress = (address) => {
@@ -98,24 +135,17 @@ const AddressSearchWithHandler = () => {
   };
 
   const handleAddAddress = (newAddress) => {
+    // The newAddress comes from API response in AddAddressModal
+    // Just add it to the local state
     if (editingAddress) {
       // Update existing address
       setAddresses((prev) =>
-        prev.map((addr) =>
-          addr.id === editingAddress.id
-            ? { ...newAddress, id: editingAddress.id }
-            : addr
-        )
+        prev.map((addr) => (addr.id === editingAddress.id ? newAddress : addr))
       );
       setEditingAddress(null);
     } else {
-      // Add new address
-      const addressWithId = {
-        ...newAddress,
-        id: Date.now().toString(),
-        createdAt: new Date(),
-      };
-      setAddresses((prev) => [...prev, addressWithId]);
+      // Add new address (already has ID from API response)
+      setAddresses((prev) => [...prev, newAddress]);
     }
     setIsAddModalOpen(false);
   };
@@ -126,12 +156,6 @@ const AddressSearchWithHandler = () => {
     setSearchQuery(result.properties.display_name);
     setLocationSearchResults([]);
     setShowLocationDropdown(false);
-  };
-
-  const getLabelInfo = (labelId) => {
-    return (
-      addressLabels.find((label) => label.id === labelId) || addressLabels[3]
-    );
   };
 
   const hasLocationResults =
@@ -249,9 +273,16 @@ const AddressSearchWithHandler = () => {
 
       {/* Address Cards */}
       <div className="grid gap-4">
-        {hasAddressResults ? (
+        {isLoading ? (
+          <div className="text-center py-12">
+            <p className="text-gray-600">Loading addresses...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <p className="text-red-600">{error}</p>
+          </div>
+        ) : hasAddressResults ? (
           filteredAddresses.map((address) => {
-            const labelInfo = getLabelInfo(address.label);
             return (
               <Card
                 key={address.id}
@@ -264,16 +295,10 @@ const AddressSearchWithHandler = () => {
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
-                      <Badge className={labelInfo.color}>
-                        {labelInfo.name}
-                      </Badge>
                       {address.isSelected && (
-                        <Badge
-                          variant="secondary"
-                          className="bg-green-100 text-green-800"
-                        >
+                        <div className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
                           Alamat Terpilih
-                        </Badge>
+                        </div>
                       )}
                     </div>
 

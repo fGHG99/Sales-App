@@ -1,48 +1,57 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Plus, MapPin, Edit, Trash2, Phone, User } from 'lucide-react';
-import { Input } from '../../ui/input';
-import { Button } from '../../ui/button';
-import { Card, CardContent } from '../../ui/card';
-import { Badge } from '../../ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../ui/dialog';
-import useDebounce from '../../hook/useDebounce';
-import useThrottle from '../../hook/useThrottle';
-import { mockAddresses, addressLabels } from './data/mockDataAddress';
-import AddAddressModal from './AddAddressModal';
+import React, { useState, useMemo } from "react";
+import { Search, Plus, MapPin, Edit, Trash2, Phone, User } from "lucide-react";
+import { Input } from "../../ui/input";
+import { Button } from "../../ui/button";
+import { Card, CardContent } from "../../ui/card";
+import { Badge } from "../../ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../../ui/dialog";
+import useDebounce from "../../hook/useDebounce";
+import useThrottle from "../../hook/useThrottle";
+import { mockAddresses, addressLabels } from "../demo/data/mockDataAddress";
+import AddAddressModal from "./AddAddressModal";
 
 const AddressSearch = () => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [addresses, setAddresses] = useState(mockAddresses);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
 
   // Debounced search query for filtering
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  
+
   // Throttled search for API calls (if needed)
   const throttledSearchQuery = useThrottle(searchQuery, 500);
 
   // Filter addresses based on search query
   const filteredAddresses = useMemo(() => {
     if (!debouncedSearchQuery.trim()) return addresses;
-    
+
     const query = debouncedSearchQuery.toLowerCase();
-    return addresses.filter(address => 
-      address.fullAddress.toLowerCase().includes(query) ||
-      address.recipientName.toLowerCase().includes(query) ||
-      address.streetAddress.toLowerCase().includes(query)
+    return addresses.filter(
+      (address) =>
+        address.fullAddress.toLowerCase().includes(query) ||
+        address.recipientName.toLowerCase().includes(query) ||
+        address.streetAddress.toLowerCase().includes(query)
     );
   }, [debouncedSearchQuery, addresses]);
 
   const handleSelectAddress = (addressId) => {
-    setAddresses(prev => prev.map(addr => ({
-      ...addr,
-      isSelected: addr.id === addressId
-    })));
+    setAddresses((prev) =>
+      prev.map((addr) => ({
+        ...addr,
+        isSelected: addr.id === addressId,
+      }))
+    );
   };
 
   const handleDeleteAddress = (addressId) => {
-    setAddresses(prev => prev.filter(addr => addr.id !== addressId));
+    setAddresses((prev) => prev.filter((addr) => addr.id !== addressId));
   };
 
   const handleEditAddress = (address) => {
@@ -53,24 +62,30 @@ const AddressSearch = () => {
   const handleAddAddress = (newAddress) => {
     if (editingAddress) {
       // Update existing address
-      setAddresses(prev => prev.map(addr => 
-        addr.id === editingAddress.id ? { ...newAddress, id: editingAddress.id } : addr
-      ));
+      setAddresses((prev) =>
+        prev.map((addr) =>
+          addr.id === editingAddress.id
+            ? { ...newAddress, id: editingAddress.id }
+            : addr
+        )
+      );
       setEditingAddress(null);
     } else {
       // Add new address
       const addressWithId = {
         ...newAddress,
         id: Date.now().toString(),
-        createdAt: new Date()
+        createdAt: new Date(),
       };
-      setAddresses(prev => [...prev, addressWithId]);
+      setAddresses((prev) => [...prev, addressWithId]);
     }
     setIsAddModalOpen(false);
   };
 
   const getLabelInfo = (labelId) => {
-    return addressLabels.find(label => label.id === labelId) || addressLabels[3];
+    return (
+      addressLabels.find((label) => label.id === labelId) || addressLabels[3]
+    );
   };
 
   return (
@@ -78,7 +93,9 @@ const AddressSearch = () => {
       {/* Header */}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-gray-900">Alamat Pengiriman</h1>
-        <p className="text-gray-600">Kelola alamat pengiriman Anda dengan mudah</p>
+        <p className="text-gray-600">
+          Kelola alamat pengiriman Anda dengan mudah
+        </p>
       </div>
 
       {/* Search and Add Section */}
@@ -95,7 +112,7 @@ const AddressSearch = () => {
               className="pl-10 h-12 text-base"
             />
           </div>
-          
+
           {/* Add Address Button */}
           <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
             <DialogTrigger asChild>
@@ -107,10 +124,10 @@ const AddressSearch = () => {
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
-                  {editingAddress ? 'Edit Alamat' : 'Tambah Alamat Baru'}
+                  {editingAddress ? "Edit Alamat" : "Tambah Alamat Baru"}
                 </DialogTitle>
               </DialogHeader>
-              <AddAddressModal 
+              <AddAddressModal
                 onAddAddress={handleAddAddress}
                 editingAddress={editingAddress}
                 onClose={() => {
@@ -125,10 +142,9 @@ const AddressSearch = () => {
         {/* Search Results Info */}
         {searchQuery && (
           <div className="text-sm text-gray-600">
-            {filteredAddresses.length > 0 
+            {filteredAddresses.length > 0
               ? `Menampilkan ${filteredAddresses.length} alamat dari pencarian "${searchQuery}"`
-              : `Tidak ada alamat yang ditemukan untuk "${searchQuery}"`
-            }
+              : `Tidak ada alamat yang ditemukan untuk "${searchQuery}"`}
           </div>
         )}
       </div>
@@ -139,12 +155,12 @@ const AddressSearch = () => {
           filteredAddresses.map((address) => {
             const labelInfo = getLabelInfo(address.label);
             return (
-              <Card 
-                key={address.id} 
+              <Card
+                key={address.id}
                 className={`transition-all duration-200 hover:shadow-md ${
-                  address.isSelected 
-                    ? 'ring-2 ring-slate-900 border-slate-900' 
-                    : 'border-gray-200'
+                  address.isSelected
+                    ? "ring-2 ring-slate-900 border-slate-900"
+                    : "border-gray-200"
                 }`}
               >
                 <CardContent className="p-6">
@@ -154,12 +170,15 @@ const AddressSearch = () => {
                         {labelInfo.name}
                       </Badge>
                       {address.isSelected && (
-                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        <Badge
+                          variant="secondary"
+                          className="bg-green-100 text-green-800"
+                        >
                           Alamat Terpilih
                         </Badge>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <Button
                         variant="ghost"
@@ -185,18 +204,24 @@ const AddressSearch = () => {
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium text-gray-900">{address.recipientName}</span>
+                        <span className="font-medium text-gray-900">
+                          {address.recipientName}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600">{address.recipientPhone}</span>
+                        <span className="text-gray-600">
+                          {address.recipientPhone}
+                        </span>
                       </div>
                     </div>
 
                     {/* Address */}
                     <div className="flex items-start gap-2">
                       <MapPin className="h-4 w-4 text-gray-400 mt-1 flex-shrink-0" />
-                      <p className="text-gray-700 leading-relaxed">{address.fullAddress}</p>
+                      <p className="text-gray-700 leading-relaxed">
+                        {address.fullAddress}
+                      </p>
                     </div>
 
                     {/* Select Button */}
@@ -224,21 +249,15 @@ const AddressSearch = () => {
           <div className="text-center py-12">
             <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchQuery ? 'Alamat tidak ditemukan' : 'Belum ada alamat tersimpan'}
+              {searchQuery
+                ? "Alamat tidak ditemukan"
+                : "Belum ada alamat tersimpan"}
             </h3>
             <p className="text-gray-600 mb-6">
-              {searchQuery 
-                ? 'Coba ubah kata kunci pencarian atau tambah alamat baru'
-                : 'Tambahkan alamat pertama Anda untuk memulai'
-              }
+              {searchQuery
+                ? "Coba ubah kata kunci pencarian atau tambah alamat baru"
+                : "Tambahkan alamat pertama Anda untuk memulai"}
             </p>
-            <Button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-slate-900 hover:bg-slate-800 text-white"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Tambah Alamat
-            </Button>
           </div>
         )}
       </div>

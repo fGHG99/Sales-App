@@ -94,12 +94,9 @@ const ProfilePage = () => {
             </p>
           </div>
           <div className="mt-4 sm:mt-0 flex gap-2">
-            <Button
-              variant="destructive"
-              onClick={() => setLogoutOpen(true)}
-            >
-              <LogOut className="w-4 h-4 mr-2" /> 
-                Logout
+            <Button variant="destructive" onClick={() => setLogoutOpen(true)}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
             </Button>
           </div>
         </div>
@@ -110,7 +107,7 @@ const ProfilePage = () => {
         onClose={() => setLogoutOpen(false)}
         onConfirm={() => {
           setLogoutOpen(false);
-          // Add your logout logic here (e.g., clear auth, redirect)
+          // Redirect to signin page
           navigate("/auth/signin");
         }}
       />

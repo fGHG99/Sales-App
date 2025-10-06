@@ -2,6 +2,8 @@ import {
   createBrowserRouter,
   RouterProvider,
   useParams,
+  useNavigate,
+  useSearchParams,
 } from "react-router-dom";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
@@ -15,10 +17,11 @@ import NotFound from "./components/NotFound";
 import ProductPageResult from "./components/ProductSearchResult";
 import OrderHistory from "./components/OrderHistory";
 import EditProfile from "./components/User/user-profile/EditProfile";
-import AddressSearchWithHandler from "./components/address/demo/AddressSearchWHandler";
+import AddressSearchWithHandler from "./components/address/pages/AddressSearchWHandler";
 import OrderCheckout from "./components/User/user-order/OrderCheckout";
 import CourierTracking from "./components/User/user-order/CourierTracking";
 import AdminLayout from "./components/Admin/Admin-Layout";
+import { EmailVerificationSent } from "./components/EmailVerif";
 import AdminDashboard from "./components/Admin/Pages/Dashboard";
 import OrderManagement from "./components/Admin/Pages/OrderManagement";
 import DisputesManagement from "./components/Admin/Pages/DisputeManagement";
@@ -27,14 +30,10 @@ import AdminCourierTracking from "./components/Admin/Pages/CourierTracking";
 import SuperAdminLayout from "./components/superAdmin/layout/SuperAdminLayout";
 import SuperAdminDashboard from "./components/superAdmin/page/Dashboard";
 import StoreManagement from "./components/superAdmin/page/StoreManagement";
-import AccountManagement from "./components/superAdmin/page/AccManagement";
-import RoleManagement from "./components/superAdmin/page/RoleManagement";
 import SuperAdminOrderManagement from "./components/superAdmin/page/OrderManagement";
 import ProductManagement from "./components/superAdmin/page/ProductManagement";
 import FeeSetup from "./components/superAdmin/page/FeeSetup";
-import SystemConfiguration from "./components/superAdmin/page/SystemConf";
 import GlobalReports from "./components/superAdmin/page/GlobalReports";
-import AuditLog from "./components/superAdmin/page/AuditLog";
 import CourierDashboard from "./components/courier/pages/Dashboard";
 import OrdersPage from "./components/courier/pages/Orders";
 import ProfilePage from "./components/courier/pages/Profile";
@@ -44,6 +43,7 @@ import Navigation from "./components/courier/pages/Navigation";
 import UserLocation from "./components/courier/pages/UserLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
 import NotificationsPage from "./components/User/pages/NotificationsPage";
+import api from "./utils/api";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -70,6 +70,37 @@ const CategoryPage = () => {
   );
 };
 
+// Email Verification Page Component
+const EmailVerificationPage = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const email = searchParams.get("emailUser") || "";
+
+  const handleResendEmail = async () => {
+    try {
+      await api.post("/auth/resend-verification", { email });
+      alert("Verification email resent successfully!");
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          "Failed to resend email. Please try again."
+      );
+    }
+  };
+
+  const handleBackToLogin = () => {
+    navigate("/auth/signin");
+  };
+
+  return (
+    <EmailVerificationSent
+      email={email}
+      onResendEmail={handleResendEmail}
+      onBackToLogin={handleBackToLogin}
+    />
+  );
+};
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -90,6 +121,7 @@ const router = createBrowserRouter([
     children: [
       { path: "signin", element: <Login /> },
       { path: "signup", element: <Register /> },
+      { path: "verify-email", element: <EmailVerificationPage /> },
     ],
   },
   {

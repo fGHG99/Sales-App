@@ -38,12 +38,20 @@ const MapTilerForModal = ({ onLocationSelect, externalSearchResult }) => {
         }
 
         const data = await response.json();
-        return (
-          data.display_name || `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`
-        );
+
+        // Return both display name and full address object
+        return {
+          displayName:
+            data.display_name ||
+            `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`,
+          addressData: data.address || null,
+        };
       } catch (error) {
         console.error("Error fetching address:", error);
-        return `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+        return {
+          displayName: `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`,
+          addressData: null,
+        };
       }
     };
 
@@ -72,13 +80,14 @@ const MapTilerForModal = ({ onLocationSelect, externalSearchResult }) => {
       }
 
       // Get address from coordinates
-      const address = await reverseGeocode(lat, lng);
+      const geocodeResult = await reverseGeocode(lat, lng);
 
-      // Kirim lokasi ke parent
+      // Kirim lokasi ke parent dengan address data lengkap
       onLocationSelect({
         lat,
         lng,
-        address,
+        address: geocodeResult.displayName,
+        addressData: geocodeResult.addressData,
       });
     });
   }, [onLocationSelect]);
@@ -150,10 +159,12 @@ const MapTilerForModal = ({ onLocationSelect, externalSearchResult }) => {
           let address = `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(
             6
           )}`;
+          let addressData = null;
 
           if (response.ok) {
             const data = await response.json();
             address = data.display_name || address;
+            addressData = data.address || null;
           }
 
           // Fly to user location
@@ -174,11 +185,12 @@ const MapTilerForModal = ({ onLocationSelect, externalSearchResult }) => {
             }
           }
 
-          // Send location to parent component
+          // Send location to parent component with address data
           onLocationSelect({
             lat: latitude,
             lng: longitude,
             address: address,
+            addressData: addressData,
           });
         } catch (error) {
           console.error("Error fetching address:", error);
@@ -189,6 +201,7 @@ const MapTilerForModal = ({ onLocationSelect, externalSearchResult }) => {
             address: `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(
               6
             )}`,
+            addressData: null,
           });
         } finally {
           setIsGettingLocation(false);

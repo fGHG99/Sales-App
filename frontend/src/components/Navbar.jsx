@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, Search, ShoppingCart, Menu, X } from "lucide-react";
 import SearchBar from "./SearchBar";
-import AuthSection from "./AuthNavbar";
+import AuthSection from "./AuthSection";
+import api from "../utils/api";
 
 const categories = [
   "Elektronik",
@@ -17,14 +18,27 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(true); // Mock authentication state set to true to show authenticated navbar
+  const [userData, setUserData] = useState(null);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  // Mock authentication check
-  // const isAuthenticated = () => {
-  //   return document.cookie.includes("refresh_token");
-  // };
+  // Get user data from localStorage
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUserData(JSON.parse(storedUser));
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
+  // Check authentication using accessToken from localStorage
+  const isAuthenticated = () => {
+    const accessToken = localStorage.getItem("accessToken");
+    return !!accessToken; // true if exists, false otherwise
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -38,12 +52,11 @@ const Navbar = () => {
   }, []);
 
   const handleCartClick = () => {
-    // if (!isAuthenticated()) {
-    //   setShowLoginModal(true);
-    // } else {
-    //   navigate("/cart");
-    // }
-    navigate("/cart");
+    if (!isAuthenticated()) {
+      setShowLoginModal(true);
+    } else {
+      navigate("/cart");
+    }
   };
 
   const handleSearch = (e) => {
@@ -119,8 +132,8 @@ const Navbar = () => {
 
             <div className="hidden lg:flex items-center space-x-6">
               <AuthSection
-                isAuthenticated={isAuthenticated}
-                user={{ name: "User" }}
+                isAuthenticated={isAuthenticated()}
+                user={userData || { name: "User" }}
                 handleCartClick={handleCartClick}
               />
             </div>

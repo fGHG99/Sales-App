@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Menu, LogOut } from "lucide-react";
 import AdminSearch from "./AdminSearch";
 import LogoutModal from "../modal/logout-confirmation";
@@ -13,6 +14,7 @@ export default function AdminNavbar({
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [, setIsUserDropdownOpen] = useState(false);
+  const navigate = useNavigate();
   const closeTimeoutRef = useRef(null);
   const userDropdownRef = useRef(null);
 
@@ -63,12 +65,11 @@ export default function AdminNavbar({
   };
 
   const confirmLogout = () => {
-    // Add your logout logic here
-    console.log("User logged out");
+    // Close the modal
     setShowLogoutModal(false);
-    if (onClose) onClose();
-    // Add actual logout functionality here
-    // For example: dispatch logout action, clear localStorage, redirect, etc.
+
+    // Redirect to login page
+    navigate("/login");
   };
   return (
     <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">

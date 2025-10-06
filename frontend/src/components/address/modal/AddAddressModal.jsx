@@ -3,13 +3,14 @@ import { MapPin, Plus, Check } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Card, CardContent } from "../../ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
-import AddressForm from "./AddressForm";
-import MapTilerForModal from "./MapTilerForModal";
+import AddressForm from "../pages/AddressForm";
+import MapTilerForModal from "../pages/MapTilerForModal";
 import {
   getCurrentLocation,
   performAutocompleteSearch,
-} from "./AddressHandler";
-import MapTilerSearch from "./MapTilerSearch";
+} from "../pages/AddressHandler";
+import MapTilerSearch from "../demo/MapTilerSearch";
+import api from "../../../utils/api";
 
 const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
   const [activeTab, setActiveTab] = useState("location");
@@ -17,6 +18,7 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
   const [addressData, setAddressData] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [externalSearchResult, setExternalSearchResult] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (editingAddress) {
@@ -64,16 +66,72 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
     });
   };
 
-  const handleAddressSubmit = (formData) => {
-    const newAddress = {
-      ...formData,
-      coordinates: selectedLocation
-        ? { lat: selectedLocation.lat, lng: selectedLocation.lng }
-        : null,
-      fullAddress: `${formData.streetAddress}, ${formData.subDistrictName}, ${formData.districtName}, ${formData.cityName}, ${formData.provinceName} ${formData.postalCode}`,
-    };
-    onAddAddress(newAddress);
+  const handleAddressSubmit = async (formData) => {
+    try {
+      setIsSubmitting(true);
+
+      // Get userId from localStorage
+      const user = localStorage.getItem("user");
+      const userId = user ? JSON.parse(user).id : null;
+
+      if (!userId) {
+        alert("User not logged in. Please login first.");
+        return;
+      }
+
+      // Prepare data for API based on schema.prisma Address model
+      const addressPayload = {
+        userId: userId,
+        recipientName: formData.recipientName,
+        recipientPhone: formData.recipientPhone,
+        label: formData.label,
+        fullAddress: formData.fullAddress,
+        subDistrict: formData.subDistrict || null,
+        district: formData.district || null,
+        city: formData.city || null,
+        province: formData.province,
+        country: "Indonesia", // Default country
+        postalCode: formData.postalCode,
+        latitude: formData.coordinates?.lat || selectedLocation?.lat || 0,
+        longitude: formData.coordinates?.lng || selectedLocation?.lng || 0,
+      };
+
+      let response;
+
+      if (editingAddress) {
+        // Update existing address
+        response = await api.put(
+          `/address/${editingAddress.id}`,
+          addressPayload
+        );
+        console.log("Address updated:", response.data);
+      } else {
+        // Create new address
+        response = await api.post("/address", addressPayload);
+        console.log("Address created:", response.data);
+      }
+
+      // Pass the created/updated address to parent component
+      // The response.data.data contains the address object from the API
+      const savedAddress = response.data.data || response.data;
+      onAddAddress(savedAddress);
+
+      // Close modal or reset form
+      if (onClose) {
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error saving address:", error);
+      alert(
+        error.response?.data?.message ||
+          "Failed to save address. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  console.log("address data :", selectedLocation);
 
   return (
     <div className="w-full max-w-4xl">
@@ -87,7 +145,7 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
             <Plus className="h-4 w-4 mr-2" />
             Isi Detail Alamat
           </TabsTrigger> */}
-        {/* </TabsList> */} 
+        {/* </TabsList> */}
 
         <TabsContent value="location" className="space-y-6">
           <div className="text-center space-y-4">
@@ -173,6 +231,7 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
             onSubmit={handleAddressSubmit}
             initialData={addressData}
             selectedLocation={selectedLocation}
+            isSubmitting={isSubmitting}
           />
         </TabsContent>
       </Tabs>
