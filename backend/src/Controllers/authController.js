@@ -17,11 +17,10 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { email, name, password } = req.body;
 
     // cek kalau email sudah ada
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -32,6 +31,19 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await prisma.$transaction(async (tx) => {
+      // Find by roleType or isDefault flag (safer than name)
+      const userRole = await tx.role.findFirst({
+        where: {
+          OR: [{ roleType: "user" }, { isDefault: true }],
+        },
+      });
+
+      if (!userRole) {
+        throw new Error(
+          "Default user role not found. Please run database seed."
+        );
+      }
+
       // buat user dulu (tapi transaksi belum commit)
       const user = await tx.user.create({
         data: {
@@ -39,6 +51,7 @@ router.post("/register", async (req, res) => {
           email,
           password: hashedPassword,
           isVerified: false,
+          roleId: userRole.id,
         },
       });
 
@@ -178,6 +191,11 @@ router.post("/login", async (req, res) => {
       expiresIn: rememberMe ? "30d" : "1d",
     });
 
+    //untuk testing waktu expired dari token dengan waktu singkat
+    // const refreshToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+    //   expiresIn: rememberMe ? "2min" : "1min",
+    // });
+
     // 5. set refresh token di httpOnly cookie
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
@@ -185,6 +203,14 @@ router.post("/login", async (req, res) => {
       sameSite: "strict",
       maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000, // 30d / 1d
     });
+
+    //untuk testing token expired dengan waktu singkat
+    // res.cookie("refreshToken", refreshToken, {
+    //   httpOnly: true,
+    //   secure: process.env.NODE_ENV === "production", // pakai HTTPS only di production
+    //   sameSite: "strict",
+    //   maxAge: rememberMe ? 2 * 60 * 1000 : 1 * 60 * 1000, // 2 menit untuk testing
+    // });
 
     // 6. kirim access token + user info
     const { password: _, verifyToken, ...userWithoutPassword } = user;

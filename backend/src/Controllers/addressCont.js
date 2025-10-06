@@ -8,7 +8,7 @@ const BASE_URL = process.env.BASE_URL;
 
 /**
  * get alamat user dengan menggunakan reverse geocoding untuk menambahkan alamat ke dalam form
- * 
+ *
  */
 router.get("/", async (req, res) => {
   try {
@@ -32,14 +32,14 @@ router.get("/", async (req, res) => {
 
     // Mapping agar sesuai dengan kebutuhan
     const result = {
-      sub_district: address.suburb || address.village || address.hamlet || null, 
+      sub_district: address.suburb || address.village || address.hamlet || null,
       district: address.city_district || address.county || null,
       city: address.city || address.town || address.municipality || null,
       province: address.state || null,
       country: address.country || null,
       postal_code: address.postcode || null,
-      latitude : lat,
-      longitude : lon,
+      latitude: lat,
+      longitude: lon,
     };
 
     res.json(result);
@@ -55,7 +55,9 @@ router.get("/provinces", async (req, res) => {
     const { data } = await axios.get(`${BASE_URL}/provinces.json`);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ message: "Gagal mengambil data provinsi", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data provinsi", error: err.message });
   }
 });
 
@@ -63,10 +65,15 @@ router.get("/provinces", async (req, res) => {
 router.get("/regencies/:provinceId", async (req, res) => {
   try {
     const { provinceId } = req.params;
-    const { data } = await axios.get(`${BASE_URL}/regencies/${provinceId}.json`);
+    const { data } = await axios.get(
+      `${BASE_URL}/regencies/${provinceId}.json`
+    );
     res.json(data);
   } catch (err) {
-    res.status(500).json({ message: "Gagal mengambil data kabupaten/kota", error: err.message });
+    res.status(500).json({
+      message: "Gagal mengambil data kabupaten/kota",
+      error: err.message,
+    });
   }
 });
 
@@ -77,7 +84,9 @@ router.get("/districts/:regencyId", async (req, res) => {
     const { data } = await axios.get(`${BASE_URL}/districts/${regencyId}.json`);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ message: "Gagal mengambil data kecamatan", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data kecamatan", error: err.message });
   }
 });
 
@@ -88,9 +97,164 @@ router.get("/villages/:districtId", async (req, res) => {
     const { data } = await axios.get(`${BASE_URL}/villages/${districtId}.json`);
     res.json(data);
   } catch (err) {
-    res.status(500).json({ message: "Gagal mengambil data kelurahan", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Gagal mengambil data kelurahan", error: err.message });
   }
 });
+
+// 5. Cari ID provinsi berdasarkan nama
+router.get("/provinces/search/:name", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { data } = await axios.get(`${BASE_URL}/provinces.json`);
+
+    // Case-insensitive search
+    const province = data.find(
+      (p) => p.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (!province) {
+      return res.status(404).json({ message: "Provinsi tidak ditemukan" });
+    }
+
+    res.json(province);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Gagal mencari provinsi", error: err.message });
+  }
+});
+
+// 6. Cari kabupaten/kota berdasarkan nama provinsi
+router.get("/regencies/by-province-name/:provinceName", async (req, res) => {
+  try {
+    const { provinceName } = req.params;
+
+    // First, get all provinces to find the ID
+    const provincesResponse = await axios.get(`${BASE_URL}/provinces.json`);
+    const province = provincesResponse.data.find(
+      (p) => p.name.toLowerCase() === provinceName.toLowerCase()
+    );
+
+    if (!province) {
+      return res.status(404).json({ message: "Provinsi tidak ditemukan" });
+    }
+
+    // Then get regencies for that province
+    const { data } = await axios.get(
+      `${BASE_URL}/regencies/${province.id}.json`
+    );
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({
+      message: "Gagal mengambil data kabupaten/kota",
+      error: err.message,
+    });
+  }
+});
+
+// 7. Cari kecamatan berdasarkan nama kabupaten/kota dan provinsi
+router.get(
+  "/districts/by-regency-name/:provinceName/:regencyName",
+  async (req, res) => {
+    try {
+      const { provinceName, regencyName } = req.params;
+
+      // First, get province ID
+      const provincesResponse = await axios.get(`${BASE_URL}/provinces.json`);
+      const province = provincesResponse.data.find(
+        (p) => p.name.toLowerCase() === provinceName.toLowerCase()
+      );
+
+      if (!province) {
+        return res.status(404).json({ message: "Provinsi tidak ditemukan" });
+      }
+
+      // Then get regency ID
+      const regenciesResponse = await axios.get(
+        `${BASE_URL}/regencies/${province.id}.json`
+      );
+      const regency = regenciesResponse.data.find(
+        (r) => r.name.toLowerCase() === regencyName.toLowerCase()
+      );
+
+      if (!regency) {
+        return res
+          .status(404)
+          .json({ message: "Kabupaten/kota tidak ditemukan" });
+      }
+
+      // Finally get districts
+      const { data } = await axios.get(
+        `${BASE_URL}/districts/${regency.id}.json`
+      );
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({
+        message: "Gagal mengambil data kecamatan",
+        error: err.message,
+      });
+    }
+  }
+);
+
+// 8. Cari kelurahan berdasarkan nama kecamatan, kabupaten/kota, dan provinsi
+router.get(
+  "/villages/by-district-name/:provinceName/:regencyName/:districtName",
+  async (req, res) => {
+    try {
+      const { provinceName, regencyName, districtName } = req.params;
+
+      // First, get province ID
+      const provincesResponse = await axios.get(`${BASE_URL}/provinces.json`);
+      const province = provincesResponse.data.find(
+        (p) => p.name.toLowerCase() === provinceName.toLowerCase()
+      );
+
+      if (!province) {
+        return res.status(404).json({ message: "Provinsi tidak ditemukan" });
+      }
+
+      // Then get regency ID
+      const regenciesResponse = await axios.get(
+        `${BASE_URL}/regencies/${province.id}.json`
+      );
+      const regency = regenciesResponse.data.find(
+        (r) => r.name.toLowerCase() === regencyName.toLowerCase()
+      );
+
+      if (!regency) {
+        return res
+          .status(404)
+          .json({ message: "Kabupaten/kota tidak ditemukan" });
+      }
+
+      // Then get district ID
+      const districtsResponse = await axios.get(
+        `${BASE_URL}/districts/${regency.id}.json`
+      );
+      const district = districtsResponse.data.find(
+        (d) => d.name.toLowerCase() === districtName.toLowerCase()
+      );
+
+      if (!district) {
+        return res.status(404).json({ message: "Kecamatan tidak ditemukan" });
+      }
+
+      // Finally get villages
+      const { data } = await axios.get(
+        `${BASE_URL}/villages/${district.id}.json`
+      );
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({
+        message: "Gagal mengambil data kelurahan",
+        error: err.message,
+      });
+    }
+  }
+);
 
 /**
  * registrasi alamat user secara manual setelah user mendapatkan detail alamat dari reverse geocode
@@ -100,6 +264,8 @@ router.post("/", async (req, res) => {
   try {
     const {
       userId,
+      recipientName,
+      recipientPhone,
       label,
       fullAddress,
       subDistrict,
@@ -124,10 +290,24 @@ router.post("/", async (req, res) => {
         .json({ success: false, message: "fullAddress wajib diberikan" });
     }
 
+    if (!recipientName) {
+      return res
+        .status(400)
+        .json({ success: false, message: "recipientName is required" });
+    }
+
+    if (!recipientPhone) {
+      return res
+        .status(400)
+        .json({ success: false, message: "recipientPhone is required" });
+    }
+
     // Simpan ke database (semua field manual dari user)
     const newAddress = await prisma.address.create({
       data: {
         user: { connect: { id: userId } },
+        recipientName,
+        recipientPhone,
         label,
         fullAddress,
         subDistrict,
@@ -144,9 +324,7 @@ router.post("/", async (req, res) => {
     res.json({ success: true, data: newAddress });
   } catch (error) {
     console.error("Error membuat alamat:", error.message);
-    res
-      .status(500)
-      .json({ success: false, message: "Gagal membuat alamat" });
+    res.status(500).json({ success: false, message: "Gagal membuat alamat" });
   }
 });
 
@@ -167,18 +345,18 @@ router.get("/user/:userId", async (req, res) => {
 });
 
 // GET /addresses/:id => detail alamat
-// router.get("/:id", async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const address = await prisma.address.findUnique({ where: { id } });
-//     if (!address)
-//       return res.status(404).json({ error: "Alamat tidak ditemukan" });
-//     return res.json(address);
-//   } catch (err) {
-//     console.error("GET /addresses/:id error:", err);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// });
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const address = await prisma.address.findUnique({ where: { id } });
+    if (!address)
+      return res.status(404).json({ error: "Alamat tidak ditemukan" });
+    return res.json(address);
+  } catch (err) {
+    console.error("GET /addresses/:id error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
 
 // PUT /addresses/:id => update alamat manual (label atau fields)
 router.put("/:id", async (req, res) => {
