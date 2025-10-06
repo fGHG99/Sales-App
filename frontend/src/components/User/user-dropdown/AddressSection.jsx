@@ -1,16 +1,11 @@
-import React from 'react';
 import { MapPin } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const AddressSection = () => {
-    const handleAddressClick = () => {
-        // Navigate to address management page
-        window.location.href = '/user/addresses';
-    };
-
     return (
         <div className="p-4">
+            <Link to="/user/addresses">
             <button
-                onClick={handleAddressClick}
                 className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 text-left"
             >
                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -21,6 +16,7 @@ const AddressSection = () => {
                     <p className="text-sm text-gray-500">Pengaturan alamat tujuan</p>
                 </div>
             </button>
+            </Link>
         </div>
     );
 };

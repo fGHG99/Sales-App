@@ -43,6 +43,7 @@ import MapNavigation from "./components/courier/pages/MapNavigation";
 import Navigation from "./components/courier/pages/Navigation";
 import UserLocation from "./components/courier/pages/UserLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
+import NotificationsPage from "./components/User/pages/NotificationsPage";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -80,6 +81,7 @@ const router = createBrowserRouter([
       { path: "cart", element: <Cart /> },
       { path: "terms-conditions", element: <TermsConditions /> },
       { path: "p/:productname", element: <ProductDetail /> },
+      { path: "notifications", element: <NotificationsPage /> },
     ],
   },
   {
@@ -148,9 +150,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/support",
-    children: [
-      { index: true, element: <SupportDashboard /> },
-    ],
+    children: [{ index: true, element: <SupportDashboard /> }],
   },
   { path: "*", element: <NotFound /> },
 ]);
