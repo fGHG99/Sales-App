@@ -17,76 +17,66 @@ export default function DeliveryOptionsModal({
   open,
   onOpenChange,
   onDeliverySelect,
+  nearbyStores = [],
+  isLoadingStores = false,
+  onFetchStores,
 }) {
   const [selectedOption, setSelectedOption] = useState("courier");
   const [selectedStore, setSelectedStore] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [stores, setStores] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [showMap, setShowMap] = useState(null);
 
-  // Mock store data
-  const mockStores = [
-    {
-      id: "1",
-      name: "TechStore Manhattan",
-      address: "100 Tech Plaza, Manhattan, NY 10003",
-      openHour: "09:00",
-      closeHour: "21:00",
-      distance: "2.3 miles",
-      distanceValue: 2.3,
-      coordinates: { lat: 40.7589, lng: -73.9851 },
-    },
-    {
-      id: "2",
-      name: "TechStore Brooklyn",
-      address: "456 Brooklyn Ave, Brooklyn, NY 11201",
-      openHour: "08:00",
-      closeHour: "22:00",
-      distance: "4.7 miles",
-      distanceValue: 4.7,
-      coordinates: { lat: 40.6892, lng: -73.9442 },
-    },
-    {
-      id: "3",
-      name: "TechStore Queens",
-      address: "789 Queens Blvd, Queens, NY 11373",
-      openHour: "10:00",
-      closeHour: "20:00",
-      distance: "8.1 miles",
-      distanceValue: 8.1,
-      coordinates: { lat: 40.7282, lng: -73.7949 },
-    },
-  ];
-
   useEffect(() => {
-    if (open && selectedOption === "pickup") {
-      setLoading(true);
-      setTimeout(() => {
-        const sortedStores = [...mockStores].sort(
-          (a, b) => a.distanceValue - b.distanceValue
-        );
-        setStores(sortedStores);
-        setLoading(false);
-      }, 1000);
+    // Reset selections when modal closes
+    if (!open) {
+      setSelectedStore("");
+      setSelectedTime("");
     }
-  }, [open, selectedOption]);
+  }, [open]);
+
+  // Fetch stores when user selects pickup option
+  useEffect(() => {
+    if (
+      open &&
+      selectedOption === "pickup" &&
+      nearbyStores.length === 0 &&
+      !isLoadingStores &&
+      onFetchStores
+    ) {
+      console.log("📦 Fetching stores for pickup option...");
+      onFetchStores();
+    }
+  }, [
+    open,
+    selectedOption,
+    nearbyStores.length,
+    isLoadingStores,
+    onFetchStores,
+  ]);
 
   const generateTimeSlots = (openHour, closeHour) => {
     const slots = [];
-    const start = parseInt(openHour.split(":")[0]);
-    const end = parseInt(closeHour.split(":")[0]);
 
-    for (let hour = start; hour < end; hour++) {
-      const timeString = `${hour.toString().padStart(2, "0")}:00`;
-      const displayTime =
-        hour < 12
-          ? `${hour}:00 AM`
-          : hour === 12
-          ? "12:00 PM"
-          : `${hour - 12}:00 PM`;
-      slots.push({ value: timeString, display: displayTime });
+    // Parse the time strings (format: "HH:MM")
+    const [openH, openM] = openHour.split(":").map(Number);
+    const [closeH, closeM] = closeHour.split(":").map(Number);
+
+    // Start from opening hour
+    let currentHour = openH;
+
+    // Generate slots with 1-hour intervals
+    while (currentHour < closeH) {
+      const timeString = `${currentHour.toString().padStart(2, "0")}:00`;
+      const displayTime = `${currentHour.toString().padStart(2, "0")}:00`;
+
+      slots.push({
+        value: timeString,
+        display: displayTime,
+      });
+
+      currentHour += 1; // 1-hour interval
     }
+
     return slots;
   };
 
@@ -236,7 +226,7 @@ export default function DeliveryOptionsModal({
                   Select Store & Pickup Time
                 </h3>
 
-                {loading ? (
+                {isLoadingStores ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
                       <Card key={i}>
@@ -254,9 +244,19 @@ export default function DeliveryOptionsModal({
                       </Card>
                     ))}
                   </div>
+                ) : nearbyStores.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Store className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-muted-foreground font-medium mb-1">
+                      No stores available
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Unable to find stores near your location
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
-                    {stores.map((store) => {
+                    {nearbyStores.map((store) => {
                       const isExpanded = selectedStore === store.id;
                       return (
                         <Card
@@ -373,7 +373,7 @@ export default function DeliveryOptionsModal({
       </Dialog>
 
       {/* Map Modals */}
-      {stores.map((store) => (
+      {nearbyStores.map((store) => (
         <MapModal key={store.id} store={store} />
       ))}
     </>

@@ -1,6 +1,6 @@
 // src/components/cart/Cart.js
 import { useState, useEffect } from "react";
-import { AlertOctagon } from "lucide-react"; // ⬅️ Import the icon
+import { AlertOctagon, AlertCircle } from "lucide-react"; // ⬅️ Import the icon
 import api from "../../../utils/api";
 import DeliveryOptionsModal from "../../modal/delivery-option";
 import { PaymentOptionsModal } from "../../modal/payment-option";
@@ -13,6 +13,7 @@ import AddressSection from "./AddressSection";
 import StoreSection from "./StoreSection";
 import OrderItemsSection from "./OrderItem";
 import OrderSummary from "./OrderSummary";
+import CartSkeleton from "./CartSkeleton";
 
 const BE_URL =
   import.meta.env.VITE_BE_API_URL?.replace("/api", "") ||
@@ -20,15 +21,15 @@ const BE_URL =
 
 export default function Cart() {
   const [deliveryOption, setDeliveryOption] = useState({
-    type: "courier",
-    cost: 12000,
+    type: null,
+    cost: 0,
   });
 
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState({
-    type: "method",
-    methodId: "card-1",
+    type: "cash",
+    cashAmount: null,
   });
   const [selectedAddress, setSelectedAddress] = useState("1");
 
@@ -46,10 +47,19 @@ export default function Cart() {
   const [deliveryAddresses, setDeliveryAddresses] = useState([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
 
+  // Store state for pickup
+  const [selectedStore, setSelectedStore] = useState(null);
+
+  // Stores from API based on user location
+  const [nearbyStores, setNearbyStores] = useState([]);
+  const [isLoadingStores, setIsLoadingStores] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+
   // Fetch cart data and addresses on component mount
   useEffect(() => {
     fetchCartData();
     fetchUserAddresses();
+    // Removed fetchNearbyStores() - now called from delivery modal
   }, []);
 
   const fetchCartData = async () => {
@@ -242,6 +252,80 @@ export default function Cart() {
     fetchUserAddresses(); // Refresh the address list
   };
 
+  // Fetch nearby stores based on user's current location
+  const fetchNearbyStores = async () => {
+    // Get user's current location
+    if (!navigator.geolocation) {
+      console.warn("Geolocation is not supported by this browser");
+      return;
+    }
+
+    setIsLoadingStores(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation({ latitude, longitude });
+
+        console.log("📍 User location for stores:", { latitude, longitude });
+
+        try {
+          const response = await api.get("/store/by-location", {
+            params: {
+              latitude,
+              longitude,
+            },
+          });
+
+          console.log("✅ Nearby stores fetched:", response.data);
+
+          if (response.data.stores && Array.isArray(response.data.stores)) {
+            // Transform stores to match the expected format
+            const transformedStores = response.data.stores.map((store) => ({
+              id: store.id,
+              name: store.name,
+              address: store.address?.fullAddress || "Address not available",
+              openHour: new Date(store.openHour).toLocaleTimeString("id-ID", {
+                timeZone: "Asia/Jakarta",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              }),
+              closeHour: new Date(store.closeHour).toLocaleTimeString("id-ID", {
+                timeZone: "Asia/Jakarta",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              }),
+              distance: store.distanceDisplay,
+              distanceValue: store.distance,
+              coordinates: {
+                lat: store.address?.latitude,
+                lng: store.address?.longitude,
+              },
+              phoneNumber: store.phoneNumber,
+              isActive: store.isActive,
+            }));
+
+            setNearbyStores(transformedStores);
+          } else {
+            setNearbyStores([]);
+          }
+        } catch (error) {
+          console.error("❌ Error fetching nearby stores:", error);
+          setNearbyStores([]);
+        } finally {
+          setIsLoadingStores(false);
+        }
+      },
+      (error) => {
+        console.error("❌ Geolocation error:", error);
+        setIsLoadingStores(false);
+        setNearbyStores([]);
+      }
+    );
+  };
+
   const store = {
     id: "1",
     name: "TechStore Manhattan",
@@ -299,18 +383,9 @@ export default function Cart() {
   const deliveryCost = deliveryOption.cost;
   const total = subtotal + deliveryCost;
 
-  // Show loading state
+  // Show loading state with skeleton UI
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background p-4 md:p-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <p className="text-muted-foreground">Loading cart...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <CartSkeleton />;
   }
 
   // Show error state
@@ -363,7 +438,9 @@ export default function Cart() {
                   deliveryOption={deliveryOption}
                   setDeliveryModalOpen={setDeliveryModalOpen}
                   formatIDR={formatIDR}
-                  mockStores={mockStores}
+                  stores={nearbyStores}
+                  isLoadingStores={isLoadingStores}
+                  userLocation={userLocation}
                 />
 
                 <PaymentSection
@@ -374,16 +451,48 @@ export default function Cart() {
               </div>
 
               {deliveryOption.type === "courier" && (
-                <AddressSection
-                  deliveryAddresses={deliveryAddresses}
-                  selectedAddress={selectedAddress}
-                  setSelectedAddress={setSelectedAddress}
-                  isLoadingAddresses={isLoadingAddresses}
-                  onAddressAdded={handleAddressAdded}
-                />
+                <>
+                  <AddressSection
+                    deliveryAddresses={deliveryAddresses}
+                    selectedAddress={selectedAddress}
+                    setSelectedAddress={setSelectedAddress}
+                    isLoadingAddresses={isLoadingAddresses}
+                    onAddressAdded={handleAddressAdded}
+                  />
+                  <StoreSection
+                    deliveryOption={deliveryOption}
+                    selectedAddress={selectedAddress}
+                    selectedStore={selectedStore}
+                    setSelectedStore={setSelectedStore}
+                  />
+                </>
               )}
 
-              <StoreSection deliveryOption={deliveryOption} store={store} />
+              {deliveryOption.type === "pickup" && (
+                <>
+                  <AddressSection
+                    deliveryAddresses={deliveryAddresses}
+                    selectedAddress={selectedAddress}
+                    setSelectedAddress={setSelectedAddress}
+                    isLoadingAddresses={isLoadingAddresses}
+                    onAddressAdded={handleAddressAdded}
+                  />
+                  <StoreSection
+                    deliveryOption={deliveryOption}
+                    selectedAddress={selectedAddress}
+                    selectedStore={
+                      deliveryOption.storeId
+                        ? nearbyStores.find(
+                            (s) => s.id === deliveryOption.storeId
+                          )
+                        : null
+                    }
+                    setSelectedStore={setSelectedStore}
+                    pickupTime={deliveryOption.pickupTime}
+                    isPickupMode={true}
+                  />
+                </>
+              )}
 
               <OrderItemsSection
                 cartItems={cartItems}
@@ -406,6 +515,13 @@ export default function Cart() {
                 deliveryCost={deliveryCost}
                 total={total}
                 formatIDR={formatIDR}
+                selectedStore={
+                  deliveryOption.type === "pickup" && deliveryOption.storeId
+                    ? nearbyStores.find((s) => s.id === deliveryOption.storeId)
+                    : selectedStore
+                }
+                cashAmount={selectedPayment?.cashAmount}
+                selectedPayment={selectedPayment}
               />
             </div>
           </div>
@@ -418,6 +534,9 @@ export default function Cart() {
         onOpenChange={setDeliveryModalOpen}
         onDeliverySelect={setDeliveryOption}
         currentSelection={deliveryOption}
+        nearbyStores={nearbyStores}
+        isLoadingStores={isLoadingStores}
+        onFetchStores={fetchNearbyStores}
       />
 
       <PaymentOptionsModal

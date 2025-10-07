@@ -1,6 +1,6 @@
 // src/components/cart/sections/PaymentSection.js
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { CreditCard, Settings, Banknote, DollarSign } from "lucide-react";
+import { Settings, Banknote, DollarSign } from "lucide-react";
 
 export default function PaymentSection({
   selectedPayment,
@@ -8,18 +8,17 @@ export default function PaymentSection({
   formatIDR,
 }) {
   const getPaymentDisplayText = () => {
-    if (selectedPayment.type === "cash") {
-      return `Cash Payment • ${formatIDR(selectedPayment.cashAmount || 0)}`;
-    } else {
-      const methodNames = {
-        "card-1": "Visa ending in 4242",
-        "card-2": "Mastercard ending in 8888",
-        paypal: "PayPal",
-        gopay: "GoPay",
-        ovo: "OVO",
-      };
-      return methodNames[selectedPayment.methodId || ""] || "Digital Payment";
+    if (selectedPayment?.cashAmount) {
+      return `Cash Payment • ${formatIDR(selectedPayment.cashAmount)}`;
     }
+    return "Cash Payment";
+  };
+
+  const getPaymentSubtext = () => {
+    if (selectedPayment?.cashAmount) {
+      return "Click to change amount";
+    }
+    return "Click to set cash amount";
   };
 
   return (
@@ -39,18 +38,14 @@ export default function PaymentSection({
         >
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 mt-0.5">
-              {selectedPayment.type === "cash" ? (
-                <Banknote className="w-5 h-5 text-primary" />
-              ) : (
-                <CreditCard className="w-5 h-5 text-primary" />
-              )}
+              <Banknote className="w-5 h-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-card-foreground mb-1 truncate">
                 {getPaymentDisplayText()}
               </p>
               <p className="text-sm text-muted-foreground truncate">
-                Click to change
+                {getPaymentSubtext()}
               </p>
             </div>
             <div className="flex-shrink-0">

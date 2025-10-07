@@ -4,13 +4,9 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Card, CardContent } from "../ui/card";
-import { Badge } from "../ui/badge";
 import { Separator } from "../ui/separator";
 import {
   Banknote,
-  CreditCard,
-  Smartphone,
-  Wallet,
   AlertCircle,
 } from "lucide-react";
 
@@ -29,44 +25,6 @@ export function PaymentOptionsModal({
     currentSelection.methodId || "card-1"
   );
   const [cashError, setCashError] = useState("");
-
-  const paymentMethods = [
-    {
-      id: "card-1",
-      name: "Visa ending in 4242",
-      type: "card",
-      icon: CreditCard,
-      details: "Expires 12/26",
-    },
-    {
-      id: "card-2",
-      name: "Mastercard ending in 8888",
-      type: "card",
-      icon: CreditCard,
-      details: "Expires 08/25",
-    },
-    {
-      id: "paypal",
-      name: "PayPal",
-      type: "digital",
-      icon: Wallet,
-      details: "user@example.com",
-    },
-    {
-      id: "gopay",
-      name: "GoPay",
-      type: "digital",
-      icon: Smartphone,
-      details: "Connected account",
-    },
-    {
-      id: "ovo",
-      name: "OVO",
-      type: "digital",
-      icon: Smartphone,
-      details: "Connected account",
-    },
-  ];
 
   const formatIDR = (amount) => {
     return new Intl.NumberFormat("id-ID", {
@@ -218,68 +176,6 @@ export function PaymentOptionsModal({
                       </p>
                     )}
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Digital Payment Methods */}
-          <Card
-            className={`cursor-pointer transition-all ${
-              selectedOption === "method"
-                ? "border-primary bg-accent"
-                : "border-border hover:border-muted-foreground"
-            }`}
-            onClick={() => setSelectedOption("method")}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <CreditCard className="w-6 h-6 text-muted-foreground" />
-                <div>
-                  <h3 className="font-semibold text-card-foreground">
-                    Digital Payment
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Pay with card or digital wallet
-                  </p>
-                </div>
-              </div>
-
-              {selectedOption === "method" && (
-                <div className="space-y-3">
-                  {paymentMethods.map((method) => (
-                    <div
-                      key={method.id}
-                      className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                        selectedMethodId === method.id
-                          ? "border-primary bg-background"
-                          : "border-border hover:border-muted-foreground"
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedMethodId(method.id);
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <method.icon className="w-5 h-5 text-muted-foreground" />
-                        <div className="flex-1">
-                          <p className="font-medium text-card-foreground">
-                            {method.name}
-                          </p>
-                          {method.details && (
-                            <p className="text-sm text-muted-foreground">
-                              {method.details}
-                            </p>
-                          )}
-                        </div>
-                        {method.type === "digital" && (
-                          <Badge variant="secondary" className="text-xs">
-                            Digital
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
                 </div>
               )}
             </CardContent>

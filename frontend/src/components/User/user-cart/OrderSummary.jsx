@@ -1,8 +1,78 @@
+// // src/components/cart/sections/OrderSummary.js
+// import { useNavigate } from "react-router-dom";
+// import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+// import { Button } from "@/components/ui/button";
+// import { Separator } from "@/components/ui/separator";
+
+// export default function OrderSummary({
+//   deliveryOption,
+//   subtotal,
+//   deliveryCost,
+//   total,
+//   formatIDR,
+// }) {
+//   const navigate = useNavigate();
+
+//   const handleCheckout = () => {
+//     const orderId = `ORD-${Date.now()}`;
+//     navigate(`/order/checkout/${orderId}`);
+//   };
+
+//   return (
+//     <Card className="bg-card border-border sticky top-22">
+//       <CardHeader>
+//         <CardTitle className="text-card-foreground">Order Summary</CardTitle>
+//       </CardHeader>
+//       <CardContent className="space-y-4">
+//         <div className="space-y-2">
+//           <div className="flex justify-between text-sm">
+//             <span className="text-muted-foreground">Subtotal</span>
+//             <span className="text-card-foreground">{formatIDR(subtotal)}</span>
+//           </div>
+//           <div className="flex justify-between text-sm">
+//             <span className="text-muted-foreground">Delivery</span>
+//             <span className="text-card-foreground">
+//               {formatIDR(deliveryCost)}
+//             </span>
+//           </div>
+//         </div>
+
+//         <Separator className="bg-border" />
+
+//         <div className="flex justify-between items-center">
+//           <span className="font-semibold text-card-foreground">Total</span>
+//           <span className="text-lg font-bold text-card-foreground">
+//             {formatIDR(total)}
+//           </span>
+//         </div>
+
+//         <Button className="w-full" onClick={handleCheckout}>
+//           Proceed to Checkout
+//         </Button>
+
+//         <div className="text-xs text-muted-foreground text-center">
+//           By proceeding to checkout, you agree to our Terms of Service and
+//           Privacy Policy
+//         </div>
+//       </CardContent>
+//     </Card>
+//   );
+// }
+
 // src/components/cart/sections/OrderSummary.js
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { AlertCircle, XCircle } from "lucide-react";
 
 export default function OrderSummary({
   deliveryOption,
@@ -10,11 +80,100 @@ export default function OrderSummary({
   deliveryCost,
   total,
   formatIDR,
+  selectedStore,
+  cashAmount,
+  selectedPayment,
 }) {
   const navigate = useNavigate();
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showClosedModal, setShowClosedModal] = useState(false);
+  const [validationErrors, setValidationErrors] = useState([]);
+
+  // Clear errors when delivery option or payment changes
+  useEffect(() => {
+    setValidationErrors([]);
+  }, [deliveryOption, selectedPayment]);
+
+  const isStoreOpen = (store) => {
+    if (!store || !store.openHour || !store.closeHour) return true;
+
+    const now = new Date();
+    const indonesianTime = new Date(
+      now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
+    );
+    const currentHours = indonesianTime.getHours();
+    const currentMinutes = indonesianTime.getMinutes();
+    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+    const openDate = new Date(store.openHour);
+    const closeDate = new Date(store.closeHour);
+
+    const openIndonesian = new Date(
+      openDate.toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
+    );
+    const closeIndonesian = new Date(
+      closeDate.toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
+    );
+
+    const openHours = openIndonesian.getHours();
+    const openMinutes = openIndonesian.getMinutes();
+    const openTimeInMinutes = openHours * 60 + openMinutes;
+
+    const closeHours = closeIndonesian.getHours();
+    const closeMinutes = closeIndonesian.getMinutes();
+    let closeTimeInMinutes = closeHours * 60 + closeMinutes;
+
+    // Handle case when store closes after midnight (e.g., opens at 10:00, closes at 00:10)
+    // If closing time is earlier than opening time, it means it crosses midnight
+    if (closeTimeInMinutes < openTimeInMinutes) {
+      // If current time is after midnight (00:00 - close time), store is still open
+      if (currentTimeInMinutes < openTimeInMinutes) {
+        // We're in the early morning hours, check if we're before closing time
+        return currentTimeInMinutes < closeTimeInMinutes;
+      }
+      // If current time is after opening time, store is still open (waiting for midnight)
+      return currentTimeInMinutes >= openTimeInMinutes;
+    }
+
+    // Normal case: store opens and closes on the same day
+    return (
+      currentTimeInMinutes >= openTimeInMinutes &&
+      currentTimeInMinutes < closeTimeInMinutes
+    );
+  };
+
+  const handleProceedToCheckout = () => {
+    // Clear previous errors
+    setValidationErrors([]);
+    const errors = [];
+
+    // Validate delivery option
+    if (!deliveryOption || !deliveryOption.type) {
+      errors.push("Silakan pilih metode pengiriman (kurir atau pickup)");
+    }
+
+    // Validate cash payment - harus ada cashAmount
+    if (!selectedPayment?.cashAmount || selectedPayment?.cashAmount <= 0) {
+      errors.push("Silakan pilih jumlah uang cash yang akan dibayarkan");
+    }
+
+    // If there are errors, show them and don't proceed
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      return; // Stop here - do not show confirmation modal
+    }
+
+    // Check if store is closed
+    if (!isStoreOpen(selectedStore)) {
+      setShowClosedModal(true);
+    } else {
+      setShowConfirmModal(true);
+    }
+  };
 
   const handleCheckout = () => {
     const orderId = `ORD-${Date.now()}`;
+    setShowConfirmModal(false); // Close modal
     navigate(`/order/checkout/${orderId}`);
   };
 
@@ -46,15 +205,122 @@ export default function OrderSummary({
           </span>
         </div>
 
-        <Button className="w-full" onClick={handleCheckout}>
+        <Button className="w-full" onClick={handleProceedToCheckout}>
           Proceed to Checkout
         </Button>
+
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <div className="space-y-2">
+            {validationErrors.map((error, index) => (
+              <div
+                key={index}
+                className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg"
+              >
+                <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="text-xs text-muted-foreground text-center">
           By proceeding to checkout, you agree to our Terms of Service and
           Privacy Policy
         </div>
       </CardContent>
+
+      {/* Store Closed Modal */}
+      <Dialog open={showClosedModal} onOpenChange={setShowClosedModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-destructive" />
+              <DialogTitle>Toko Tutup</DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-center text-muted-foreground">
+              Toko sedang tutup, coba lagi lain kali
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              className="w-full"
+              onClick={() => setShowClosedModal(false)}
+            >
+              Mengerti
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Modal */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-primary" />
+              Konfirmasi Pesanan
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-muted-foreground mb-4">
+              Apakah kamu yakin untuk melakukan pesanan?
+            </p>
+            <div className="bg-muted rounded-lg p-4 space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Total Pembayaran:
+                </p>
+                <p className="text-2xl font-bold text-card-foreground">
+                  {formatIDR(total)}
+                </p>
+              </div>
+              {cashAmount && (
+                <>
+                  <Separator className="bg-border" />
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Jumlah Uang Dibayar:
+                    </p>
+                    <p className="text-xl font-semibold text-card-foreground">
+                      {formatIDR(cashAmount)}
+                    </p>
+                  </div>
+                  {cashAmount > total && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        Kembalian:
+                      </p>
+                      <p className="text-lg font-medium text-green-600">
+                        {formatIDR(cashAmount - total)}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              {cashAmount
+                ? `Kamu harus menyiapkan uang sebesar ${formatIDR(cashAmount)}`
+                : `Kamu harus membayar sebesar ${formatIDR(total)}`}
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmModal(false)}
+              className="w-full sm:w-auto"
+            >
+              Batal
+            </Button>
+            <Button onClick={handleCheckout} className="w-full sm:w-auto">
+              Ya, Lanjutkan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
