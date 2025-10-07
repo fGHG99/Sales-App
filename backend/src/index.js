@@ -8,6 +8,7 @@ import addressRoute from "./Controllers/addressCont.js";
 import courierLoc from "./Controllers/courierLocCont.js";
 import cartRoutes from "./Controllers/cartController.js";
 import orderRoutes from "./Controllers/orderController.js";
+import inventoryRoutes from "./Controllers/InventoryCont.js";
 import { PORT, HOST } from "../utils/serverConf.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -43,13 +44,20 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
+app.use((req, res, next) => {
+  console.log(`🔍 Incoming request: ${req.method} ${req.originalUrl}`);
+  console.log(`🎯 Base URL: ${req.baseUrl}`);
+  console.log(`📝 Path: ${req.path}`);
+  next();
+});
 // Routes
 app.use("/users", userRoute);
 app.use("/auth", authRoute);
-app.use("/address", addressRoute);
 app.use("/courier", courierLoc);
+app.use("/inventory", inventoryRoutes);
 app.use("/cart", cartRoutes);
 app.use("/order", orderRoutes);
+app.use("/address", addressRoute);
 
 // Start the server
 server.listen(PORT, HOST, () => {

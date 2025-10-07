@@ -10,44 +10,44 @@ const BASE_URL = process.env.BASE_URL;
  * get alamat user dengan menggunakan reverse geocoding untuk menambahkan alamat ke dalam form
  *
  */
-router.get("/", async (req, res) => {
-  try {
-    const { lat, lon } = req.query;
+// router.get("/", async (req, res) => {
+//   try {
+//     const { lat, lon } = req.query;
 
-    if (!lat || !lon) {
-      return res.status(400).json({ error: "lat and lon are required" });
-    }
+//     if (!lat || !lon) {
+//       return res.status(400).json({ error: "lat and lon are required" });
+//     }
 
-    const response = await axios.get("https://us1.locationiq.com/v1/reverse", {
-      params: {
-        key: LOCATIONIQ_KEY,
-        lat,
-        lon,
-        format: "json",
-        addressdetails: 1,
-      },
-    });
+//     const response = await axios.get("https://us1.locationiq.com/v1/reverse", {
+//       params: {
+//         key: LOCATIONIQ_KEY,
+//         lat,
+//         lon,
+//         format: "json",
+//         addressdetails: 1,
+//       },
+//     });
 
-    const address = response.data.address;
+//     const address = response.data.address;
 
-    // Mapping agar sesuai dengan kebutuhan
-    const result = {
-      sub_district: address.suburb || address.village || address.hamlet || null,
-      district: address.city_district || address.county || null,
-      city: address.city || address.town || address.municipality || null,
-      province: address.state || null,
-      country: address.country || null,
-      postal_code: address.postcode || null,
-      latitude: lat,
-      longitude: lon,
-    };
+//     // Mapping agar sesuai dengan kebutuhan
+//     const result = {
+//       sub_district: address.suburb || address.village || address.hamlet || null,
+//       district: address.city_district || address.county || null,
+//       city: address.city || address.town || address.municipality || null,
+//       province: address.state || null,
+//       country: address.country || null,
+//       postal_code: address.postcode || null,
+//       latitude: lat,
+//       longitude: lon,
+//     };
 
-    res.json(result);
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to fetch reverse geocode" });
-  }
-});
+//     res.json(result);
+//   } catch (error) {
+//     console.error(error.response?.data || error.message);
+//     res.status(500).json({ error: "Failed to fetch reverse geocode" });
+//   }
+// });
 
 // 1. Ambil semua provinsi
 router.get("/provinces", async (req, res) => {
@@ -345,21 +345,21 @@ router.get("/user/:userId", async (req, res) => {
 });
 
 // GET /addresses/:id => detail alamat
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const address = await prisma.address.findUnique({ where: { id } });
-    if (!address)
-      return res.status(404).json({ error: "Alamat tidak ditemukan" });
-    return res.json(address);
-  } catch (err) {
-    console.error("GET /addresses/:id error:", err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
+// router.get("/:id", async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const address = await prisma.address.findUnique({ where: { id } });
+//     if (!address)
+//       return res.status(404).json({ error: "Alamat tidak ditemukan" });
+//     return res.json(address);
+//   } catch (err) {
+//     console.error("GET /addresses/:id error:", err);
+//     return res.status(500).json({ error: "Server error" });
+//   }
+// });
 
-// PUT /addresses/:id => update alamat manual (label atau fields)
-router.put("/:id", async (req, res) => {
+// // PUT /addresses/:id => update alamat manual (label atau fields)
+router.put("/addresses/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const payload = req.body; // ex: { label, street, city, ... }
@@ -379,8 +379,8 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE /addresses/:id
-router.delete("/:id", async (req, res) => {
+// // DELETE /addresses/:id
+router.delete("/addresses/:id", async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.address.delete({ where: { id } });

@@ -259,6 +259,8 @@ model StockMovement {
   @@map("stock_movements")
 }
 
+//TODO : ADD MODEL STORE
+
 model Category {
   id          String   @id @default(cuid())
   name        String   @db.VarChar(100)

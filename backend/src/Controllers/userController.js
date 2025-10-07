@@ -92,6 +92,33 @@ router.get("/test", authenticate, authorize("VIEW_TEST"), async (req, res) => {
   res.send("hi");
 });
 
+// Get authenticated user's data
+router.get("/me", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id; // from authenticate middleware
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        image: true,
+        addresses: true,
+        role: true, 
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      user: user,
+    });
+  } catch (error) {
+    console.error("Get user data error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Update user profile
 router.put("/profile", authenticate, async (req, res) => {
   try {

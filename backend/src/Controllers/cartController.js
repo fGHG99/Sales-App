@@ -1,14 +1,19 @@
 import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
+import { authenticate } from "../Middlewares/accessControl.js";
 
 /**
- * Helper untuk konversi BigInt -> String atau Number
+ * Helper untuk konversi BigInt dan Decimal -> Number
  * (rekursif untuk nested object/array dari Prisma)
  */
 function serializeBigInt(obj) {
   if (Array.isArray(obj)) {
     return obj.map((item) => serializeBigInt(item));
   } else if (obj && typeof obj === "object") {
+    // Check if it's a Prisma Decimal object (has toNumber method)
+    if (typeof obj.toNumber === "function") {
+      return obj.toNumber();
+    }
     return Object.fromEntries(
       Object.entries(obj).map(([key, value]) => [key, serializeBigInt(value)])
     );
@@ -18,95 +23,367 @@ function serializeBigInt(obj) {
   return obj;
 }
 
-// POST /cart/add
-router.post("/add", async (req, res) => {
+// GET /cart/:userId - Get user's cart with all items
+router.get("/get-cart", authenticate, async (req, res) => {
   try {
-    const { userId, productId } = req.body;
-    const quantity = Number(req.body.quantity);
+    const userId = req.user.id; // Get userId from authenticated user
 
-    if (!userId || !productId || !quantity || quantity <= 0) {
-      return res.status(400).json({ message: "Invalid request data" });
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
     }
 
-    // cek apakah user punya cart
-    let cart = await prisma.cart.findUnique({
+    // Find cart for the user
+    const cart = await prisma.cart.findUnique({
       where: { userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (!cart) {
-      cart = await prisma.cart.create({
-        data: { userId },
+      return res.status(200).json({
+        message: "Cart not found, returning empty cart",
+        cart: {
+          id: null,
+          userId,
+          cartItems: [],
+          totalItems: 0,
+          totalPrice: 0,
+        },
       });
     }
 
-    // cek product
+    // Parse cartItems from JSON
+    const cartItems = cart.cartItems || [];
+
+    // Calculate totals
+    let totalItems = 0;
+    let totalPrice = 0;
+
+    if (Array.isArray(cartItems)) {
+      totalItems = cartItems.reduce(
+        (sum, item) => sum + (item.quantity || 0),
+        0
+      );
+      totalPrice = cartItems.reduce((sum, item) => {
+        const price = Number(item.sellingPrice || 0);
+        const quantity = item.quantity || 0;
+        return sum + price * quantity;
+      }, 0);
+    }
+
+    // Serialize BigInt values
+    const serializedCart = serializeBigInt({
+      id: cart.id,
+      userId: cart.userId,
+      createdAt: cart.createdAt,
+      updatedAt: cart.updatedAt,
+      cartItems: cartItems,
+      totalItems,
+      totalPrice,
+      user: cart.user,
+    });
+
+    return res.status(200).json({
+      message: "Cart retrieved successfully",
+      cart: serializedCart,
+    });
+  } catch (error) {
+    console.error("Get cart error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// POST /cart/add or update quantity
+router.post("/add", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id; // Get userId from authenticated user
+    const { productId } = req.body;
+    const quantity = Number(req.body.quantity);
+
+    if (!productId || !quantity) {
+      return res.status(400).json({ message: "Invalid request data" });
+    }
+
+    // Check if product exists
     const product = await prisma.product.findUnique({
       where: { id: productId },
+      include: {
+        images: {
+          select: {
+            url: true,
+            altText: true,
+          },
+        },
+      },
     });
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // cek apakah product sudah ada di cart
-    let cartItem = await prisma.cartItem.findFirst({
-      where: {
-        cartId: cart.id,
-        productId,
-      },
+    // Find or create cart for authenticated user
+    let cart = await prisma.cart.findUnique({
+      where: { userId },
     });
 
-    if (cartItem) {
-      // update quantity
-      cartItem = await prisma.cartItem.update({
-        where: { id: cartItem.id },
-        data: { quantity: cartItem.quantity + quantity },
-      });
-    } else {
-      // buat cartItem baru
-      cartItem = await prisma.cartItem.create({
+    if (!cart) {
+      cart = await prisma.cart.create({
         data: {
-          cartId: cart.id,
-          productId,
-          quantity,
+          userId,
+          cartItems: [],
         },
       });
     }
 
-    // ambil cart terbaru dengan isi item + product
-    const updatedCart = await prisma.cart.findUnique({
+    // Get current cart items (parse from JSON)
+    let cartItems = Array.isArray(cart.cartItems) ? cart.cartItems : [];
+
+    // Check if product already exists in cart
+    const existingItemIndex = cartItems.findIndex(
+      (item) => item.productId === productId
+    );
+
+    if (existingItemIndex !== -1) {
+      // Update quantity of existing item
+      cartItems[existingItemIndex].quantity += quantity;
+
+      // If quantity becomes 0 or negative, remove the item
+      if (cartItems[existingItemIndex].quantity <= 0) {
+        cartItems.splice(existingItemIndex, 1);
+      }
+    } else {
+      // Only add new item if quantity is positive
+      if (quantity > 0) {
+        const newItem = {
+          productId: product.id,
+          name: product.name,
+          quantity: quantity,
+          sellingPrice: Number(product.sellingPrice),
+          images: product.images,
+        };
+        cartItems.push(newItem);
+      }
+    }
+
+    // Update cart with new items
+    const updatedCart = await prisma.cart.update({
       where: { id: cart.id },
+      data: {
+        cartItems: cartItems,
+      },
       include: {
-        cartItems: {
+        user: {
           select: {
             id: true,
-            quantity: true,
-            product: {
-              select: {
-                name: true,
-                images: {
-                    select: {
-                        url: true,
-                        altText: true
-                    }
-                },
-                sellingPrice: true,
-              },
-            },
+            name: true,
+            email: true,
           },
         },
       },
     });
 
-    // serialize BigInt sebelum dikirim ke frontend
-    const serializedCart = serializeBigInt(updatedCart);
+    // Calculate totals
+    let totalItems = 0;
+    let totalPrice = 0;
+
+    if (Array.isArray(updatedCart.cartItems)) {
+      totalItems = updatedCart.cartItems.reduce(
+        (sum, item) => sum + (item.quantity || 0),
+        0
+      );
+      totalPrice = updatedCart.cartItems.reduce((sum, item) => {
+        const price = Number(item.sellingPrice || 0);
+        const quantity = item.quantity || 0;
+        return sum + price * quantity;
+      }, 0);
+    }
+
+    // Serialize BigInt values
+    const serializedCart = serializeBigInt({
+      id: updatedCart.id,
+      userId: updatedCart.userId,
+      createdAt: updatedCart.createdAt,
+      updatedAt: updatedCart.updatedAt,
+      cartItems: updatedCart.cartItems,
+      totalItems,
+      totalPrice,
+      user: updatedCart.user,
+    });
 
     return res.status(200).json({
-      message: "Product added to cart",
+      message: "Cart updated successfully",
       cart: serializedCart,
     });
   } catch (error) {
-    console.error(error);
+    console.error("Add to cart error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// PATCH /cart/remove-item - Remove specific item(s) from cart
+router.patch("/remove-item", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { productId, productIds } = req.body;
+
+    // Support both single productId and array of productIds
+    let idsToRemove = [];
+    
+    if (productId) {
+      // Single product deletion
+      idsToRemove = [productId];
+    } else if (productIds && Array.isArray(productIds)) {
+      // Bulk deletion
+      idsToRemove = productIds;
+    } else {
+      return res.status(400).json({ 
+        message: "Either productId or productIds array is required" 
+      });
+    }
+
+    if (idsToRemove.length === 0) {
+      return res.status(400).json({ 
+        message: "At least one product ID is required" 
+      });
+    }
+
+    // Find user's cart
+    const cart = await prisma.cart.findUnique({
+      where: { userId },
+    });
+
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    // Get current cart items
+    let cartItems = Array.isArray(cart.cartItems) ? cart.cartItems : [];
+
+    // Filter out the items to remove
+    const filteredItems = cartItems.filter(
+      (item) => !idsToRemove.includes(item.productId)
+    );
+
+    const removedCount = cartItems.length - filteredItems.length;
+
+    if (removedCount === 0) {
+      return res.status(404).json({ 
+        message: "None of the specified items were found in cart" 
+      });
+    }
+
+    // Update cart with filtered items
+    const updatedCart = await prisma.cart.update({
+      where: { id: cart.id },
+      data: {
+        cartItems: filteredItems,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Calculate totals
+    let totalItems = 0;
+    let totalPrice = 0;
+
+    if (Array.isArray(updatedCart.cartItems)) {
+      totalItems = updatedCart.cartItems.reduce(
+        (sum, item) => sum + (item.quantity || 0),
+        0
+      );
+      totalPrice = updatedCart.cartItems.reduce((sum, item) => {
+        const price = Number(item.sellingPrice || 0);
+        const quantity = item.quantity || 0;
+        return sum + price * quantity;
+      }, 0);
+    }
+
+    // Serialize BigInt values
+    const serializedCart = serializeBigInt({
+      id: updatedCart.id,
+      userId: updatedCart.userId,
+      createdAt: updatedCart.createdAt,
+      updatedAt: updatedCart.updatedAt,
+      cartItems: updatedCart.cartItems,
+      totalItems,
+      totalPrice,
+      user: updatedCart.user,
+    });
+
+    return res.status(200).json({
+      message: `${removedCount} item(s) removed from cart`,
+      removedCount,
+      cart: serializedCart,
+    });
+  } catch (error) {
+    console.error("Remove item error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// DELETE /cart/clear - Clear all items from cart
+router.delete("/clear", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Find user's cart
+    const cart = await prisma.cart.findUnique({
+      where: { userId },
+    });
+
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    // Clear all items
+    const updatedCart = await prisma.cart.update({
+      where: { id: cart.id },
+      data: {
+        cartItems: [],
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Serialize BigInt values
+    const serializedCart = serializeBigInt({
+      id: updatedCart.id,
+      userId: updatedCart.userId,
+      createdAt: updatedCart.createdAt,
+      updatedAt: updatedCart.updatedAt,
+      cartItems: [],
+      totalItems: 0,
+      totalPrice: 0,
+      user: updatedCart.user,
+    });
+
+    return res.status(200).json({
+      message: "Cart cleared successfully",
+      cart: serializedCart,
+    });
+  } catch (error) {
+    console.error("Clear cart error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
