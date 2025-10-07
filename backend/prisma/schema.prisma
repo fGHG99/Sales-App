@@ -68,6 +68,11 @@ enum DisputeStatus {
   REJECTED
 }
 
+enum DeliveryType {
+  DELIVERY
+  PICKUP_TO_STORE
+}
+
 model User {
   id       String  @id @default(uuid()) @db.Uuid
   name     String  @db.VarChar(100)
@@ -188,11 +193,13 @@ model Store {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  addressId String  @unique @db.Uuid
+  addressId String       @unique @db.Uuid
   address   StoreAddress @relation("StoreAddress", fields: [addressId], references: [id], onDelete: Cascade)
 
   adminId String? @db.Uuid
   admin   User?   @relation("StoreAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+
+  orders Order[] @relation("OrderPickupStore")
 
   @@index([isActive, isDeleted])
   @@index([adminId])
@@ -202,7 +209,7 @@ model Store {
 model Role {
   id          String             @id @default(cuid())
   name        String             @unique @db.VarChar(50)
-  roleType    String?             @unique @db.VarChar(50) // superadmin, admin, courier, user, itsupport
+  roleType    String?            @unique @db.VarChar(50) // superadmin, admin, courier, user, itsupport
   isDefault   Boolean            @default(false) // true for "user" role
   isSystem    Boolean            @default(false) // cannot be deleted
   createdAt   DateTime           @default(now())
@@ -227,23 +234,44 @@ model Order {
   paymentStatus PaymentStatus @default(PENDING)
   orderStatus   OrderStatus   @default(PENDING)
 
-  isDeleted Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Payment fields
+  subtotal     Decimal @db.Decimal(10, 0) // Subtotal dari items
+  cashAmount   Decimal @db.Decimal(10, 0) // Uang yang dibayarkan user
+  changeAmount Decimal @db.Decimal(10, 0) // Kembalian
 
+  // Delivery fields
+  deliveryType DeliveryType // DELIVERY atau PICKUP_TO_STORE
+  deliveryFee  Decimal      @db.Decimal(10, 0) // Biaya pengiriman
+  pickupTime   DateTime? // Waktu pickup (jika PICKUP_TO_STORE)
+
+  // Order items stored as JSON
+  orderItems Json?
+  
+  // Relations
   deliveryAddressId String  @db.Uuid
-  deliveryAddress   Address @relation("OrderDeliveryAddress", fields: [deliveryAddressId], references: [id], onDelete: Cascade)
+  deliveryAddress   Address @relation("OrderDeliveryAddress", fields: [deliveryAddressId], references: [id])
 
   userId String @db.Uuid
-  user   User   @relation("UserOrders", fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserOrders", fields: [userId], references: [id])
 
   courierId String? @db.Uuid
   courier   User?   @relation("CourierOrders", fields: [courierId], references: [id], onDelete: SetNull)
 
-  orderItems Json?
+  // Store untuk pickup (optional, hanya untuk PICKUP_TO_STORE)
+  pickupStoreId String? @db.Uuid
+  pickupStore   Store?  @relation("OrderPickupStore", fields: [pickupStoreId], references: [id], onDelete: SetNull)
 
   disputes Dispute[]
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([courierId])
+  @@index([pickupStoreId])
+  @@index([paymentStatus])
+  @@index([orderStatus])
+  @@index([deliveryType])
   @@map("orders")
 }
 
@@ -253,7 +281,7 @@ model Product {
   barcode      String?  @unique @db.VarChar(50)
   description  String?  @db.Text
   unit         String   @default("pcs") @db.VarChar(20)
-  sellingPrice Decimal @db.Decimal(10, 0)
+  sellingPrice Decimal  @db.Decimal(10, 0)
   isPerishable Boolean  @default(false)
   isActive     Boolean  @default(true)
   isDeleted    Boolean  @default(false)
@@ -273,7 +301,7 @@ model Product {
 model ProductBatch {
   id        String      @id @default(uuid()) @db.Uuid
   quantity  Int
-  costPrice Decimal @db.Decimal(10, 0)
+  costPrice Decimal     @db.Decimal(10, 0)
   status    BatchStatus @default(AVAILABLE)
 
   receivedAt DateTime? @default(now())
@@ -303,8 +331,6 @@ model StockMovement {
 
   @@map("stock_movements")
 }
-
-
 
 model Category {
   id          String   @id @default(cuid())
@@ -345,7 +371,7 @@ model Dispute {
   description String        @db.Text
   response    String?       @db.Text
   imageUrl    String[]
-  
+
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   resolvedAt DateTime?
