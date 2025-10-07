@@ -60,27 +60,71 @@ const EditProfile = () => {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load user data from localStorage
+  // Fetch user data from API
   useEffect(() => {
-    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-    setUserData({
-      username: storedUser.name || "",
-      email: storedUser.email || "",
-      emailVerified: storedUser.isVerified || false,
-    });
-    setFormData({
-      name: storedUser.name || "",
-      phone: storedUser.phone || "",
-      sex: storedUser.sex || "",
-      dob: storedUser.dob || "",
-    });
-    // Profile picture comes from image.url
-    if (storedUser.image && storedUser.image.url) {
-      setProfilePicture(`${BE_URL}${storedUser.image.url}`);
-    }
-    if (storedUser.dob) {
-      setSelectedDate(new Date(storedUser.dob));
-    }
+    const fetchUserData = async () => {
+      try {
+        console.log("🔄 Fetching user data from API...");
+        const response = await api.get("/users/me");
+        const fetchedUser = response.data.user;
+
+        console.log("✅ User data fetched:", fetchedUser);
+
+        // Update localStorage with fresh data
+        localStorage.setItem("user", JSON.stringify(fetchedUser));
+
+        // Set user data state
+        setUserData({
+          username: fetchedUser.name || "",
+          email: fetchedUser.email || "",
+          emailVerified: fetchedUser.isVerified || false,
+        });
+
+        // Set form data
+        setFormData({
+          name: fetchedUser.name || "",
+          phone: fetchedUser.phone || "",
+          sex: fetchedUser.sex || "",
+          dob: fetchedUser.dob || "",
+        });
+
+        // Set profile picture from image.url
+        if (fetchedUser.image && fetchedUser.image.url) {
+          setProfilePicture(`${BE_URL}${fetchedUser.image.url}`);
+          console.log("✅ Profile picture loaded:", fetchedUser.image.url);
+        } else {
+          setProfilePicture(null);
+        }
+
+        // Set date of birth
+        if (fetchedUser.dob) {
+          setSelectedDate(new Date(fetchedUser.dob));
+        }
+      } catch (error) {
+        console.error("❌ Failed to fetch user data:", error);
+        // Fallback to localStorage
+        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        setUserData({
+          username: storedUser.name || "",
+          email: storedUser.email || "",
+          emailVerified: storedUser.isVerified || false,
+        });
+        setFormData({
+          name: storedUser.name || "",
+          phone: storedUser.phone || "",
+          sex: storedUser.sex || "",
+          dob: storedUser.dob || "",
+        });
+        if (storedUser.image && storedUser.image.url) {
+          setProfilePicture(`${BE_URL}${storedUser.image.url}`);
+        }
+        if (storedUser.dob) {
+          setSelectedDate(new Date(storedUser.dob));
+        }
+      }
+    };
+
+    fetchUserData();
   }, [BE_URL]);
 
   // Simulate initial loading
@@ -91,13 +135,6 @@ const EditProfile = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [dispatch]);
-
-  const maskPhoneNumber = (phone) => {
-    if (phone.length > 3) {
-      return "*".repeat(phone.length - 3) + phone.slice(-3);
-    }
-    return phone;
-  };
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

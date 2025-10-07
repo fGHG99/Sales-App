@@ -2,50 +2,61 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Settings } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "../../ui/avatar";
+import api from "../../../utils/api";
 
-const UserCard = ({ userData }) => {
+const UserCard = ({ userData: initialUserData }) => {
   const [profilePicture, setProfilePicture] = useState(null);
+  const [userData, setUserData] = useState(initialUserData);
   const BE_URL = import.meta.env.VITE_BE_API_URL;
-  const user = userData || {
-    name: "User",
-    email: "user@example.com",
-  };
   const navigate = useNavigate();
 
-  // Load profile picture from localStorage
+  // Fetch user data from API
   useEffect(() => {
-    const loadProfilePicture = () => {
-      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-      if (storedUser.image && storedUser.image.url) {
-        setProfilePicture(`${BE_URL}${storedUser.image.url}`);
-      } else {
-        setProfilePicture(null);
+    const fetchUserData = async () => {
+      try {
+        const response = await api.get("/users/me");
+        const fetchedUser = response.data.user;
+
+        setUserData(fetchedUser);
+
+        // Set profile picture
+        if (fetchedUser.image && fetchedUser.image.url) {
+          setProfilePicture(`${BE_URL}${fetchedUser.image.url}`);
+        } else {
+          setProfilePicture(null);
+        }
+
+        console.log("✅ UserCard: User data fetched from API");
+      } catch (error) {
+        console.error("❌ UserCard: Failed to fetch user data:", error);
+        // Fallback to props or localStorage
+        const user =
+          initialUserData || JSON.parse(localStorage.getItem("user") || "{}");
+        setUserData(user);
+        if (user.image && user.image.url) {
+          setProfilePicture(`${BE_URL}${user.image.url}`);
+        }
       }
     };
 
-    loadProfilePicture();
+    fetchUserData();
 
-    // Listen for storage changes (when profile picture is updated in EditProfile)
-    const handleStorageChange = (e) => {
-      if (e.key === "user" || e.key === null) {
-        loadProfilePicture();
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
-    // Custom event for same-tab updates
+    // Listen for custom event when user updates profile
     const handleUserUpdate = () => {
-      loadProfilePicture();
+      fetchUserData();
     };
 
     window.addEventListener("userUpdated", handleUserUpdate);
 
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("userUpdated", handleUserUpdate);
     };
-  }, [BE_URL]);
+  }, [BE_URL, initialUserData]);
+
+  const user = userData || {
+    name: "User",
+    email: "user@example.com",
+  };
 
   const handleSettingsClick = () => {
     navigate("/user/profile");
@@ -67,10 +78,8 @@ const UserCard = ({ userData }) => {
           </Avatar>
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 truncate">
-            {userData.name}
-          </h3>
-          <p className="text-sm text-gray-500 truncate">{userData.email}</p>
+          <h3 className="font-semibold text-gray-900 truncate">{user.name}</h3>
+          <p className="text-sm text-gray-500 truncate">{user.email}</p>
         </div>
         <button
           onClick={handleSettingsClick}

@@ -18,12 +18,54 @@ import {
 } from "lucide-react";
 import { mockCourier, getTodaysStats } from "../../../utils/mockDataCourier";
 import LogoutModal from "../../modal/logout-confirmation";
+import api from "../../../utils/api";
 
 const ProfilePage = () => {
   const courier = mockCourier;
   const stats = getTodaysStats();
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
+
+  const handleConfirmLogout = async () => {
+    try {
+      console.log("🔵 [CourierProfile] confirmLogout started");
+      setIsLoggingOut(true);
+
+      // Call the logout API endpoint
+      console.log("🔵 [CourierProfile] Calling POST /auth/logout...");
+      const response = await api.post("/auth/logout");
+      console.log("✅ [CourierProfile] Logout API successful:", response.data);
+
+      // Clear local storage
+      console.log("🔵 [CourierProfile] Clearing localStorage...");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("user");
+      console.log("✅ [CourierProfile] localStorage cleared");
+
+      // Close the modal
+      setLogoutOpen(false);
+
+      // Redirect to signin page
+      console.log("🔵 [CourierProfile] Redirecting to /auth/signin...");
+      navigate("/auth/signin");
+      console.log("✅ [CourierProfile] Logout complete");
+    } catch (error) {
+      console.error("❌ [CourierProfile] Logout API error:", error);
+
+      // Even if API call fails, clear local data and logout
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("user");
+
+      // Close the modal
+      setLogoutOpen(false);
+
+      // Redirect
+      navigate("/auth/signin");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const profileSections = [
     {
@@ -105,11 +147,8 @@ const ProfilePage = () => {
       <LogoutModal
         isOpen={logoutOpen}
         onClose={() => setLogoutOpen(false)}
-        onConfirm={() => {
-          setLogoutOpen(false);
-          // Redirect to signin page
-          navigate("/auth/signin");
-        }}
+        onConfirm={handleConfirmLogout}
+        isLoading={isLoggingOut}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

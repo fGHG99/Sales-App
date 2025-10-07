@@ -4,6 +4,7 @@ import { Menu, LogOut } from "lucide-react";
 import AdminSearch from "./AdminSearch";
 import LogoutModal from "../modal/logout-confirmation";
 import NotificationDropdown from "../User/user-dropdown/NotificationDropdown";
+import api from "../../utils/api";
 
 export default function AdminNavbar({
   searchQuery,
@@ -12,6 +13,7 @@ export default function AdminNavbar({
   onSearchSelect,
 }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [, setIsUserDropdownOpen] = useState(false);
   const navigate = useNavigate();
@@ -64,12 +66,44 @@ export default function AdminNavbar({
     setShowLogoutModal(true);
   };
 
-  const confirmLogout = () => {
-    // Close the modal
-    setShowLogoutModal(false);
+  const confirmLogout = async () => {
+    try {
+      console.log("🔵 [AdminNavbar] confirmLogout started");
+      setIsLoggingOut(true);
 
-    // Redirect to login page
-    navigate("/login");
+      // Call the logout API endpoint
+      console.log("🔵 [AdminNavbar] Calling POST /auth/logout...");
+      const response = await api.post("/auth/logout");
+      console.log("✅ [AdminNavbar] Logout API successful:", response.data);
+
+      // Clear local storage
+      console.log("🔵 [AdminNavbar] Clearing localStorage...");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("user");
+      console.log("✅ [AdminNavbar] localStorage cleared");
+
+      // Close the modal
+      setShowLogoutModal(false);
+
+      // Redirect to login page
+      console.log("🔵 [AdminNavbar] Redirecting to /login...");
+      navigate("/login");
+      console.log("✅ [AdminNavbar] Logout complete");
+    } catch (error) {
+      console.error("❌ [AdminNavbar] Logout API error:", error);
+
+      // Even if API call fails, clear local data and logout
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("user");
+
+      // Close the modal
+      setShowLogoutModal(false);
+
+      // Redirect
+      navigate("/login");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
   return (
     <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
@@ -167,6 +201,7 @@ export default function AdminNavbar({
         isOpen={showLogoutModal}
         onClose={() => setShowLogoutModal(false)}
         onConfirm={confirmLogout}
+        isLoading={isLoggingOut}
       />
     </div>
   );

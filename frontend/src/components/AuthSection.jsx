@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import NotificationDropdown from "./User/user-dropdown/NotificationDropdown";
 import UserDropdown from "./User/user-dropdown/UserDropdown";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import api from "../utils/api";
 
 export default function AuthSection({
   isAuthenticated,
@@ -15,42 +16,55 @@ export default function AuthSection({
   const closeTimeoutRef = useRef(null);
   const userDropdownRef = useRef(null);
   const [profilePicture, setProfilePicture] = useState(null);
+  const [userData, setUserData] = useState(user);
   const BE_URL = import.meta.env.VITE_BE_API_URL;
 
-  // Load profile picture from localStorage
+  // Fetch user data from API
   useEffect(() => {
-    const loadProfilePicture = () => {
-      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-      if (storedUser.image && storedUser.image.url) {
-        setProfilePicture(`${BE_URL}${storedUser.image.url}`);
-      } else {
-        setProfilePicture(null);
+    const fetchUserData = async () => {
+      if (!isAuthenticated) return;
+
+      try {
+        const response = await api.get("/users/me");
+        const fetchedUser = response.data.user;
+
+        setUserData(fetchedUser);
+
+        // Update localStorage with fresh data
+        localStorage.setItem("user", JSON.stringify(fetchedUser));
+
+        // Set profile picture
+        if (fetchedUser.image && fetchedUser.image.url) {
+          setProfilePicture(`${BE_URL}${fetchedUser.image.url}`);
+        } else {
+          setProfilePicture(null);
+        }
+
+        console.log("✅ User data fetched from API:", fetchedUser);
+      } catch (error) {
+        console.error("❌ Failed to fetch user data:", error);
+        // Fallback to localStorage
+        const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+        setUserData(storedUser);
+        if (storedUser.image && storedUser.image.url) {
+          setProfilePicture(`${BE_URL}${storedUser.image.url}`);
+        }
       }
     };
 
-    loadProfilePicture();
+    fetchUserData();
 
-    // Listen for storage changes (when profile picture is updated in EditProfile)
-    const handleStorageChange = (e) => {
-      if (e.key === "user" || e.key === null) {
-        loadProfilePicture();
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
-    // Custom event for same-tab updates
+    // Listen for custom event when user updates profile
     const handleUserUpdate = () => {
-      loadProfilePicture();
+      fetchUserData();
     };
 
     window.addEventListener("userUpdated", handleUserUpdate);
 
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
       window.removeEventListener("userUpdated", handleUserUpdate);
     };
-  }, [BE_URL]);
+  }, [isAuthenticated, BE_URL]);
 
   const openDropdown = () => {
     if (closeTimeoutRef.current) {
@@ -196,13 +210,13 @@ export default function AuthSection({
                     className="object-cover"
                   />
                   <AvatarFallback className="bg-gray-200 text-gray-600 text-sm font-semibold">
-                    {user?.name?.charAt(0).toUpperCase() || "U"}
+                    {userData?.name?.charAt(0).toUpperCase() || "U"}
                   </AvatarFallback>
                 </Avatar>
               </div>
               <span className="font-regular text-sm text-gray-700 ml-2 overflow-hidden whitespace-nowrap select-none">
                 {(() => {
-                  const name = user?.name || "User";
+                  const name = userData?.name || "User";
                   return name.length > 4 ? name.slice(0, 4) + "..." : name;
                 })()}
               </span>
@@ -217,7 +231,7 @@ export default function AuthSection({
             {isUserDropdownOpen && (
               <div className="absolute right-0 top-full mt-2 z-50">
                 <UserDropdown
-                  userData={user}
+                  userData={userData}
                   onClose={() => setIsUserDropdownOpen(false)}
                 />
               </div>

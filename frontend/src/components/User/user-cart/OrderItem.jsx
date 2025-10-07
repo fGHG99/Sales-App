@@ -4,6 +4,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Trash2, Minus, Plus, ShoppingCart } from "lucide-react";
+import api from "../../../utils/api";
+import { useState } from "react";
 
 export default function OrderItemsSection({
   cartItems,
@@ -14,7 +16,9 @@ export default function OrderItemsSection({
   subtotal,
   setShowDeleteModal,
   setItemToDelete,
+  removeSelectedItems,
 }) {
+  const [updatingItems, setUpdatingItems] = useState(new Set());
   const toggleItemSelection = (itemId) => {
     setSelectedItems((prev) => {
       const newSet = new Set(prev);
@@ -32,20 +36,66 @@ export default function OrderItemsSection({
     }
   };
 
-  const updateQuantity = (itemId, newQuantity) => {
-    setCartItems((prev) =>
-      prev.map((item) => {
-        if (item.id === itemId) {
-          if (item.quantity === 1 && newQuantity < 1) {
-            setItemToDelete(itemId);
-            setShowDeleteModal(true);
-            return item;
-          }
-          return { ...item, quantity: Math.max(1, newQuantity) };
-        }
-        return item;
-      })
-    );
+  const updateQuantity = async (itemId, newQuantity) => {
+    // Check if item is already being updated
+    if (updatingItems.has(itemId)) return;
+
+    // Calculate the quantity difference
+    const currentItem = cartItems.find((item) => item.id === itemId);
+    if (!currentItem) return;
+
+    const quantityDiff = newQuantity - currentItem.quantity;
+
+    // If trying to decrease below 1, show delete modal
+    if (newQuantity < 1) {
+      setItemToDelete(itemId);
+      setShowDeleteModal(true);
+      return;
+    }
+
+    try {
+      // Mark item as updating
+      setUpdatingItems((prev) => new Set(prev).add(itemId));
+
+      // Optimistically update UI
+      setCartItems((prev) =>
+        prev.map((item) =>
+          item.id === itemId ? { ...item, quantity: newQuantity } : item
+        )
+      );
+
+      // Call API to update quantity using /cart/add
+      // The API automatically handles quantity updates
+      await api.post("/cart/add", {
+        productId: itemId,
+        quantity: quantityDiff, // Send the difference (positive to add, negative to subtract)
+      });
+
+      console.log(`✅ Updated quantity for product ${itemId}: ${newQuantity}`);
+
+      // Dispatch event to update cart count in navbar
+      window.dispatchEvent(new CustomEvent("cartUpdated"));
+    } catch (error) {
+      console.error("❌ Failed to update quantity:", error);
+
+      // Revert optimistic update on error
+      setCartItems((prev) =>
+        prev.map((item) =>
+          item.id === itemId
+            ? { ...item, quantity: currentItem.quantity }
+            : item
+        )
+      );
+
+      alert(error.response?.data?.message || "Failed to update quantity");
+    } finally {
+      // Remove from updating set
+      setUpdatingItems((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
+    }
   };
 
   return (
@@ -58,20 +108,37 @@ export default function OrderItemsSection({
             </div>
             Order Items ({cartItems.length})
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="select-all"
-              checked={
-                selectedItems.size === cartItems.length && cartItems.length > 0
-              }
-              onCheckedChange={toggleSelectAll}
-            />
-            <label
-              htmlFor="select-all"
-              className="text-sm font-medium cursor-pointer"
-            >
-              Select All
-            </label>
+          <div className="flex items-center gap-3">
+            {/* Delete Selected Button */}
+            {selectedItems.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={removeSelectedItems}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete ({selectedItems.size})
+              </Button>
+            )}
+
+            {/* Select All Checkbox */}
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="select-all"
+                checked={
+                  selectedItems.size === cartItems.length &&
+                  cartItems.length > 0
+                }
+                onCheckedChange={toggleSelectAll}
+              />
+              <label
+                htmlFor="select-all"
+                className="text-sm font-medium cursor-pointer"
+              >
+                Select All
+              </label>
+            </div>
           </div>
         </CardTitle>
       </CardHeader>
@@ -101,17 +168,19 @@ export default function OrderItemsSection({
               <div className="flex items-center border border-gray-300 rounded-md overflow-hidden">
                 <button
                   onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                  disabled={updatingItems.has(item.id)}
                   className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
 
                 <span className="flex-1 text-center text-sm font-medium text-gray-800 border-x border-gray-300">
-                  {item.quantity}
+                  {updatingItems.has(item.id) ? "..." : item.quantity}
                 </span>
 
                 <button
                   onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                  disabled={updatingItems.has(item.id)}
                   className="flex items-center justify-center w-8 h-8 text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
                 >
                   <Plus className="w-4 h-4" />

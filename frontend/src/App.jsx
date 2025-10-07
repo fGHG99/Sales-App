@@ -44,6 +44,7 @@ import UserLocation from "./components/courier/pages/UserLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
 import NotificationsPage from "./components/User/pages/NotificationsPage";
 import api from "./utils/api";
+import ProtectedRoute from "./components/Middleware";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -126,7 +127,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/user",
-    element: <Layout />,
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
     children: [
       { path: "orders", element: <OrderHistory /> },
       { path: "profile", element: <EditProfile /> },
@@ -135,7 +140,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/order",
-    element: <Layout />,
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
     children: [
       { path: "checkout/:orderId", element: <OrderCheckout /> },
       { path: "track/:orderId", element: <CourierTracking /> },
@@ -143,7 +152,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/courier",
-    element: <Navigation />,
+    element: (
+      <ProtectedRoute>
+        <Navigation />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <CourierDashboard /> },
       { path: "orders", element: <OrdersPage /> },
@@ -155,7 +168,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: <AdminLayout />,
+    element: (
+      <ProtectedRoute>
+        <AdminLayout />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <AdminDashboard /> },
       { path: "orders", element: <OrderManagement /> },
@@ -166,7 +183,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/s-admin",
-    element: <SuperAdminLayout />,
+    element: (
+      <ProtectedRoute>
+        <SuperAdminLayout />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: <SuperAdminDashboard /> },
       { path: "stores", element: <StoreManagement /> },
@@ -182,7 +203,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/support",
-    children: [{ index: true, element: <SupportDashboard /> }],
+    element: (
+      <ProtectedRoute>
+        <SupportDashboard />
+      </ProtectedRoute>
+    ),
   },
   { path: "*", element: <NotFound /> },
 ]);

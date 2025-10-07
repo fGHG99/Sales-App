@@ -35,7 +35,6 @@ api.interceptors.response.use(
         // Call refresh endpoint - refreshToken is sent automatically via HTTP-only cookie
         const response = await axios.post(
           `${import.meta.env.VITE_BE_API_URL}/auth/refresh`,
-          {},
           { withCredentials: true }
         );
 

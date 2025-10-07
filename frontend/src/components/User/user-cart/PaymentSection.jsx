@@ -34,26 +34,28 @@ export default function PaymentSection({
       </CardHeader>
       <CardContent>
         <div
-          className="p-4 rounded-lg border border-border hover:border-muted-foreground cursor-pointer transition-colors bg-accent"
+          className="p-4 rounded-lg border border-border hover:border-primary cursor-pointer transition-all bg-accent/50 hover:bg-accent"
           onClick={() => setPaymentModalOpen(true)}
         >
-          <div className="flex justify-between items-center">
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                {selectedPayment.type === "cash" ? (
-                  <Banknote className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <CreditCard className="w-4 h-4 text-muted-foreground" />
-                )}
-                <p className="font-medium text-card-foreground">
-                  {getPaymentDisplayText()}
-                </p>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Click to change payment method
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              {selectedPayment.type === "cash" ? (
+                <Banknote className="w-5 h-5 text-primary" />
+              ) : (
+                <CreditCard className="w-5 h-5 text-primary" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-card-foreground mb-1 truncate">
+                {getPaymentDisplayText()}
+              </p>
+              <p className="text-sm text-muted-foreground truncate">
+                Click to change
               </p>
             </div>
-            <Settings className="w-4 h-4 text-muted-foreground" />
+            <div className="flex-shrink-0">
+              <Settings className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
+            </div>
           </div>
         </div>
       </CardContent>

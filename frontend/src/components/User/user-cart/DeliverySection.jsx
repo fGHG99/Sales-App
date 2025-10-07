@@ -6,7 +6,7 @@ export default function DeliverySection({
   deliveryOption,
   setDeliveryModalOpen,
   formatIDR,
-  mockStores
+  mockStores,
 }) {
   const getDeliveryDisplayText = () => {
     if (deliveryOption.type === "courier") {
@@ -31,28 +31,30 @@ export default function DeliverySection({
           <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">
             <Truck className="w-4 h-4" />
           </div>
-          Select your delivery options
+          Delivery Options
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div>
-          <div
-            className="p-4 rounded-lg border border-border hover:border-muted-foreground cursor-pointer transition-colors bg-accent"
-            onClick={() => setDeliveryModalOpen(true)}
-          >
-            <div className="flex justify-between items-center">
-              <div className="flex-1">
-                <p className="font-medium text-card-foreground">
-                  {getDeliveryDisplayText()}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {deliveryOption.cost === 0
-                    ? "Free"
-                    : `${formatIDR(deliveryOption.cost)}`}{" "}
-                  • Click to change
-                </p>
-              </div>
-              <Settings className="w-4 h-4 text-muted-foreground" />
+      <CardContent>
+        <div
+          className="p-4 rounded-lg border border-border hover:border-primary cursor-pointer transition-all bg-accent/50 hover:bg-accent"
+          onClick={() => setDeliveryModalOpen(true)}
+        >
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <Truck className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-card-foreground mb-1 truncate">
+                {getDeliveryDisplayText()}
+              </p>
+              <p className="text-sm text-muted-foreground truncate">
+                {deliveryOption.cost === 0
+                  ? "Free"
+                  : formatIDR(deliveryOption.cost)}
+              </p>
+            </div>
+            <div className="flex-shrink-0">
+              <Settings className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
             </div>
           </div>
         </div>

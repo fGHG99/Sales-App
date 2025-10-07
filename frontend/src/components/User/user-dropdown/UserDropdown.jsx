@@ -20,47 +20,35 @@ const UserDropdown = ({ userData, onClose, onConfirm }) => {
 
   const confirmLogout = async () => {
     try {
+      console.log("🔵 confirmLogout function started");
       setIsLoggingOut(true);
+      console.log("🔵 isLoggingOut set to true");
 
       // Call the logout API endpoint
-      const response = await api.post("/auth/logout");
-      console.log("Logout response:", response.data);
-
-      // Clear local storage
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("user");
-
-      // Close the modal
-      setShowLogoutModal(false);
-      console.log("clicked logot")
-
-      // Call onConfirm if provided, otherwise redirect manually
-      if (onConfirm) {
-        onConfirm();
-      } else {
-        // Force redirect to login page
-        navigate("/auth/login", { replace: true });
-        // Atau jika Anda pakai React Router:
-        // window.location.replace('/login');
-      }
+      console.log("🔵 Calling POST /auth/logout...");
+      await api.post("/auth/logout");
+      console.log("✅ Logout API successful");
     } catch (error) {
-      console.error("Logout API error:", error);
-
-      // Even if API call fails, clear local data and logout
+      console.error("❌ Logout API error:", error);
+    } finally {
+      // Clear local storage regardless of API result
+      console.log("🔵 Clearing localStorage...");
       localStorage.removeItem("accessToken");
       localStorage.removeItem("user");
+      console.log("✅ localStorage cleared");
 
-      // Close the modal
+      setIsLoggingOut(false);
       setShowLogoutModal(false);
+      console.log("✅ Modal closed");
 
-      // Redirect
+      // Redirect to login
+      console.log("🔵 Redirecting to /auth/login...");
+      navigate("/auth/signin", { replace: true });
+
+      // Call parent onConfirm if exists
       if (onConfirm) {
         onConfirm();
-      } else {
-        window.location.href = "/login";
       }
-    } finally {
-      setIsLoggingOut(false);
     }
   };
 

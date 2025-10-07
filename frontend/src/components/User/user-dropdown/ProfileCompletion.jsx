@@ -1,18 +1,26 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { CheckCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 const ProfileCompletion = ({ userData }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
+    // Helper function untuk validasi field
+    const isFieldComplete = (value) => {
+        if (!value) return false;
+        if (Array.isArray(value)) return value.length > 0;
+        if (typeof value === 'string') return value.trim() !== '';
+        return true;
+    };
+
     const profileFields = [
         { label: 'Full Name', value: userData.name, required: true },
         { label: 'Email Address', value: userData.email, required: true },
         { label: 'Phone Number', value: userData.phone, required: true },
-        { label: 'Home Address', value: userData.address, required: false },
+        { label: 'Home Address', value: userData.addresses, required: false },
         { label: 'Date of Birth', value: userData.dob, required: false },
     ];
 
-    const completedFields = profileFields.filter(field => field.value && field.value.trim() !== '');
+    const completedFields = profileFields.filter(field => isFieldComplete(field.value));
     const completionPercentage = Math.round((completedFields.length / profileFields.length) * 100);
 
     const getProgressColor = () => {
@@ -75,7 +83,7 @@ const ProfileCompletion = ({ userData }) => {
                                 {field.required && (
                                     <span className="text-xs text-red-500">*</span>
                                 )}
-                                {field.value && field.value.trim() !== '' ? (
+                                {isFieldComplete(field.value) ? (
                                     <CheckCircle className="w-4 h-4 text-green-500" />
                                 ) : (
                                     <AlertCircle className="w-4 h-4 text-gray-400" />
