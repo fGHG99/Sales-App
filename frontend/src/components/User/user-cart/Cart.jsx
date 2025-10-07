@@ -522,6 +522,10 @@ export default function Cart() {
                 }
                 cashAmount={selectedPayment?.cashAmount}
                 selectedPayment={selectedPayment}
+                selectedAddress={selectedAddress}
+                selectedItems={selectedItems}
+                cartItems={cartItems}
+                onCheckoutSuccess={fetchCartData}
               />
             </div>
           </div>

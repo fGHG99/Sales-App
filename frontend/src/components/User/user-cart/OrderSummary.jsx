@@ -72,7 +72,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { AlertCircle, XCircle } from "lucide-react";
+import { AlertCircle, XCircle, Loader2 } from "lucide-react";
+import api from "../../../utils/api";
 
 export default function OrderSummary({
   deliveryOption,
@@ -83,11 +84,16 @@ export default function OrderSummary({
   selectedStore,
   cashAmount,
   selectedPayment,
+  selectedAddress,
+  selectedItems,
+  cartItems,
+  onCheckoutSuccess,
 }) {
   const navigate = useNavigate();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showClosedModal, setShowClosedModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Clear errors when delivery option or payment changes
   useEffect(() => {
@@ -171,10 +177,93 @@ export default function OrderSummary({
     }
   };
 
-  const handleCheckout = () => {
-    const orderId = `ORD-${Date.now()}`;
-    setShowConfirmModal(false); // Close modal
-    navigate(`/order/checkout/${orderId}`);
+  const handleCheckout = async () => {
+    try {
+      setIsProcessing(true);
+
+      // Get user data untuk userId
+      const userResponse = await api.get("/users/me");
+      const userId = userResponse.data.user.id;
+
+      // Get selected cart items dari cartItems
+      const selectedCartItems = cartItems.filter((item) =>
+        selectedItems.has(item.id)
+      );
+
+      // Map selected items ke cartItemIds
+      const cartItemIds = selectedCartItems.map((item) => item.id);
+
+      if (cartItemIds.length === 0) {
+        setValidationErrors(["Tidak ada item yang dipilih untuk checkout"]);
+        setShowConfirmModal(false);
+        setIsProcessing(false);
+        return;
+      }
+
+      // Prepare checkout data
+      const checkoutData = {
+        userId,
+        deliveryAddressId: selectedAddress,
+        cartItemIds,
+        cashAmount: selectedPayment.cashAmount,
+        deliveryType:
+          deliveryOption.type === "courier" ? "DELIVERY" : "PICKUP_TO_STORE",
+        deliveryFee: deliveryOption.cost,
+      };
+
+      // Add pickup-specific fields if pickup option
+      if (deliveryOption.type === "pickup") {
+        checkoutData.pickupStoreId = deliveryOption.storeId;
+        checkoutData.pickupTime = deliveryOption.pickupTime;
+      }
+
+      console.log("📦 Sending checkout request:", checkoutData);
+
+      // Call checkout API
+      const response = await api.post("/order/checkout", checkoutData);
+
+      console.log("✅ Checkout successful:", response.data);
+
+      // Close modal
+      setShowConfirmModal(false);
+
+      // Notify parent component to refresh cart
+      if (onCheckoutSuccess) {
+        onCheckoutSuccess();
+      }
+
+      // Dispatch event to update cart count
+      window.dispatchEvent(new CustomEvent("cartUpdated"));
+
+      // Navigate to order success/detail page
+      const orderId = response.data.order.id;
+      navigate(`/order/success/${orderId}`, {
+        state: { orderData: response.data.order },
+      });
+    } catch (error) {
+      console.error("❌ Checkout failed:", error);
+
+      setShowConfirmModal(false);
+
+      // Show error message
+      const errorMessage =
+        error.response?.data?.message || "Checkout gagal. Silakan coba lagi.";
+      setValidationErrors([errorMessage]);
+
+      // If insufficient cash, show specific error
+      if (error.response?.data?.shortage) {
+        const shortage = error.response.data.shortage;
+        setValidationErrors([
+          `Uang yang dibayarkan kurang ${formatIDR(
+            shortage
+          )}. Total yang harus dibayar: ${formatIDR(
+            error.response.data.required
+          )}`,
+        ]);
+      }
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -312,11 +401,23 @@ export default function OrderSummary({
               variant="outline"
               onClick={() => setShowConfirmModal(false)}
               className="w-full sm:w-auto"
+              disabled={isProcessing}
             >
               Batal
             </Button>
-            <Button onClick={handleCheckout} className="w-full sm:w-auto">
-              Ya, Lanjutkan
+            <Button
+              onClick={handleCheckout}
+              className="w-full sm:w-auto"
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Memproses...
+                </>
+              ) : (
+                "Ya, Lanjutkan"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

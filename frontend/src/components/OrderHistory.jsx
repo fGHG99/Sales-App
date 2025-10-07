@@ -29,53 +29,84 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "../lib/utils";
-import { mockOrders } from "../utils/mockDataOrder";
+import { useDebounce } from "../hooks/useDebounce";
 import Pagination from "./Pagination";
+import api from "../utils/api";
 
 const OrderHistory = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedDate, setSelectedDate] = useState(null);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [orders, setOrders] = useState([]);
+  const [error, setError] = useState(null);
   const ordersPerPage = 6;
 
-  // Initial loading with 0.5s delay
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+  // Debounce status and date changes (500ms delay)
+  const debouncedStatus = useDebounce(selectedStatus, 500);
+  const debouncedDate = useDebounce(selectedDate, 500);
+  const debouncedSearch = useDebounce(searchQuery, 500);
 
-  // Debounce search with 0.5s delay
+  // Fetch orders from API with filters
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    const fetchOrders = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Build query parameters
+        const params = {};
+
+        // Add status filter if not "all"
+        if (debouncedStatus && debouncedStatus !== "all") {
+          params.status = debouncedStatus;
+        }
+
+        // Add date filter
+        if (debouncedDate) {
+          params.date = format(debouncedDate, "yyyy-MM-dd");
+        }
+
+        const response = await api.get("/order/my-orders", { params });
+
+        setOrders(response.data.orders || []);
+      } catch (err) {
+        console.error("Error fetching orders:", err);
+        setError(err.response?.data?.message || "Failed to fetch orders");
+        setOrders([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [debouncedStatus, debouncedDate]);
 
   const orderStatuses = [
     { value: "all", label: "All Orders" },
-    { value: "waiting_payment", label: "Waiting for Payment" },
-    { value: "payment_completed", label: "Payment Completed" },
-    { value: "processing", label: "Processing" },
-    { value: "on_delivery", label: "On Delivery" },
-    { value: "arrived", label: "Arrived" },
-    { value: "completed", label: "Completed" },
+    { value: "PENDING", label: "Pending" },
+    { value: "IN_PREPARATION", label: "In Preparation" },
+    { value: "READY_FOR_PICKUP", label: "Ready for Pickup" },
+    { value: "OUT_FOR_DELIVERY", label: "Out for Delivery" },
+    { value: "DELIVERED", label: "Delivered" },
+    { value: "COMPLETED", label: "Completed" },
+    { value: "DISPUTED", label: "Disputed" },
+    { value: "CANCELED", label: "Canceled" },
   ];
 
   const getStatusColor = (status) => {
     const colors = {
-      waiting_payment: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      payment_completed: "bg-blue-100 text-blue-800 border-blue-200",
-      processing: "bg-purple-100 text-purple-800 border-purple-200",
-      on_delivery: "bg-orange-100 text-orange-800 border-orange-200",
-      arrived: "bg-green-100 text-green-800 border-green-200",
-      completed: "bg-gray-100 text-gray-800 border-gray-200",
+      PENDING: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      IN_PREPARATION: "bg-blue-100 text-blue-800 border-blue-200",
+      READY_FOR_PICKUP: "bg-purple-100 text-purple-800 border-purple-200",
+      OUT_FOR_DELIVERY: "bg-orange-100 text-orange-800 border-orange-200",
+      DELIVERED: "bg-green-100 text-green-800 border-green-200",
+      COMPLETED: "bg-gray-100 text-gray-800 border-gray-200",
+      DISPUTED: "bg-red-100 text-red-800 border-red-200",
+      CANCELED: "bg-gray-100 text-gray-800 border-gray-200",
+      GRACE_PERIOD: "bg-yellow-100 text-yellow-800 border-yellow-200",
     };
     return colors[status] || "bg-gray-100 text-gray-800 border-gray-200";
   };
@@ -84,23 +115,22 @@ const OrderHistory = () => {
     return `Rp ${parseFloat(amount).toLocaleString("id-ID")}`;
   };
 
+  // Client-side search filter (after API returns filtered data by status and date)
   const filteredOrders = useMemo(() => {
-    return mockOrders.filter((order) => {
+    return orders.filter((order) => {
       const matchesSearch =
         order.id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        order.items.some((item) =>
-          item.name.toLowerCase().includes(debouncedSearch.toLowerCase())
-        );
-      const matchesStatus =
-        selectedStatus === "all" || order.status === selectedStatus;
-      const matchesDate =
-        !selectedDate ||
-        format(new Date(order.orderDate), "yyyy-MM-dd") ===
-          format(selectedDate, "yyyy-MM-dd");
+        (order.orderItems &&
+          Array.isArray(order.orderItems) &&
+          order.orderItems.some((item) =>
+            item.productName
+              ?.toLowerCase()
+              .includes(debouncedSearch.toLowerCase())
+          ));
 
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesSearch;
     });
-  }, [debouncedSearch, selectedStatus, selectedDate]);
+  }, [orders, debouncedSearch]);
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
@@ -123,16 +153,22 @@ const OrderHistory = () => {
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <Package className="h-24 w-24 text-gray-300 mb-6" />
       <h3 className="text-xl font-semibold text-gray-700 mb-2">
-        No Orders Yet
+        {error ? "Error Loading Orders" : "No Orders Yet"}
       </h3>
       <p className="text-gray-500 mb-6">
-        Try ordering something at{" "}
-        <a
-          href="/"
-          className="text-blue-600 hover:text-blue-800 underline font-medium"
-        >
-          Geek Sales
-        </a>
+        {error ? (
+          <span className="text-red-500">{error}</span>
+        ) : (
+          <>
+            Try ordering something at{" "}
+            <a
+              href="/"
+              className="text-blue-600 hover:text-blue-800 underline font-medium"
+            >
+              Geek Sales
+            </a>
+          </>
+        )}
       </p>
     </div>
   );
@@ -142,54 +178,120 @@ const OrderHistory = () => {
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <Package className="h-5 w-5" />
-          Order Details - #{order.id}
+          Order Details - #{order.id.slice(0, 8)}
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <Badge className={getStatusColor(order.status)}>
-            {orderStatuses.find((s) => s.value === order.status)?.label}
+          <Badge className={getStatusColor(order.orderStatus)}>
+            {orderStatuses.find((s) => s.value === order.orderStatus)?.label ||
+              order.orderStatus}
           </Badge>
           <div className="text-sm text-gray-500">
-            {format(new Date(order.orderDate), "PPP")} at{" "}
-            {format(new Date(order.orderDate), "p")}
+            {format(new Date(order.createdAt), "PPP")} at{" "}
+            {format(new Date(order.createdAt), "p")}
           </div>
         </div>
 
         <div className="space-y-4">
           <h4 className="font-semibold">Order Items</h4>
-          {order.items.map((item, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-4 p-4 border rounded-lg"
-            >
-              <img
-                src={item.image}
-                alt={item.name}
-                className="w-16 h-16 object-cover rounded-md"
-              />
-              <div className="flex-1">
-                <h5 className="font-medium">{item.name}</h5>
-                <p className="text-sm text-gray-600">
-                  Quantity: {item.quantity}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="font-semibold">
-                  {formatCurrency(item.price)}
+          {order.orderItems && Array.isArray(order.orderItems) ? (
+            order.orderItems.map((item, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-4 p-4 border rounded-lg"
+              >
+                <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center">
+                  <Package className="h-8 w-8 text-gray-400" />
                 </div>
-                <div className="text-sm text-gray-500">
-                  Total: {formatCurrency(item.price * item.quantity)}
+                <div className="flex-1">
+                  <h5 className="font-medium">{item.productName}</h5>
+                  <p className="text-sm text-gray-600">
+                    Quantity: {item.quantity}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="font-semibold">
+                    {formatCurrency(item.pricePerItem)}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Total: {formatCurrency(item.total)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-gray-500">No items found</p>
+          )}
         </div>
 
-        <div className="border-t pt-4">
-          <div className="flex justify-between items-center text-lg font-semibold">
+        <div className="space-y-2 border-t pt-4">
+          <div className="flex justify-between">
+            <span>Subtotal:</span>
+            <span>{formatCurrency(order.subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Delivery Fee:</span>
+            <span>{formatCurrency(order.deliveryFee)}</span>
+          </div>
+          <div className="flex justify-between items-center text-lg font-semibold border-t pt-2">
             <span>Total Amount:</span>
-            <span>{formatCurrency(order.totalAmount)}</span>
+            <span>{formatCurrency(order.total)}</span>
+          </div>
+          <div className="flex justify-between text-sm text-gray-600 mt-2">
+            <span>Cash Amount:</span>
+            <span>{formatCurrency(order.cashAmount)}</span>
+          </div>
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Change:</span>
+            <span>{formatCurrency(order.changeAmount)}</span>
+          </div>
+        </div>
+
+        {/* Delivery Info */}
+        <div className="border-t pt-4 space-y-2">
+          <h4 className="font-semibold">Delivery Information</h4>
+          <div className="text-sm">
+            <p className="font-medium">Type: {order.deliveryType}</p>
+            {order.deliveryAddress && (
+              <div className="mt-2 text-gray-600">
+                <p className="font-medium">{order.deliveryAddress.label}</p>
+                <p>{order.deliveryAddress.recipientName}</p>
+                <p>{order.deliveryAddress.recipientPhone}</p>
+                <p>{order.deliveryAddress.fullAddress}</p>
+                <p>
+                  {order.deliveryAddress.city}, {order.deliveryAddress.province}{" "}
+                  {order.deliveryAddress.postalCode}
+                </p>
+              </div>
+            )}
+            {order.pickupStore && (
+              <div className="mt-2 text-gray-600">
+                <p className="font-medium">Pickup Store:</p>
+                <p>{order.pickupStore.name}</p>
+                {order.pickupStore.address && (
+                  <>
+                    <p>{order.pickupStore.address.fullAddress}</p>
+                    <p>
+                      {order.pickupStore.address.city},{" "}
+                      {order.pickupStore.address.province}
+                    </p>
+                  </>
+                )}
+                {order.pickupTime && (
+                  <p className="mt-1">
+                    Pickup Time: {format(new Date(order.pickupTime), "PPP p")}
+                  </p>
+                )}
+              </div>
+            )}
+            {order.courier && (
+              <div className="mt-2 text-gray-600">
+                <p className="font-medium">Courier:</p>
+                <p>{order.courier.name}</p>
+                <p>{order.courier.phone}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -341,68 +443,74 @@ const OrderHistory = () => {
               </p>
             </div>
 
-            {currentOrders.map((order) => (
-              <Card
-                key={order.id}
-                className="hover:shadow-md transition-shadow"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        <Package className="h-5 w-5 text-gray-600" />
-                        <span className="font-semibold">#{order.id}</span>
-                      </div>
-                      <Badge className={getStatusColor(order.status)}>
-                        {
-                          orderStatuses.find((s) => s.value === order.status)
-                            ?.label
-                        }
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Clock className="h-4 w-4" />
-                      {format(
-                        new Date(order.orderDate),
-                        "MMM dd, yyyy"
-                      )} at {format(new Date(order.orderDate), "HH:mm")}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <img
-                        src={order.items[0].image}
-                        alt={order.items[0].name}
-                        className="w-16 h-16 object-cover rounded-md"
-                      />
-                      <div>
-                        <h3 className="font-medium">{order.items[0].name}</h3>
-                        {order.items.length > 1 && (
-                          <p className="text-sm text-gray-500">
-                            +{order.items.length - 1} more item
-                            {order.items.length > 2 ? "s" : ""}
-                          </p>
-                        )}
-                        <p className="text-sm font-semibold text-gray-900">
-                          Total: {formatCurrency(order.totalAmount)}
-                        </p>
-                      </div>
-                    </div>
+            {currentOrders.map((order) => {
+              const firstItem = order.orderItems?.[0];
+              const itemsCount = order.orderItems?.length || 0;
 
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="p-2">
-                          <ChevronRight className="h-5 w-5" />
-                        </Button>
-                      </DialogTrigger>
-                      <OrderDetailModal order={order} />
-                    </Dialog>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+              return (
+                <Card
+                  key={order.id}
+                  className="hover:shadow-md transition-shadow"
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Package className="h-5 w-5 text-gray-600" />
+                          <span className="font-semibold">
+                            #{order.id.slice(0, 8)}
+                          </span>
+                        </div>
+                        <Badge className={getStatusColor(order.orderStatus)}>
+                          {orderStatuses.find(
+                            (s) => s.value === order.orderStatus
+                          )?.label || order.orderStatus}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Clock className="h-4 w-4" />
+                        {format(
+                          new Date(order.createdAt),
+                          "MMM dd, yyyy"
+                        )} at {format(new Date(order.createdAt), "HH:mm")}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center">
+                          <Package className="h-8 w-8 text-gray-400" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">
+                            {firstItem?.productName || "Order Items"}
+                          </h3>
+                          {itemsCount > 1 && (
+                            <p className="text-sm text-gray-500">
+                              +{itemsCount - 1} more item
+                              {itemsCount > 2 ? "s" : ""}
+                            </p>
+                          )}
+                          <p className="text-sm font-semibold text-gray-900">
+                            Total: {formatCurrency(order.total)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="p-2">
+                            <ChevronRight className="h-5 w-5" />
+                          </Button>
+                        </DialogTrigger>
+                        <OrderDetailModal order={order} />
+                      </Dialog>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
 
             {/* Pagination Component */}
             {totalPages > 1 && (
