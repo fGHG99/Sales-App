@@ -9,6 +9,7 @@ import courierLoc from "./Controllers/courierLocCont.js";
 import cartRoutes from "./Controllers/cartController.js";
 import orderRoutes from "./Controllers/orderController.js";
 import inventoryRoutes from "./Controllers/InventoryCont.js";
+import storeRoute from "./Controllers/storeController.js";
 import { PORT, HOST } from "../utils/serverConf.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -52,6 +53,7 @@ app.use((req, res, next) => {
 });
 // Routes
 app.use("/users", userRoute);
+app.use("/store", storeRoute);
 app.use("/auth", authRoute);
 app.use("/courier", courierLoc);
 app.use("/inventory", inventoryRoutes);

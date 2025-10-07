@@ -29,7 +29,9 @@ export function authorize(accessKey) {
       });
 
       if (!user || !user.role) {
-        return res.status(401).json({ error: "Unauthorized: No role assigned" });
+        return res
+          .status(401)
+          .json({ error: "Unauthorized: No role assigned" });
       }
 
       // Cek apakah role user punya accessKey yang sesuai
@@ -61,10 +63,16 @@ export function authenticate(req, res, next) {
     if (accessToken) {
       try {
         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-        req.user = { id: decoded.userId, email: decoded.email };
+        // Only set properties that exist in the decoded token
+        req.user = {
+          id: decoded.userId || decoded.id,
+          ...(decoded.email && { email: decoded.email }),
+        };
         return next();
       } catch (err) {
-        console.warn("Access token invalid/expired, fallback ke refresh token...");
+        console.warn(
+          "Access token invalid/expired, fallback ke refresh token..."
+        );
       }
     }
 
@@ -72,7 +80,11 @@ export function authenticate(req, res, next) {
     if (refreshToken) {
       try {
         const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-        req.user = { id: decoded.userId, email: decoded.email };
+        // Only set properties that exist in the decoded token
+        req.user = {
+          id: decoded.userId || decoded.id,
+          ...(decoded.email && { email: decoded.email }),
+        };
         return next();
       } catch (err) {
         console.warn("Refresh token invalid/expired:", err.message);
@@ -80,9 +92,7 @@ export function authenticate(req, res, next) {
     }
 
     // Step 3: kalau dua-duanya gagal
-    return res
-      .status(401)
-      .json({ error: "session expired, try re-login" });
+    return res.status(401).json({ error: "session expired, try re-login" });
   } catch (err) {
     console.error("Hybrid auth error:", err);
     return res.status(500).json({ error: "Internal server error" });

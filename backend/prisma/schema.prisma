@@ -104,6 +104,9 @@ model User {
 
   auditLogs AuditLog[]
 
+  storeAddresses StoreAddress[] @relation("StoreAddressUser")
+  managedStores  Store[]        @relation("StoreAdmin")
+
   @@map("users")
 }
 
@@ -152,6 +155,48 @@ model Address {
   orders Order[] @relation("OrderDeliveryAddress")
 
   @@map("addresses")
+}
+
+model StoreAddress {
+  id          String  @id @default(uuid()) @db.Uuid
+  fullAddress String  @db.VarChar(100)
+  subDistrict String? @db.VarChar(100)
+  district    String? @db.VarChar(100)
+  city        String? @db.VarChar(100)
+  province    String  @db.VarChar(100)
+  country     String  @db.VarChar(100)
+  postalCode  String  @db.VarChar(100)
+  latitude    Float
+  longitude   Float
+
+  userId String @db.Uuid
+  user   User   @relation("StoreAddressUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  store Store? @relation("StoreAddress")
+
+  @@map("store_addresses")
+}
+
+model Store {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(100)
+  phoneNumber String?  @db.VarChar(20)
+  openHour    DateTime
+  closeHour   DateTime
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  addressId String  @unique @db.Uuid
+  address   StoreAddress @relation("StoreAddress", fields: [addressId], references: [id], onDelete: Cascade)
+
+  adminId String? @db.Uuid
+  admin   User?   @relation("StoreAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, isDeleted])
+  @@index([adminId])
+  @@map("stores")
 }
 
 model Role {
@@ -259,7 +304,7 @@ model StockMovement {
   @@map("stock_movements")
 }
 
-//TODO : ADD MODEL STORE
+
 
 model Category {
   id          String   @id @default(cuid())
