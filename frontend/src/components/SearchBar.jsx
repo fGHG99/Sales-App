@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
-import { mockProducts } from "../utils/mockDataProduct";
+import api from "../utils/api";
 
 // Debounce + Throttle Hook
 const useDebouncedThrottle = (value, delay = 400, throttleDelay = 800) => {
@@ -33,16 +33,30 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
   const debouncedQuery = useDebouncedThrottle(searchQuery);
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setResults([]);
-      return;
-    }
+    let cancelled = false;
 
-    // Simulate search on mock data
-    const filtered = mockProducts.filter((p) =>
-      p.name.toLowerCase().includes(debouncedQuery.toLowerCase())
-    );
-    setResults(filtered);
+    const run = async () => {
+      const q = debouncedQuery.trim();
+      if (!q) {
+        setResults([]);
+        return;
+      }
+      try {
+        const res = await api.get(`/inventory/search`, {
+          params: { q, limit: 8 },
+        });
+        if (!cancelled) {
+          setResults(res.data?.results || []);
+        }
+      } catch (err) {
+        if (!cancelled) setResults([]);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedQuery]);
 
   // Click outside handler
@@ -75,7 +89,9 @@ export default function SearchBar({ searchQuery, setSearchQuery, onSelect }) {
   };
 
   const handleSearch = (query) => {
-    const searchTerm = (query && query.trim()) || debouncedQuery.trim();
+    // Use the latest input state for manual triggers (Enter/click),
+    // fallback to provided query when selecting from suggestions
+    const searchTerm = (query && query.trim()) || searchQuery.trim();
     if (searchTerm) {
       addToHistory(searchTerm);
       navigate(`/search?q=${encodeURIComponent(searchTerm)}`);

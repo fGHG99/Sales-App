@@ -18,6 +18,8 @@ export default function AuthSection({
   const [profilePicture, setProfilePicture] = useState(null);
   const [userData, setUserData] = useState(user);
   const BE_URL = import.meta.env.VITE_BE_API_URL;
+  const [cartCount, setCartCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
 
   // Fetch user data from API
   useEffect(() => {
@@ -66,6 +68,57 @@ export default function AuthSection({
     };
   }, [isAuthenticated, BE_URL]);
 
+  // Fetch cart count and listen for cart updates
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setCartCount(0);
+      return;
+    }
+
+    const fetchCartCount = async () => {
+      try {
+        const res = await api.get("/cart/get-cart");
+        const items = res.data?.cart?.cartItems || [];
+        setCartCount(Array.isArray(items) ? items.length : 0);
+      } catch (err) {
+        setCartCount(0);
+      }
+    };
+
+    fetchCartCount();
+
+    const onCartUpdated = () => fetchCartCount();
+    window.addEventListener("cartUpdated", onCartUpdated);
+    return () => window.removeEventListener("cartUpdated", onCartUpdated);
+  }, [isAuthenticated]);
+
+  // Fetch notification count (total)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setNotifCount(0);
+      return;
+    }
+    let cancelled = false;
+    const fetchNotifCount = async () => {
+      try {
+        const res = await api.get("/users/notifications/count");
+        if (!cancelled) setNotifCount(Number(res.data?.total || 0));
+      } catch (e) {
+        if (!cancelled) setNotifCount(0);
+      }
+    };
+
+    fetchNotifCount();
+
+    // Optional: refresh on visibility change
+    const onFocus = () => fetchNotifCount();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isAuthenticated]);
+
   const openDropdown = () => {
     if (closeTimeoutRef.current) {
       clearTimeout(closeTimeoutRef.current);
@@ -105,8 +158,7 @@ export default function AuthSection({
     };
   }, []);
 
-  const hasNotification = true;
-  const notif = [1, 2];
+  const hasNotification = notifCount > 0;
 
   return (
     <div
@@ -117,7 +169,7 @@ export default function AuthSection({
       {/* Cart Section (shared) */}
       <button
         onClick={handleCartClick}
-        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+        className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
         aria-label="Shopping cart"
       >
         <img
@@ -125,6 +177,11 @@ export default function AuthSection({
           alt="Cart"
           className="w-6 h-6 object-contain"
         />
+        {cartCount > 0 && (
+          <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
+            {cartCount}
+          </span>
+        )}
       </button>
 
       {/* Auth Section */}
@@ -163,7 +220,7 @@ export default function AuthSection({
                 />
                 {hasNotification && (
                   <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
-                    {notif.length}
+                    {notifCount}
                   </span>
                 )}
               </div>
@@ -173,8 +230,7 @@ export default function AuthSection({
               <div className="absolute top-full left-0 z-50 w-64">
                 <NotificationDropdown
                   isOpen={isOpen}
-                  onToggle={setIsOpen}
-                  notifications={notif}
+                  onToggle={() => setIsOpen(false)}
                 />
               </div>
             )}

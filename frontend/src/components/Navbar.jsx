@@ -19,6 +19,7 @@ const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [userData, setUserData] = useState(null);
+  const [cartCount, setCartCount] = useState(0);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
@@ -58,6 +59,28 @@ const Navbar = () => {
       navigate("/cart");
     }
   };
+
+  // Fetch cart count for mobile icon and listen for updates
+  useEffect(() => {
+    const fetchCartCount = async () => {
+      if (!isAuthenticated()) {
+        setCartCount(0);
+        return;
+      }
+      try {
+        const res = await api.get("/cart/get-cart");
+        const items = res.data?.cart?.cartItems || [];
+        setCartCount(Array.isArray(items) ? items.length : 0);
+      } catch (err) {
+        setCartCount(0);
+      }
+    };
+
+    fetchCartCount();
+    const onCartUpdated = () => fetchCartCount();
+    window.addEventListener("cartUpdated", onCartUpdated);
+    return () => window.removeEventListener("cartUpdated", onCartUpdated);
+  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -193,9 +216,14 @@ const Navbar = () => {
               <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleCartClick}
-                  className="p-2 text-gray-600 hover:text-blue-600 transition-colors duration-200"
+                  className="relative p-2 text-gray-600 hover:text-blue-600 transition-colors duration-200"
                 >
                   <ShoppingCart className="w-6 h-6" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
+                      {cartCount}
+                    </span>
+                  )}
                 </button>
 
                 <Link

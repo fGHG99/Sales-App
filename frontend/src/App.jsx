@@ -44,7 +44,9 @@ import UserLocation from "./components/courier/pages/UserLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
 import NotificationsPage from "./components/User/pages/NotificationsPage";
 import api from "./utils/api";
-import ProtectedRoute from "./components/Middleware";
+import ProtectedRoute from "./components/middleware/ProtecedRoute";
+import PermissionBasedRoute from "./components/middleware/Rbac";
+import AccessDeniedPage from "./components/AccessDeniedPage";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -142,7 +144,9 @@ const router = createBrowserRouter([
     path: "/order",
     element: (
       <ProtectedRoute>
-        <Layout />
+        {/* <PermissionBasedRoute requiredPermissions={["order.create"]}> */}
+          <Layout />
+          {/* </PermissionBasedRoute> */}
       </ProtectedRoute>
     ),
     children: [
@@ -208,6 +212,10 @@ const router = createBrowserRouter([
         <SupportDashboard />
       </ProtectedRoute>
     ),
+  },
+  {
+    path: "/access-denied",
+    element: <AccessDeniedPage />,
   },
   { path: "*", element: <NotFound /> },
 ]);
