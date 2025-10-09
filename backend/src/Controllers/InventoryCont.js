@@ -77,4 +77,61 @@ router.get("/", authenticate, async (req, res) => {
   }
 });
 
+// GET /inventory/search?q=...&limit=10 - Lightweight search endpoint (public)
+router.get("/search", async (req, res) => {
+  try {
+    const { q } = req.query;
+    let { limit } = req.query;
+
+    const searchQuery = (q || "").toString().trim();
+    if (!searchQuery) {
+      return res.status(400).json({ message: "Query parameter q is required" });
+    }
+
+    const maxLimit = 20;
+    const defaultLimit = 10;
+    const parsedLimit = Number.parseInt(limit, 10);
+    const take = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), maxLimit)
+      : defaultLimit;
+
+    const products = await prisma.product.findMany({
+      where: {
+        isDeleted: false,
+        isActive: true,
+        name: { contains: searchQuery, mode: "insensitive" },
+      },
+      select: {
+        id: true,
+        name: true,
+        // pick one thumbnail if exists
+        images: {
+          select: { thumbnailUrl: true, url: true },
+          take: 1,
+        },
+        // optionally include price if needed by UI; keep minimal
+        // sellingPrice: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+    });
+
+    // flatten first image
+    const payload = products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      thumbnailUrl: p.images?.[0]?.thumbnailUrl || p.images?.[0]?.url || null,
+    }));
+
+    return res.status(200).json({
+      message: "Search results",
+      results: payload,
+      count: payload.length,
+    });
+  } catch (error) {
+    console.error("❌ Product search error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 export default router;

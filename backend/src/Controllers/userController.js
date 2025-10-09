@@ -88,6 +88,98 @@ router.post("/create", async (req, res) => {
   }
 });
 
+// Get notifications for the authenticated user
+router.get("/notifications", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { type, limit, cursor } = req.query;
+
+    const maxLimit = 50;
+    const defaultLimit = 20;
+    const parsedLimit = Number.parseInt(limit, 10);
+    const take = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), maxLimit)
+      : defaultLimit;
+
+    const whereClause = {
+      userId,
+      ...(type ? { type: type } : {}),
+    };
+
+    const notifications = await prisma.notification.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        hasRead: true,
+        metadata: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+
+    const nextCursor =
+      notifications.length === take
+        ? notifications[notifications.length - 1].id
+        : null;
+
+    return res.json({
+      notifications,
+      nextCursor,
+      count: notifications.length,
+    });
+  } catch (error) {
+    console.error("Get notifications error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get notification counts (all, ORDER, INFO)
+router.get("/notifications/count", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [allCount, orderCount, infoCount] = await Promise.all([
+      prisma.notification.count({ where: { userId } }),
+      prisma.notification.count({ where: { userId, type: "ORDER" } }),
+      prisma.notification.count({ where: { userId, type: "INFO" } }),
+    ]);
+
+    return res.json({ total: allCount, ORDER: orderCount, INFO: infoCount });
+  } catch (error) {
+    console.error("Get notifications count error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Mark a notification as read
+router.patch("/notifications/:id/read", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const notif = await prisma.notification.findFirst({
+      where: { id, userId },
+    });
+    if (!notif)
+      return res.status(404).json({ error: "Notification not found" });
+
+    const updated = await prisma.notification.update({
+      where: { id },
+      data: { hasRead: true },
+      select: { id: true, hasRead: true },
+    });
+    return res.json({ notification: updated });
+  } catch (error) {
+    console.error("Mark notification read error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/test", authenticate, authorize("VIEW_TEST"), async (req, res) => {
   res.send("hi");
 });
@@ -102,8 +194,8 @@ router.get("/me", authenticate, async (req, res) => {
       include: {
         image: true,
         addresses: true,
-        role: true, 
-      }
+        role: true,
+      },
     });
 
     if (!user) {
@@ -115,6 +207,44 @@ router.get("/me", authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error("Get user data error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get access permissions owned by the authenticated user's role
+router.get("/permissions", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              where: { isDeleted: false },
+              select: { id: true, accessKey: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user || !user.role) {
+      return res.status(404).json({ error: "Role not found for user" });
+    }
+
+    const permissions = user.role.permissions.map((p) => p.accessKey);
+
+    return res.json({
+      role: {
+        id: user.role.id,
+        name: user.role.name,
+      },
+      permissions,
+    });
+  } catch (error) {
+    console.error("Get permissions error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

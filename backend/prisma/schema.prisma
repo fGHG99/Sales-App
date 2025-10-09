@@ -73,6 +73,11 @@ enum DeliveryType {
   PICKUP_TO_STORE
 }
 
+enum NotificationType {
+  INFO
+  ORDER
+}
+
 model User {
   id       String  @id @default(uuid()) @db.Uuid
   name     String  @db.VarChar(100)
@@ -116,14 +121,18 @@ model User {
 }
 
 model Notification {
-  id        String   @id @default(uuid()) @db.Uuid
-  title     String   @db.VarChar(100)
-  message   String   @db.Text
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType @default(INFO)
+  title     String           @db.VarChar(100)
+  message   String           @db.Text
+  hasRead   Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
 
+  @@index([type])
   @@map("notifications")
-} 
+}
 
 model Cart {
   id String @id @default(uuid()) @db.Uuid

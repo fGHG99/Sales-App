@@ -1,6 +1,7 @@
 import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate } from "../Middlewares/accessControl.js";
+import { getIO } from "../../utils/socket.js";
 
 // ==================== GET ORDER ROUTES ====================
 
@@ -484,6 +485,10 @@ router.post("/checkout", async (req, res) => {
         id: true,
         name: true,
         sellingPrice: true,
+        images: {
+          select: { url: true, thumbnailUrl: true, altText: true },
+          take: 1,
+        },
       },
     });
 
@@ -500,6 +505,9 @@ router.post("/checkout", async (req, res) => {
           id: product.id,
           name: product.name,
           sellingPrice: product.sellingPrice,
+          image: product.images?.[0]?.url || null,
+          thumbnailUrl: product.images?.[0]?.thumbnailUrl || null,
+          altText: product.images?.[0]?.altText || null,
         },
       };
     });
@@ -581,6 +589,52 @@ router.post("/checkout", async (req, res) => {
         cartItems: remainingCartItems,
       },
     });
+
+    // Buat notifikasi untuk user
+    const notificationItems = cartItemsWithProducts.map((item) => ({
+      productId: item.productId,
+      productName: item.product.name,
+      quantity: item.quantity,
+      pricePerItem: Number(item.product.sellingPrice),
+      total: Number(item.product.sellingPrice) * item.quantity,
+      imageUrl: item.product.image,
+      thumbnailUrl: item.product.thumbnailUrl,
+      altText: item.product.altText,
+    }));
+
+    const notification = await prisma.notification.create({
+      data: {
+        userId,
+        type: "ORDER",
+        title: "Pesanan dibuat",
+        message: `Pesanan ${order.id} berhasil dibuat`,
+        metadata: {
+          orderId: order.id,
+          total,
+          deliveryType,
+          itemCount: orderItems.length,
+          items: notificationItems,
+        },
+      },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        metadata: true,
+        createdAt: true,
+      },
+    });
+
+    // Emit realtime notification via Socket.IO ke room user
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(`user:${userId}`).emit("notification:new", notification);
+      }
+    } catch (emitErr) {
+      console.warn("Socket emit failed:", emitErr?.message);
+    }
 
     // Format response: nama produk, quantity, total per item
     const summary = cartItemsWithProducts.map((item) => {
