@@ -158,10 +158,19 @@ router.post("/login", async (req, res) => {
   const { identifier, password, rememberMe } = req.body;
 
   try {
-    // 1. cari user berdasarkan email atau phone
+    // 1. Cari user berdasarkan email atau phone, include role
     const user = await prisma.user.findFirst({
       where: {
         OR: [{ email: identifier }, { phone: identifier }],
+      },
+      include: {
+        role: {
+          select: {
+            id: true,
+            name: true,
+            roleType: true,
+          },
+        },
       },
     });
 
@@ -226,7 +235,7 @@ router.post("/login", async (req, res) => {
 });
 
 // === REFRESH TOKEN ===
-router.post("/refresh", (req, res) => {
+router.post("/refresh", async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) {
     return res
@@ -237,13 +246,36 @@ router.post("/refresh", (req, res) => {
   try {
     const payload = jwt.verify(refreshToken, process.env.JWT_SECRET);
 
+    // Fetch user data with role
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: {
+        role: {
+          select: {
+            id: true,
+            name: true,
+            roleType: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     const newAccessToken = jwt.sign(
       { userId: payload.userId },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
 
-    res.json({ NewAccessToken: newAccessToken });
+    // Return both token and user data
+    const { password, verifyToken, ...userWithoutPassword } = user;
+    res.json({
+      NewAccessToken: newAccessToken,
+      user: userWithoutPassword,
+    });
   } catch (err) {
     return res
       .status(403)

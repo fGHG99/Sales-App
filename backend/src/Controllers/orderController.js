@@ -2,6 +2,10 @@ import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate } from "../Middlewares/accessControl.js";
 import { getIO } from "../../utils/socket.js";
+import {
+  findBestCourier,
+  assignCourierToOrder,
+} from "../utils/courierAssignment.js";
 
 // ==================== GET ORDER ROUTES ====================
 
@@ -636,6 +640,134 @@ router.post("/checkout", async (req, res) => {
       console.warn("Socket emit failed:", emitErr?.message);
     }
 
+    // ==================== AUTO-ASSIGN COURIER ====================
+    // Only auto-assign for DELIVERY type orders
+    let assignedCourier = null;
+    if (deliveryType === "DELIVERY") {
+      try {
+        // Get postal code from delivery address
+        const deliveryAddress = await prisma.address.findUnique({
+          where: { id: deliveryAddressId },
+          select: {
+            postalCode: true,
+            fullAddress: true,
+            street: true,
+            city: true,
+            province: true,
+          },
+        });
+
+        // Get customer data for courier notification
+        const customerData = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+          },
+        });
+
+        if (deliveryAddress?.postalCode) {
+          // Find best courier for this postal code
+          const bestCourier = await findBestCourier(deliveryAddress.postalCode);
+
+          if (bestCourier) {
+            // Assign courier to order
+            const updatedOrder = await assignCourierToOrder(
+              order.id,
+              bestCourier.id
+            );
+
+            assignedCourier = updatedOrder.courier;
+
+            // Send notification to courier via Socket.IO
+            const io = getIO();
+            if (io) {
+              try {
+                const courierNotification = await prisma.notification.create({
+                  data: {
+                    userId: bestCourier.id,
+                    type: "ORDER",
+                    title: "Pengantaran Baru",
+                    message: `Anda ditugaskan untuk mengantarkan pesanan #${order.id.substring(
+                      0,
+                      8
+                    )} ke ${
+                      deliveryAddress.city || deliveryAddress.postalCode
+                    }`,
+                    metadata: {
+                      orderId: order.id,
+                      deliveryAddressId: deliveryAddressId,
+                      postalCode: deliveryAddress.postalCode,
+                      pickupTime: order.pickupTime,
+                      itemCount: orderItems.length,
+                      deliveryFee: Number(order.deliveryFee),
+                    },
+                  },
+                });
+
+                // Emit to courier with complete order data
+                io.to(`user:${bestCourier.id}`).emit(
+                  "new-delivery-assignment",
+                  {
+                    orderId: order.id,
+                    message: courierNotification.message,
+                    notification: {
+                      id: courierNotification.id,
+                      title: courierNotification.title,
+                      message: courierNotification.message,
+                      type: courierNotification.type,
+                      createdAt: courierNotification.createdAt,
+                      metadata: courierNotification.metadata,
+                    },
+                    order: {
+                      id: order.id,
+                      orderStatus: order.orderStatus,
+                      subtotal: Number(order.subtotal),
+                      deliveryFee: Number(order.deliveryFee),
+                      deliveryAddress: {
+                        id: deliveryAddressId,
+                        fullAddress:
+                          deliveryAddress.fullAddress || deliveryAddress.street,
+                        city: deliveryAddress.city,
+                        province: deliveryAddress.province,
+                        postalCode: deliveryAddress.postalCode,
+                      },
+                      itemCount: orderItems.length,
+                      customer: {
+                        id: customerData?.id,
+                        name: customerData?.name || "Customer",
+                        phone: customerData?.phone || "-",
+                        email: customerData?.email,
+                      },
+                    },
+                  }
+                );
+
+                console.log(
+                  `📱 Delivery assignment notification sent to courier ${bestCourier.name} (${bestCourier.id})`
+                );
+              } catch (notifErr) {
+                console.error(
+                  "❌ Error creating courier notification:",
+                  notifErr
+                );
+              }
+            }
+          } else {
+            console.warn(
+              `⚠️ No courier available for postal code: ${deliveryAddress.postalCode}`
+            );
+            // Order tetap dibuat, tapi belum ada courier assigned
+          }
+        }
+      } catch (courierErr) {
+        console.error("❌ Error assigning courier:", courierErr);
+        // Don't fail order creation if courier assignment fails
+      }
+    }
+
     // Format response: nama produk, quantity, total per item
     const summary = cartItemsWithProducts.map((item) => {
       const itemTotal = Number(item.product.sellingPrice) * item.quantity;
@@ -658,6 +790,13 @@ router.post("/checkout", async (req, res) => {
         cashAmount: Number(order.cashAmount),
         changeAmount: Number(order.changeAmount),
         deliveryType: order.deliveryType,
+        courier: assignedCourier
+          ? {
+              id: assignedCourier.id,
+              name: assignedCourier.name,
+              phone: assignedCourier.phone,
+            }
+          : null,
         pickupStore: order.pickupStore
           ? {
               id: order.pickupStore.id,

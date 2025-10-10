@@ -3,17 +3,22 @@ import jwt from "jsonwebtoken";
 
 /**
  * Middleware untuk cek akses endpoint berdasarkan accessKey
- * @param {string} accessKey - nama akses key yg dibutuhkan untuk endpoint ini
+ * @param {string} accessKey - Access key yang dibutuhkan untuk endpoint ini
+ * @returns {Function} Express middleware function
+ *
+ * Usage:
+ * router.get("/endpoint", authenticate, authorize("permission.view"), handler);
  */
-
-export function authorize(accessKey) {
+export const authorize = (accessKey) => {
   return async (req, res, next) => {
     try {
-      // Ambil user dari request (misalnya sudah di-attach di auth middleware)
+      // Ambil user dari request (sudah di-inject oleh authenticate middleware)
       const userId = req.user?.id;
 
       if (!userId) {
-        return res.status(401).json({ error: "Unauthorized: User not found" });
+        return res.status(401).json({
+          error: "Unauthorized: User not authenticated",
+        });
       }
 
       // Cari user beserta role dan permissions
@@ -21,49 +26,84 @@ export function authorize(accessKey) {
         where: { id: userId },
         include: {
           role: {
+            where: { isDeleted: false },
             include: {
-              permissions: true,
+              permissions: {
+                where: { isDeleted: false },
+              },
             },
           },
         },
       });
 
-      if (!user || !user.role) {
-        return res
-          .status(401)
-          .json({ error: "Unauthorized: No role assigned" });
+      if (!user) {
+        return res.status(401).json({
+          error: "Unauthorized: User not found",
+        });
+      }
+
+      if (!user.role) {
+        return res.status(403).json({
+          error: "Forbidden: No role assigned to user",
+        });
+      }
+
+      // Cek apakah user sudah dihapus (soft delete)
+      if (user.isDeleted) {
+        return res.status(403).json({
+          error: "Forbidden: User account is disabled",
+        });
+      }
+
+      // Cek apakah role sudah dihapus (soft delete)
+      if (user.role.isDeleted) {
+        return res.status(403).json({
+          error: "Forbidden: User role is disabled",
+        });
       }
 
       // Cek apakah role user punya accessKey yang sesuai
       const hasAccess = user.role.permissions.some(
-        (perm) => perm.acccess_key === accessKey && !perm.is_deleted
+        (perm) => perm.accessKey === accessKey && !perm.isDeleted
       );
 
       if (!hasAccess) {
-        return res.status(401).json({ error: "Unauthorized: Access denied" });
+        return res.status(403).json({
+          error: "Forbidden: Insufficient permissions",
+          required: accessKey,
+        });
       }
 
       // Jika lolos → lanjut ke handler berikutnya
       next();
     } catch (err) {
       console.error("Authorization error:", err);
-      return res.status(500).json({ error: "Internal Server Error" });
+      return res.status(500).json({
+        error: "Internal Server Error during authorization",
+      });
     }
   };
-}
+};
 
-//middleware hybrid auth dari access token dan refresh token, melakukan inject ke dalam req.user
-export function authenticate(req, res, next) {
+/**
+ * Hybrid authentication middleware
+ * Verifies user from Access Token (Bearer) or Refresh Token (HTTP-only cookie)
+ * Injects user data into req.user
+ *
+ * Usage:
+ * router.get("/endpoint", authenticate, handler);
+ */
+export const authenticate = (req, res, next) => {
   try {
     const authHeader = req.headers["authorization"];
     const accessToken = authHeader && authHeader.split(" ")[1];
     const refreshToken = req.cookies?.refreshToken;
 
-    // Step 1: coba verify Access Token
+    // Step 1: Try to verify Access Token
     if (accessToken) {
       try {
         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-        // Only set properties that exist in the decoded token
+        // Set user properties from decoded token
         req.user = {
           id: decoded.userId || decoded.id,
           ...(decoded.email && { email: decoded.email }),
@@ -71,16 +111,16 @@ export function authenticate(req, res, next) {
         return next();
       } catch (err) {
         console.warn(
-          "Access token invalid/expired, fallback ke refresh token..."
+          "Access token invalid/expired, attempting refresh token fallback..."
         );
       }
     }
 
-    // Step 2: kalau accessToken gagal → coba verify Refresh Token
+    // Step 2: If access token fails → try Refresh Token
     if (refreshToken) {
       try {
         const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-        // Only set properties that exist in the decoded token
+        // Set user properties from decoded token
         req.user = {
           id: decoded.userId || decoded.id,
           ...(decoded.email && { email: decoded.email }),
@@ -91,10 +131,14 @@ export function authenticate(req, res, next) {
       }
     }
 
-    // Step 3: kalau dua-duanya gagal
-    return res.status(401).json({ error: "session expired, try re-login" });
+    // Step 3: Both tokens failed
+    return res.status(401).json({
+      error: "Unauthorized: Session expired, please login again",
+    });
   } catch (err) {
-    console.error("Hybrid auth error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("Authentication error:", err);
+    return res.status(500).json({
+      error: "Internal server error during authentication",
+    });
   }
-}
+};

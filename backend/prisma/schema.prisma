@@ -91,6 +91,9 @@ model User {
   isDeleted   Boolean @default(false)
   isVerified  Boolean @default(false)
 
+  // Courier workspace - array of postal codes
+  workAreaPostalCodes String[] // e.g., ["40111", "40112", "40113"]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -221,6 +224,7 @@ model Role {
   roleType    String?            @unique @db.VarChar(50) // superadmin, admin, courier, user, itsupport
   isDefault   Boolean            @default(false) // true for "user" role
   isSystem    Boolean            @default(false) // cannot be deleted
+  isDeleted Boolean @default(false)
   createdAt   DateTime           @default(now())
   users       User[]
   permissions AccessPermission[] @relation("RolePermissions")
@@ -252,6 +256,7 @@ model Order {
   deliveryType DeliveryType // DELIVERY atau PICKUP_TO_STORE
   deliveryFee  Decimal      @db.Decimal(10, 0) // Biaya pengiriman
   pickupTime   DateTime? // Waktu pickup (jika PICKUP_TO_STORE)
+  deliveryProof String? @db.VarChar(255) // Path to delivery proof photo
 
   // Order items stored as JSON
   orderItems Json?

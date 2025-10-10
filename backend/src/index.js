@@ -1,7 +1,8 @@
 import express from "express";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
-import { setIO } from "../utils/socket.js";
+import { setIO, initializeSocketHandlers } from "../utils/socket.js";
+import { connectRedis } from "../utils/redis.js";
 import cookieParser from "cookie-parser";
 import cors from "cors"; // ✅ import cors
 import userRoute from "./Controllers/userController.js";
@@ -10,8 +11,11 @@ import addressRoute from "./Controllers/addressCont.js";
 import courierLoc from "./Controllers/courierLocCont.js";
 import cartRoutes from "./Controllers/cartController.js";
 import orderRoutes from "./Controllers/orderController.js";
+import courierOrderRoutes from "./Controllers/courierOrderController.js";
+import notificationRoutes from "./Controllers/notificationController.js";
 import inventoryRoutes from "./Controllers/InventoryCont.js";
 import storeRoute from "./Controllers/storeController.js";
+import supportRoute from "./Controllers/supportController.js";
 import { PORT, HOST } from "../utils/serverConf.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -29,21 +33,20 @@ const io = new SocketIOServer(server, {
 
 setIO(io);
 
-io.on("connection", (socket) => {
-  console.log("🔌 Client connected:", socket.id);
+// Initialize Socket.IO event handlers (includes courier location tracking)
+initializeSocketHandlers(io);
 
-  // Client should join a room with their userId to receive personal notifications
-  socket.on("join", ({ userId }) => {
-    if (userId) {
-      socket.join(`user:${userId}`);
-      console.log(`👤 Socket ${socket.id} joined room user:${userId}`);
-    }
+// Initialize Redis connection
+connectRedis()
+  .then(() => {
+    console.log("✅ Redis initialized successfully");
+  })
+  .catch((err) => {
+    console.error("❌ Failed to initialize Redis:", err);
+    console.warn(
+      "⚠️ Server will continue without Redis (location tracking disabled)"
+    );
   });
-
-  socket.on("disconnect", () => {
-    console.log("🔌 Client disconnected:", socket.id);
-  });
-});
 
 // ✅ Tambahkan konfigurasi CORS
 app.use(
@@ -70,6 +73,12 @@ app.use(
   express.static(path.join(__dirname, "../uploads/profile-pictures"))
 );
 
+// Delivery proofs - Publicly accessible for customer verification
+app.use(
+  "/uploads/delivery-proofs",
+  express.static(path.join(__dirname, "../uploads/delivery-proofs"))
+);
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -87,6 +96,9 @@ app.use("/courier", courierLoc);
 app.use("/inventory", inventoryRoutes);
 app.use("/cart", cartRoutes);
 app.use("/order", orderRoutes);
+app.use("/orders", courierOrderRoutes); // Courier order management
+app.use("/notifications", notificationRoutes); // Notification management
+app.use("/support", supportRoute);
 app.use("/address", addressRoute);
 
 // Start the server
