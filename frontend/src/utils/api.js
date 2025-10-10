@@ -19,6 +19,22 @@ api.interceptors.request.use(
   }
 );
 
+// Track ongoing refresh to prevent multiple simultaneous refresh attempts
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
 // Response interceptor - handles token refresh
 api.interceptors.response.use(
   (response) => {
@@ -31,10 +47,32 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      // Skip refresh for auth endpoints to prevent infinite loops
+      if (originalRequest.url?.includes("/auth/")) {
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        // If refresh is already in progress, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => {
+            return Promise.reject(err);
+          });
+      }
+
+      isRefreshing = true;
+
       try {
         // Call refresh endpoint - refreshToken is sent automatically via HTTP-only cookie
         const response = await axios.post(
           `${import.meta.env.VITE_BE_API_URL}/auth/refresh`,
+          {},
           { withCredentials: true }
         );
 
@@ -43,15 +81,25 @@ api.interceptors.response.use(
         // Update access token in localStorage
         localStorage.setItem("accessToken", NewAccessToken);
 
+        // Process any queued requests
+        processQueue(null, NewAccessToken);
+
         // Retry the original request with new token
         originalRequest.headers.Authorization = `Bearer ${NewAccessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh token is invalid or expired - logout user
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("user");
-        window.location.href = "/auth/signin";
+        // Process queue with error
+        processQueue(refreshError, null);
+
+        // Only redirect if it's a 401 (invalid refresh token)
+        if (refreshError.response?.status === 401) {
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("user");
+          window.location.href = "/auth/signin";
+        }
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 

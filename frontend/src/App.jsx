@@ -5,6 +5,7 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
+import RootLayout from "./components/RootLayout";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
 import Register from "./components/Register";
@@ -106,118 +107,130 @@ const EmailVerificationPage = () => {
 
 const router = createBrowserRouter([
   {
-    path: "/",
-    element: <Layout />,
+    element: <RootLayout />,
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: "category/:categoryName", element: <CategoryPage /> },
-      { path: "search", element: <ProductPageResult /> },
-      { path: "cart", element: <Cart /> },
-      { path: "terms-conditions", element: <TermsConditions /> },
-      { path: "p/:productname", element: <ProductDetail /> },
-      { path: "notifications", element: <NotificationsPage /> },
+      {
+        path: "/",
+        element: <Layout />,
+        children: [
+          { index: true, element: <Dashboard /> },
+          { path: "category/:categoryName", element: <CategoryPage /> },
+          { path: "search", element: <ProductPageResult /> },
+          { path: "cart", element: <Cart /> },
+          { path: "terms-conditions", element: <TermsConditions /> },
+          { path: "p/:productname", element: <ProductDetail /> },
+          { path: "notifications", element: <NotificationsPage /> },
+        ],
+      },
+      {
+        path: "/auth",
+        element: <AuthLayout />,
+        children: [
+          { path: "signin", element: <Login /> },
+          { path: "signup", element: <Register /> },
+          { path: "verify-email", element: <EmailVerificationPage /> },
+        ],
+      },
+      {
+        path: "/user",
+        element: (
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { path: "orders", element: <OrderHistory /> },
+          { path: "profile", element: <EditProfile /> },
+          { path: "addresses", element: <AddressSearchWithHandler /> },
+        ],
+      },
+      {
+        path: "/order",
+        element: (
+          <ProtectedRoute>
+            {/* <PermissionBasedRoute requiredPermissions={["order.create"]}> */}
+            <Layout />
+            {/* </PermissionBasedRoute> */}
+          </ProtectedRoute>
+        ),
+        children: [
+          { path: "checkout/:orderId", element: <OrderCheckout /> },
+          { path: "track/:orderId", element: <CourierTracking /> },
+        ],
+      },
+      {
+        path: "/courier",
+        element: (
+          <ProtectedRoute>
+            <PermissionBasedRoute requiredPermissions={["courier.access"]}>
+              <Navigation />
+            </PermissionBasedRoute>
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <CourierDashboard /> },
+          { path: "orders", element: <OrdersPage /> },
+          { path: "profile", element: <ProfilePage /> },
+          { path: "forgot-password", element: <ForgotPassword /> },
+          { path: "order/:orderId", element: <MapNavigation /> },
+          {
+            path: "customer-location/order/:orderId",
+            element: <UserLocation />,
+          },
+        ],
+      },
+      {
+        path: "/admin",
+        element: (
+          <ProtectedRoute>
+            <PermissionBasedRoute requiredPermissions={["admin.access"]}>
+              <AdminLayout />
+            </PermissionBasedRoute>
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <AdminDashboard /> },
+          { path: "orders", element: <OrderManagement /> },
+          { path: "couriers", element: <AdminCourierTracking /> },
+          { path: "disputes", element: <DisputesManagement /> },
+          { path: "analytics", element: <SalesAnalytics /> },
+        ],
+      },
+      {
+        path: "/s-admin",
+        element: (
+          <ProtectedRoute>
+            <PermissionBasedRoute requiredPermissions={["superadmin.access"]}>
+              <SuperAdminLayout />
+            </PermissionBasedRoute>
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <SuperAdminDashboard /> },
+          { path: "stores", element: <StoreManagement /> },
+          { path: "orders", element: <SuperAdminOrderManagement /> },
+          { path: "products", element: <ProductManagement /> },
+          { path: "fees", element: <FeeSetup /> },
+          { path: "reports", element: <GlobalReports /> },
+        ],
+      },
+      {
+        path: "/support",
+        element: (
+          <ProtectedRoute>
+            <PermissionBasedRoute requiredPermissions={["support.access"]}>
+              <SupportDashboard />
+            </PermissionBasedRoute>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/access-denied",
+        element: <AccessDeniedPage />,
+      },
+      { path: "*", element: <NotFound /> },
     ],
   },
-  {
-    path: "/auth",
-    element: <AuthLayout />,
-    children: [
-      { path: "signin", element: <Login /> },
-      { path: "signup", element: <Register /> },
-      { path: "verify-email", element: <EmailVerificationPage /> },
-    ],
-  },
-  {
-    path: "/user",
-    element: (
-      <ProtectedRoute>
-        <Layout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { path: "orders", element: <OrderHistory /> },
-      { path: "profile", element: <EditProfile /> },
-      { path: "addresses", element: <AddressSearchWithHandler /> },
-    ],
-  },
-  {
-    path: "/order",
-    element: (
-      <ProtectedRoute>
-        {/* <PermissionBasedRoute requiredPermissions={["order.create"]}> */}
-          <Layout />
-          {/* </PermissionBasedRoute> */}
-      </ProtectedRoute>
-    ),
-    children: [
-      { path: "checkout/:orderId", element: <OrderCheckout /> },
-      { path: "track/:orderId", element: <CourierTracking /> },
-    ],
-  },
-  {
-    path: "/courier",
-    element: (
-      <ProtectedRoute>
-        <Navigation />
-      </ProtectedRoute>
-    ),
-    children: [
-      { index: true, element: <CourierDashboard /> },
-      { path: "orders", element: <OrdersPage /> },
-      { path: "profile", element: <ProfilePage /> },
-      { path: "forgot-password", element: <ForgotPassword /> },
-      { path: "order/:orderId", element: <MapNavigation /> },
-      { path: "customer-location/order/:orderId", element: <UserLocation /> },
-    ],
-  },
-  {
-    path: "/admin",
-    element: (
-      <ProtectedRoute>
-        <AdminLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { index: true, element: <AdminDashboard /> },
-      { path: "orders", element: <OrderManagement /> },
-      { path: "couriers", element: <AdminCourierTracking /> },
-      { path: "disputes", element: <DisputesManagement /> },
-      { path: "analytics", element: <SalesAnalytics /> },
-    ],
-  },
-  {
-    path: "/s-admin",
-    element: (
-      <ProtectedRoute>
-        <SuperAdminLayout />
-      </ProtectedRoute>
-    ),
-    children: [
-      { index: true, element: <SuperAdminDashboard /> },
-      { path: "stores", element: <StoreManagement /> },
-      // { path: "accounts", element: <AccountManagement /> },
-      // { path: "roles", element: <RoleManagement /> },
-      { path: "orders", element: <SuperAdminOrderManagement /> },
-      { path: "products", element: <ProductManagement /> },
-      { path: "fees", element: <FeeSetup /> },
-      // { path: "system", element: <SystemConfiguration /> },
-      { path: "reports", element: <GlobalReports /> },
-      // { path: "audit", element: <AuditLog /> },
-    ],
-  },
-  {
-    path: "/support",
-    element: (
-      <ProtectedRoute>
-        <SupportDashboard />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/access-denied",
-    element: <AccessDeniedPage />,
-  },
-  { path: "*", element: <NotFound /> },
 ]);
 
 function App() {

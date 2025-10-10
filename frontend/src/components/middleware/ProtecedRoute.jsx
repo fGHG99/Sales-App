@@ -1,10 +1,24 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import { useEffect, useState } from "react";
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isChecking } = useAuth();
+  const [showLoading, setShowLoading] = useState(true);
 
-  if (isChecking) {
+  // Prevent immediate redirects to reduce flickering
+  useEffect(() => {
+    if (!isChecking) {
+      // Add a small delay to prevent flickering
+      const timer = setTimeout(() => {
+        setShowLoading(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isChecking]);
+
+  // Show loading state while checking auth or during the brief delay
+  if (isChecking || showLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -16,7 +30,7 @@ const ProtectedRoute = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    console.log("🔒 ProtectedRoute: Redirecting to login");
+    console.log("🔒 Redirecting to login");
     return <Navigate to="/auth/signin" replace />;
   }
 

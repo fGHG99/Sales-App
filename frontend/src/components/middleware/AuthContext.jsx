@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../../utils/api";
 
 const AuthContext = createContext();
@@ -12,8 +13,56 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const [permissions, setPermissions] = useState([]); // ⬅️ Tambahkan ini
+  const [permissions, setPermissions] = useState([]);
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
+  const handleLogout = useCallback(() => {
+    console.log("🚪 Logging out user");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
+    setUser(null);
+    setIsAuthenticated(false);
+    setPermissions([]);
+    navigate("/auth/signin");
+  }, [navigate]);
+
+  // Role-based redirect function
+  const redirectBasedOnRole = useCallback(
+    (userData) => {
+      const roleType = userData?.role?.roleType;
+
+      console.log("🔀 Redirecting based on role:");
+      console.log("   User data:", userData);
+      console.log("   Role object:", userData?.role);
+      console.log("   Role type:", roleType);
+
+      switch (roleType) {
+        case "courier":
+          console.log("   ➡️ Navigating to /courier");
+          navigate("/courier", { replace: true });
+          break;
+        case "superadmin":
+          console.log("   ➡️ Navigating to /s-admin");
+          navigate("/s-admin", { replace: true });
+          break;
+        case "admin":
+          console.log("   ➡️ Navigating to /admin");
+          navigate("/admin", { replace: true });
+          break;
+        case "itsupport":
+          console.log("   ➡️ Navigating to /support");
+          navigate("/support", { replace: true });
+          break;
+        case "user":
+        default:
+          console.log("   ➡️ Navigating to / (default/user)");
+          navigate("/", { replace: true });
+          break;
+      }
+    },
+    [navigate]
+  );
 
   const checkAuth = useCallback(async () => {
     setIsChecking(true);
@@ -23,28 +72,52 @@ export const AuthProvider = ({ children }) => {
       const storedUser = localStorage.getItem("user");
 
       if (token && storedUser) {
-        setUser(JSON.parse(storedUser));
-        setIsAuthenticated(true);
-      } else {
-        // Try to refresh token using Axios interceptor
-        console.log("🔄 AuthContext: Attempting refresh via interceptor...");
-        const res = await api.post("/auth/refresh");
-        if (res.data?.NewAccessToken) {
-          localStorage.setItem("accessToken", res.data.NewAccessToken);
-          if (res.data.user) {
-            localStorage.setItem("user", JSON.stringify(res.data.user));
-            setUser(res.data.user);
-          }
+        // Validate token by making a simple API call instead of assuming it's valid
+        try {
+          await api.get("/users/permissions");
+          setUser(JSON.parse(storedUser));
           setIsAuthenticated(true);
-        } else {
-          throw new Error("Refresh failed");
+          console.log("✅ Token is valid");
+        } catch (verifyError) {
+          // Token is invalid, try to refresh
+          console.log("🔄 Token invalid, attempting refresh...");
+          await attemptTokenRefresh();
         }
+      } else {
+        // No token or user data, try to refresh using HTTP-only cookie
+        console.log("🔄 No stored token, attempting refresh...");
+        await attemptTokenRefresh();
       }
     } catch (err) {
-      console.error("❌ AuthContext: Authentication failed", err);
+      console.error("❌ Authentication failed", err);
       handleLogout();
     } finally {
       setIsChecking(false);
+    }
+  }, [handleLogout]);
+
+  const attemptTokenRefresh = useCallback(async () => {
+    try {
+      const res = await api.post("/auth/refresh");
+      if (res.data?.NewAccessToken) {
+        localStorage.setItem("accessToken", res.data.NewAccessToken);
+        if (res.data.user) {
+          localStorage.setItem("user", JSON.stringify(res.data.user));
+          setUser(res.data.user);
+        }
+        setIsAuthenticated(true);
+        console.log("✅ Token refreshed successfully");
+      } else {
+        throw new Error("No access token in refresh response");
+      }
+    } catch (refreshError) {
+      // Only throw if it's not a 401 (which means refresh token is invalid)
+      if (refreshError.response?.status === 401) {
+        console.log("🔒 Refresh token invalid or expired");
+      } else {
+        console.error("❌ Refresh attempt failed", refreshError);
+      }
+      throw refreshError;
     }
   }, []);
 
@@ -80,7 +153,10 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated,
         isChecking,
         user,
-        permissions, // ⬅️ Tambahkan ini
+        permissions,
+        handleLogout,
+        checkAuth,
+        redirectBasedOnRole,
       }}
     >
       {children}

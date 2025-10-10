@@ -4,14 +4,14 @@ import { Provider } from "react-redux";
 import { store } from "./utils/store";
 import App from "./App";
 import "./index.css";
-import { AuthProvider } from "./components/middleware/AuthContext";
+import AuthErrorBoundary from "./components/middleware/AuthErrorBoundary";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <Provider store={store}>
-      <AuthProvider>
+      <AuthErrorBoundary>
         <App />
-      </AuthProvider>
+      </AuthErrorBoundary>
     </Provider>
   </StrictMode>
 );

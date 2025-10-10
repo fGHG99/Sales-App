@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
 import api from "../utils/api";
+import { useAuth } from "./middleware/AuthContext";
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -12,7 +13,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
+  const { redirectBasedOnRole } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,12 +29,16 @@ export default function Login() {
 
       const { accessToken, user } = response.data;
 
+      console.log("📥 Login response user data:", user);
+      console.log("🎭 User role:", user?.role);
+      console.log("🏷️ User roleType:", user?.role?.roleType);
+
       // Store access token and user info in localStorage
       localStorage.setItem("accessToken", accessToken);
       localStorage.setItem("user", JSON.stringify(user));
 
-      // Redirect to home page
-      navigate("/");
+      // Redirect based on user role
+      redirectBasedOnRole(user);
     } catch (err) {
       setError(
         err.response?.data?.message || "Login failed. Please try again."
