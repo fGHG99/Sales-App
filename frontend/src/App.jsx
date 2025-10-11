@@ -42,6 +42,7 @@ import ForgotPassword from "./components/ForgotPass";
 import MapNavigation from "./components/courier/pages/MapNavigation";
 import Navigation from "./components/courier/pages/Navigation";
 import UserLocation from "./components/courier/pages/UserLocation";
+import StoreLocation from "./components/courier/pages/StoreLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
 import NotificationsPage from "./components/User/pages/NotificationsPage";
 import api from "./utils/api";
@@ -184,7 +185,7 @@ const router = createBrowserRouter([
           },
           {
             path: "store-location/order/:orderId",
-            element: <UserLocation />,
+            element: <StoreLocation />,
           },
         ],
       },

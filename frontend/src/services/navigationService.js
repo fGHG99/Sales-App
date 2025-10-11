@@ -5,8 +5,21 @@ import axios from "axios";
  * Provides route calculation and turn-by-turn navigation
  */
 
-const ORS_API_KEY = import.meta.env.VITE_OPENROUTE_API_KEY;
+const ORS_API_KEY = import.meta.env.VITE_OPENROUTE_KEY;
 const ORS_BASE_URL = "https://api.openrouteservice.org/v2";
+
+// ✅ Validate API key on module load
+// if (!ORS_API_KEY) {
+//   console.error(
+//     "❌ VITE_OPENROUTE_API_KEY is not set in environment variables"
+//   );
+//   console.warn(
+//     "⚠️ Navigation features will not work without OpenRouteService API key"
+//   );
+//   console.info(
+//     "ℹ️ Get your free API key at: https://openrouteservice.org/dev/#/signup"
+//   );
+// }
 
 /**
  * Get route directions from current location to destination
@@ -24,7 +37,18 @@ export const getRouteDirections = async (
   endLat,
   profile = "driving-car"
 ) => {
+  // ✅ Check API key before making request
+  if (!ORS_API_KEY) {
+    throw new Error(
+      "OpenRouteService API key tidak ditemukan. Silakan tambahkan VITE_OPENROUTE_API_KEY di file .env"
+    );
+  }
+
   try {
+    console.log("🗺️ Requesting route from OpenRouteService...");
+    console.log("  Start:", [startLng, startLat]);
+    console.log("  End:", [endLng, endLat]);
+
     const response = await axios.post(
       `${ORS_BASE_URL}/directions/${profile}`,
       {
@@ -38,13 +62,17 @@ export const getRouteDirections = async (
       },
       {
         headers: {
-          Authorization: ORS_API_KEY,
+          Authorization: ORS_API_KEY, // ✅ API key in Authorization header
           "Content-Type": "application/json",
         },
       }
     );
 
     const route = response.data.routes[0];
+
+    console.log("✅ Route fetched successfully");
+    console.log("  Distance:", route.summary.distance, "meters");
+    console.log("  Duration:", route.summary.duration, "seconds");
 
     return {
       distance: route.summary.distance, // in meters
@@ -55,6 +83,32 @@ export const getRouteDirections = async (
     };
   } catch (error) {
     console.error("❌ Error fetching route from OpenRouteService:", error);
+
+    // ✅ Better error messages
+    if (error.response?.status === 401) {
+      throw new Error(
+        "API key OpenRouteService tidak valid. Periksa VITE_OPENROUTE_API_KEY di file .env"
+      );
+    } else if (error.response?.status === 403) {
+      throw new Error(
+        "Akses ditolak oleh OpenRouteService. Periksa API key atau quota"
+      );
+    } else if (error.response?.status === 429) {
+      throw new Error(
+        "Terlalu banyak permintaan ke OpenRouteService. Coba lagi nanti"
+      );
+    } else if (error.response) {
+      throw new Error(
+        `OpenRouteService error: ${error.response.status} - ${
+          error.response.data?.error?.message || "Unknown error"
+        }`
+      );
+    } else if (error.request) {
+      throw new Error(
+        "Tidak dapat terhubung ke OpenRouteService. Periksa koneksi internet"
+      );
+    }
+
     throw error;
   }
 };

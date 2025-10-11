@@ -10,7 +10,8 @@ import {
 
 /**
  * Hook untuk navigasi kurir dengan OpenRouteService
- * - Update lokasi setiap 3 detik ke Redis
+ * - GPS tracking: Update setiap 3 detik (smooth map movement)
+ * - Backend updates: Update setiap 35 detik (rate limit safe)
  * - Fetch route directions from OpenRouteService
  * - Real-time ETA calculation
  * - Auto-stop when arrived at destination
@@ -27,11 +28,12 @@ const useCourierNavigation = (destination) => {
   const [hasArrived, setHasArrived] = useState(false);
 
   const watchIdRef = useRef(null);
-  const updateIntervalRef = useRef(null);
+  const backendUpdateIntervalRef = useRef(null); // ✅ For 35-second backend updates
   const lastLocationRef = useRef(null);
 
   /**
-   * Send location to backend (Redis) every 3 seconds
+   * Send location to backend (Redis) - called every 35 seconds
+   * Rate limit safe: Backend allows 1 update per 30 seconds
    */
   const sendLocationToBackend = useCallback(async (latitude, longitude) => {
     try {
@@ -41,9 +43,11 @@ const useCourierNavigation = (destination) => {
       });
       console.log("📍 Location sent to Redis:", { latitude, longitude });
     } catch (err) {
-      // Silently fail if rate limited (expected behavior)
+      // Silently fail if rate limited (shouldn't happen with 35s interval)
       if (err.response?.status !== 429) {
         console.error("❌ Failed to send location:", err);
+      } else {
+        console.warn("⚠️ Rate limit hit (unexpected with 35s interval)");
       }
     }
   }, []);
@@ -103,9 +107,9 @@ const useCourierNavigation = (destination) => {
       watchIdRef.current = null;
     }
 
-    if (updateIntervalRef.current) {
-      clearInterval(updateIntervalRef.current);
-      updateIntervalRef.current = null;
+    if (backendUpdateIntervalRef.current) {
+      clearInterval(backendUpdateIntervalRef.current);
+      backendUpdateIntervalRef.current = null;
     }
 
     setIsNavigating(false);
@@ -114,12 +118,14 @@ const useCourierNavigation = (destination) => {
 
   /**
    * Handle position update from Geolocation API
+   * ✅ GPS watchPosition updates every ~3 seconds (smooth tracking)
+   * ✅ Backend updates sent separately via interval (every 35 seconds)
    */
   const handlePositionUpdate = useCallback(
     async (position) => {
       const { latitude, longitude, accuracy } = position.coords;
 
-      console.log("📍 Position updated:", {
+      console.log("📍 GPS Position updated:", {
         lat: latitude,
         lng: longitude,
         accuracy: `${Math.round(accuracy)}m`,
@@ -135,25 +141,25 @@ const useCourierNavigation = (destination) => {
       setCurrentLocation(newLocation);
       lastLocationRef.current = newLocation;
 
-      // Check if arrived at destination (within 10 meters) ✅ Changed from 50m to 10m
+      // Check if arrived at destination (within 10 meters)
       if (destination?.latitude && destination?.longitude) {
         const arrived = isWithinRadius(
           latitude,
           longitude,
           destination.latitude,
           destination.longitude,
-          10 // ✅ 10 meter radius for arrival detection
+          10 // 10 meter radius for arrival detection
         );
 
         if (arrived && !hasArrived) {
           console.log("🎯 Arrived at destination (within 10m)!");
           setHasArrived(true);
 
-          // ✅ Auto-stop navigation after 3 seconds (give time for callback)
+          // Auto-stop navigation after 3 seconds
           setTimeout(() => {
             console.log("🛑 Auto-stopping navigation (arrived at destination)");
             stopNavigation();
-          }, 3000); // 3 second delay
+          }, 3000);
         }
       }
 
@@ -162,7 +168,7 @@ const useCourierNavigation = (destination) => {
         await fetchRoute(longitude, latitude);
       }
     },
-    [destination, route, isLoadingRoute, hasArrived, fetchRoute, stopNavigation] // ✅ stopNavigation now defined above
+    [destination, route, isLoadingRoute, hasArrived, fetchRoute, stopNavigation]
   );
 
   /**
@@ -188,6 +194,9 @@ const useCourierNavigation = (destination) => {
 
   /**
    * Start navigation and location tracking
+   * ✅ Dual Interval Pattern:
+   *    - GPS watchPosition: Updates every ~3 seconds (smooth map)
+   *    - Backend POST: Updates every 35 seconds (rate limit safe)
    */
   const startNavigation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -204,7 +213,7 @@ const useCourierNavigation = (destination) => {
     setError(null);
     setHasArrived(false);
 
-    // Start watching position with high accuracy
+    // ✅ Start GPS tracking with high accuracy (updates every ~3 seconds)
     watchIdRef.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       handlePositionError,
@@ -215,17 +224,21 @@ const useCourierNavigation = (destination) => {
       }
     );
 
-    // Send location to backend every 3 seconds
-    updateIntervalRef.current = setInterval(() => {
+    // ✅ Send location to backend every 35 seconds (rate limit safe)
+    // Backend rate limit: 1 update per 30 seconds
+    // 35 seconds = safe margin to avoid 429 errors
+    backendUpdateIntervalRef.current = setInterval(() => {
       if (lastLocationRef.current) {
         sendLocationToBackend(
           lastLocationRef.current.lat,
           lastLocationRef.current.lng
         );
       }
-    }, 3000); // ✅ 3 seconds interval
+    }, 35000); // 35 seconds interval
 
     console.log("🚀 Navigation started");
+    console.log("  → GPS tracking: ~3 second updates (smooth map)");
+    console.log("  → Backend updates: 35 second interval (rate limit safe)");
   }, [
     destination,
     handlePositionUpdate,
@@ -253,24 +266,27 @@ const useCourierNavigation = (destination) => {
 
   /**
    * Auto-stop tracking when page is hidden (battery saving)
+   * ✅ Only pause backend updates, GPS tracking continues for map
    */
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && isNavigating) {
-        console.log("📱 Page hidden - pausing location updates");
-        if (updateIntervalRef.current) {
-          clearInterval(updateIntervalRef.current);
+        console.log("📱 Page hidden - pausing backend updates (GPS continues)");
+        if (backendUpdateIntervalRef.current) {
+          clearInterval(backendUpdateIntervalRef.current);
+          backendUpdateIntervalRef.current = null;
         }
       } else if (!document.hidden && isNavigating) {
-        console.log("📱 Page visible - resuming location updates");
-        updateIntervalRef.current = setInterval(() => {
+        console.log("📱 Page visible - resuming backend updates");
+        // Restart backend update interval
+        backendUpdateIntervalRef.current = setInterval(() => {
           if (lastLocationRef.current) {
             sendLocationToBackend(
               lastLocationRef.current.lat,
               lastLocationRef.current.lng
             );
           }
-        }, 3000);
+        }, 35000); // 35 seconds
       }
     };
 

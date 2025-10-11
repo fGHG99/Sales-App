@@ -151,7 +151,7 @@ const CourierDashboard = () => {
       case "READY_FOR_PICKUP":
         return (
           <div className="flex space-x-2">
-            <Link to={`/courier/order/${order.id}`}>
+            <Link to={`/courier/store-location/order/${order.id}`}>
               <Button
                 size="sm"
                 variant="outline"

@@ -200,6 +200,59 @@ export default function OrderSummary({
         return;
       }
 
+      // ✅ Determine pickupStoreId based on delivery type
+      let pickupStoreId = null;
+
+      if (deliveryOption.type === "pickup") {
+        // For pickup, use selected store from dropdown
+        pickupStoreId = deliveryOption.storeId;
+      } else if (deliveryOption.type === "courier") {
+        // For delivery, fetch nearest store from user's address
+        try {
+          const nearestStoreResponse = await api.get("/store/nearest", {
+            params: {
+              addressId: selectedAddress,
+              limit: 1,
+            },
+          });
+
+          if (
+            nearestStoreResponse.data.stores &&
+            nearestStoreResponse.data.stores.length > 0
+          ) {
+            pickupStoreId = nearestStoreResponse.data.stores[0].id;
+            console.log(
+              `📍 Nearest store for delivery: ${nearestStoreResponse.data.stores[0].name} (${nearestStoreResponse.data.stores[0].distance} km)`
+            );
+          } else {
+            setValidationErrors([
+              "Tidak ada toko terdekat yang tersedia untuk pengiriman",
+            ]);
+            setShowConfirmModal(false);
+            setIsProcessing(false);
+            return;
+          }
+        } catch (storeError) {
+          console.error("❌ Failed to fetch nearest store:", storeError);
+          setValidationErrors([
+            "Gagal mendapatkan toko terdekat. Silakan coba lagi.",
+          ]);
+          setShowConfirmModal(false);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      // ✅ Validate pickupStoreId - required for all delivery types
+      if (!pickupStoreId) {
+        setValidationErrors([
+          "Store tidak tersedia. Silakan pilih metode pengiriman yang lain.",
+        ]);
+        setShowConfirmModal(false);
+        setIsProcessing(false);
+        return;
+      }
+
       // Prepare checkout data
       const checkoutData = {
         userId,
@@ -209,11 +262,11 @@ export default function OrderSummary({
         deliveryType:
           deliveryOption.type === "courier" ? "DELIVERY" : "PICKUP_TO_STORE",
         deliveryFee: deliveryOption.cost,
+        pickupStoreId, // ✅ Always included for both delivery types
       };
 
-      // Add pickup-specific fields if pickup option
+      // Add pickup time only for PICKUP_TO_STORE
       if (deliveryOption.type === "pickup") {
-        checkoutData.pickupStoreId = deliveryOption.storeId;
         checkoutData.pickupTime = deliveryOption.pickupTime;
       }
 
