@@ -526,7 +526,7 @@ router.post("/checkout", async (req, res) => {
       cashAmount,
       deliveryType, // 'DELIVERY' | 'PICKUP_TO_STORE'
       deliveryFee,
-      pickupStoreId, // Required jika deliveryType = PICKUP_TO_STORE
+      pickupStoreId, // ✅ Required untuk SEMUA delivery type (nearest store untuk DELIVERY, selected store untuk PICKUP_TO_STORE)
       pickupTime, // Required jika deliveryType = PICKUP_TO_STORE
     } = req.body;
 
@@ -566,31 +566,32 @@ router.post("/checkout", async (req, res) => {
       });
     }
 
+    // ✅ Validasi pickupStoreId - REQUIRED untuk semua delivery type
+    if (!pickupStoreId) {
+      return res.status(400).json({
+        message: "Pickup store ID is required for all delivery types",
+      });
+    }
+
+    // Cek apakah store exists dan active
+    const store = await prisma.store.findUnique({
+      where: { id: pickupStoreId },
+    });
+
+    if (!store) {
+      return res.status(404).json({ message: "Pickup store not found" });
+    }
+
+    if (!store.isActive || store.isDeleted) {
+      return res.status(400).json({ message: "Pickup store is not active" });
+    }
+
     // Validasi khusus untuk PICKUP_TO_STORE
     if (deliveryType === "PICKUP_TO_STORE") {
-      if (!pickupStoreId) {
-        return res.status(400).json({
-          message: "Pickup store ID is required for pickup orders",
-        });
-      }
-
       if (!pickupTime) {
         return res.status(400).json({
           message: "Pickup time is required for pickup orders",
         });
-      }
-
-      // Cek apakah store exists dan active
-      const store = await prisma.store.findUnique({
-        where: { id: pickupStoreId },
-      });
-
-      if (!store) {
-        return res.status(404).json({ message: "Pickup store not found" });
-      }
-
-      if (!store.isActive || store.isDeleted) {
-        return res.status(400).json({ message: "Pickup store is not active" });
       }
     }
 
@@ -701,8 +702,7 @@ router.post("/checkout", async (req, res) => {
         deliveryType,
         deliveryFee: Number(deliveryFee),
         orderItems: orderItems, // Store items as JSON (field name: orderItems)
-        pickupStoreId:
-          deliveryType === "PICKUP_TO_STORE" ? pickupStoreId : null,
+        pickupStoreId: pickupStoreId, // ✅ Always set for both DELIVERY and PICKUP_TO_STORE
         pickupTime:
           deliveryType === "PICKUP_TO_STORE" && pickupTime
             ? new Date(pickupTime)
@@ -712,14 +712,12 @@ router.post("/checkout", async (req, res) => {
       },
       include: {
         deliveryAddress: true,
-        pickupStore:
-          deliveryType === "PICKUP_TO_STORE"
-            ? {
-                include: {
-                  address: true,
-                },
-              }
-            : false,
+        pickupStore: {
+          // ✅ Always include pickup store for both delivery types
+          include: {
+            address: true,
+          },
+        },
       },
     });
 
