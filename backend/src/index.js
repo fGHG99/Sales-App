@@ -3,6 +3,7 @@ import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { setIO, initializeSocketHandlers } from "../utils/socket.js";
 import { connectRedis } from "../utils/redis.js";
+import { startLocationCleanup } from "../utils/cronJobs.js";
 import cookieParser from "cookie-parser";
 import cors from "cors"; // ✅ import cors
 import userRoute from "./Controllers/userController.js";
@@ -40,6 +41,8 @@ initializeSocketHandlers(io);
 connectRedis()
   .then(() => {
     console.log("✅ Redis initialized successfully");
+    // Start location cleanup cron job after Redis connected
+    startLocationCleanup();
   })
   .catch((err) => {
     console.error("❌ Failed to initialize Redis:", err);

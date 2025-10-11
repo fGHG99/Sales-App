@@ -52,23 +52,188 @@ const upload = multer({
  * OUT_FOR_DELIVERY -> DELIVERED
  * DELIVERED -> COMPLETED (after delivery proof uploaded)
  */
-router.put(
-  "/:orderId/status",
-  authenticate,
-  async (req, res) => {
+router.put("/:orderId/status", authenticate, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { newStatus, notes } = req.body;
+    const courierId = req.user.id;
+
+    // Validasi input
+    if (!newStatus) {
+      return res.status(400).json({
+        message: "New status is required",
+      });
+    }
+
+    // Valid status transitions for courier
+    const validStatuses = [
+      "IN_PREPARATION",
+      "READY_FOR_PICKUP",
+      "OUT_FOR_DELIVERY",
+      "DELIVERED",
+      "COMPLETED",
+    ];
+
+    if (!validStatuses.includes(newStatus)) {
+      return res.status(400).json({
+        message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+      });
+    }
+
+    // Find order
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        courier: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        deliveryAddress: true,
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Order not found",
+      });
+    }
+
+    // Check if courier is assigned to this order
+    if (order.courierId !== courierId) {
+      return res.status(403).json({
+        message: "You are not authorized to update this order",
+      });
+    }
+
+    // Validate status transition
+    const currentStatus = order.orderStatus;
+    const validTransitions = {
+      IN_PREPARATION: ["READY_FOR_PICKUP"],
+      READY_FOR_PICKUP: ["OUT_FOR_DELIVERY"],
+      OUT_FOR_DELIVERY: ["DELIVERED"],
+      DELIVERED: ["COMPLETED"],
+    };
+
+    if (
+      !validTransitions[currentStatus] ||
+      !validTransitions[currentStatus].includes(newStatus)
+    ) {
+      return res.status(400).json({
+        message: `Invalid status transition from ${currentStatus} to ${newStatus}`,
+        allowedTransitions: validTransitions[currentStatus] || [],
+      });
+    }
+
+    // For COMPLETED status, require delivery proof
+    if (newStatus === "COMPLETED" && !order.deliveryProof) {
+      return res.status(400).json({
+        message:
+          "Cannot mark as completed without delivery proof. Please upload delivery proof first.",
+      });
+    }
+
+    // Update order status
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        orderStatus: newStatus,
+      },
+      include: {
+        courier: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        deliveryAddress: true,
+      },
+    });
+
+    // Create notification for customer
+    const statusMessages = {
+      IN_PREPARATION: "Pesanan Anda sedang disiapkan",
+      READY_FOR_PICKUP: "Pesanan siap untuk diambil kurir",
+      OUT_FOR_DELIVERY: "Pesanan dalam perjalanan",
+      DELIVERED: "Pesanan telah sampai",
+      COMPLETED: "Pesanan selesai",
+    };
+
+    const notification = await prisma.notification.create({
+      data: {
+        userId: order.userId,
+        type: "ORDER",
+        title: "Status Pesanan Diperbarui",
+        message: statusMessages[newStatus] || "Status pesanan diperbarui",
+        metadata: {
+          orderId: order.id,
+          oldStatus: currentStatus,
+          newStatus: newStatus,
+          courierName: order.courier?.name,
+          notes: notes || null,
+        },
+      },
+    });
+
+    // Send real-time notification to customer
     try {
-      const { orderId } = req.params;
-      const { newStatus, notes } = req.body;
-      const courierId = req.user.id;
-
-      // Validasi input
-      if (!newStatus) {
-        return res.status(400).json({
-          message: "New status is required",
+      const io = getIO();
+      if (io) {
+        io.to(`user:${order.userId}`).emit("order-status-updated", {
+          notification,
+          order: {
+            id: updatedOrder.id,
+            orderStatus: updatedOrder.orderStatus,
+            courier: updatedOrder.courier,
+          },
         });
+        console.log(
+          `📱 Status update notification sent to user ${order.userId}`
+        );
       }
+    } catch (emitErr) {
+      console.warn("Socket emit failed:", emitErr?.message);
+    }
 
-      // Valid status transitions for courier
+    return res.status(200).json({
+      message: "Order status updated successfully",
+      order: {
+        id: updatedOrder.id,
+        orderStatus: updatedOrder.orderStatus,
+        previousStatus: currentStatus,
+        courier: updatedOrder.courier,
+        deliveryAddress: updatedOrder.deliveryAddress,
+        updatedAt: updatedOrder.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error updating order status:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Get courier's assigned orders
+ * GET /orders/courier/my-deliveries
+ */
+router.get("/courier/my-deliveries", authenticate, async (req, res) => {
+  try {
+    const courierId = req.user.id;
+    const { status } = req.query;
+
+    const whereClause = {
+      courierId,
+    };
+
+    // Filter by status if provided
+    if (status && status !== "all") {
       const validStatuses = [
         "IN_PREPARATION",
         "READY_FOR_PICKUP",
@@ -77,227 +242,52 @@ router.put(
         "COMPLETED",
       ];
 
-      if (!validStatuses.includes(newStatus)) {
-        return res.status(400).json({
-          message: `Invalid status. Must be one of: ${validStatuses.join(
-            ", "
-          )}`,
-        });
+      if (validStatuses.includes(status.toUpperCase())) {
+        whereClause.orderStatus = status.toUpperCase();
       }
-
-      // Find order
-      const order = await prisma.order.findUnique({
-        where: { id: orderId },
-        include: {
-          courier: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          deliveryAddress: true,
-        },
-      });
-
-      if (!order) {
-        return res.status(404).json({
-          message: "Order not found",
-        });
-      }
-
-      // Check if courier is assigned to this order
-      if (order.courierId !== courierId) {
-        return res.status(403).json({
-          message: "You are not authorized to update this order",
-        });
-      }
-
-      // Validate status transition
-      const currentStatus = order.orderStatus;
-      const validTransitions = {
-        IN_PREPARATION: ["READY_FOR_PICKUP"],
-        READY_FOR_PICKUP: ["OUT_FOR_DELIVERY"],
-        OUT_FOR_DELIVERY: ["DELIVERED"],
-        DELIVERED: ["COMPLETED"],
-      };
-
-      if (
-        !validTransitions[currentStatus] ||
-        !validTransitions[currentStatus].includes(newStatus)
-      ) {
-        return res.status(400).json({
-          message: `Invalid status transition from ${currentStatus} to ${newStatus}`,
-          allowedTransitions: validTransitions[currentStatus] || [],
-        });
-      }
-
-      // For COMPLETED status, require delivery proof
-      if (newStatus === "COMPLETED" && !order.deliveryProof) {
-        return res.status(400).json({
-          message:
-            "Cannot mark as completed without delivery proof. Please upload delivery proof first.",
-        });
-      }
-
-      // Update order status
-      const updatedOrder = await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          orderStatus: newStatus,
-        },
-        include: {
-          courier: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-            },
-          },
-          deliveryAddress: true,
-        },
-      });
-
-      // Create notification for customer
-      const statusMessages = {
-        IN_PREPARATION: "Pesanan Anda sedang disiapkan",
-        READY_FOR_PICKUP: "Pesanan siap untuk diambil kurir",
-        OUT_FOR_DELIVERY: "Pesanan dalam perjalanan",
-        DELIVERED: "Pesanan telah sampai",
-        COMPLETED: "Pesanan selesai",
-      };
-
-      const notification = await prisma.notification.create({
-        data: {
-          userId: order.userId,
-          type: "ORDER",
-          title: "Status Pesanan Diperbarui",
-          message: statusMessages[newStatus] || "Status pesanan diperbarui",
-          metadata: {
-            orderId: order.id,
-            oldStatus: currentStatus,
-            newStatus: newStatus,
-            courierName: order.courier?.name,
-            notes: notes || null,
-          },
-        },
-      });
-
-      // Send real-time notification to customer
-      try {
-        const io = getIO();
-        if (io) {
-          io.to(`user:${order.userId}`).emit("order-status-updated", {
-            notification,
-            order: {
-              id: updatedOrder.id,
-              orderStatus: updatedOrder.orderStatus,
-              courier: updatedOrder.courier,
-            },
-          });
-          console.log(
-            `📱 Status update notification sent to user ${order.userId}`
-          );
-        }
-      } catch (emitErr) {
-        console.warn("Socket emit failed:", emitErr?.message);
-      }
-
-      return res.status(200).json({
-        message: "Order status updated successfully",
-        order: {
-          id: updatedOrder.id,
-          orderStatus: updatedOrder.orderStatus,
-          previousStatus: currentStatus,
-          courier: updatedOrder.courier,
-          deliveryAddress: updatedOrder.deliveryAddress,
-          updatedAt: updatedOrder.updatedAt,
-        },
-      });
-    } catch (error) {
-      console.error("❌ Error updating order status:", error);
-      return res.status(500).json({
-        message: "Internal server error",
-        error: error.message,
-      });
     }
-  }
-);
 
-/**
- * Get courier's assigned orders
- * GET /orders/courier/my-deliveries
- */
-router.get(
-  "/courier/my-deliveries",
-  authenticate,
-  async (req, res) => {
-    try {
-      const courierId = req.user.id;
-      const { status } = req.query;
-
-      const whereClause = {
-        courierId,
-      };
-
-      // Filter by status if provided
-      if (status && status !== "all") {
-        const validStatuses = [
-          "IN_PREPARATION",
-          "READY_FOR_PICKUP",
-          "OUT_FOR_DELIVERY",
-          "DELIVERED",
-          "COMPLETED",
-        ];
-
-        if (validStatuses.includes(status.toUpperCase())) {
-          whereClause.orderStatus = status.toUpperCase();
-        }
-      }
-
-      const orders = await prisma.order.findMany({
-        where: whereClause,
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true,
-            },
+    const orders = await prisma.order.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
           },
-          deliveryAddress: true,
         },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+        deliveryAddress: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
-      // Parse orderItems from JSON
-      const ordersWithParsedItems = orders.map((order) => ({
-        ...order,
-        orderItems: order.orderItems || [],
-        subtotal: Number(order.subtotal),
-        deliveryFee: Number(order.deliveryFee),
-        cashAmount: Number(order.cashAmount),
-        changeAmount: Number(order.changeAmount),
-      }));
+    // Parse orderItems from JSON
+    const ordersWithParsedItems = orders.map((order) => ({
+      ...order,
+      orderItems: order.orderItems || [],
+      subtotal: Number(order.subtotal),
+      deliveryFee: Number(order.deliveryFee),
+      cashAmount: Number(order.cashAmount),
+      changeAmount: Number(order.changeAmount),
+    }));
 
-      return res.status(200).json({
-        message: "Courier deliveries retrieved successfully",
-        orders: ordersWithParsedItems,
-        totalOrders: ordersWithParsedItems.length,
-      });
-    } catch (error) {
-      console.error("❌ Error fetching courier deliveries:", error);
-      return res.status(500).json({
-        message: "Internal server error",
-        error: error.message,
-      });
-    }
+    return res.status(200).json({
+      message: "Courier deliveries retrieved successfully",
+      orders: ordersWithParsedItems,
+      totalOrders: ordersWithParsedItems.length,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching courier deliveries:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
   }
-);
+});
 
 /**
  * Upload delivery proof photo
@@ -306,7 +296,7 @@ router.get(
  * Courier uploads photo of delivered package at customer's address
  * This is required before marking order as COMPLETED
  */
-router.post(    
+router.post(
   "/:orderId/delivery-proof",
   authenticate,
   upload.single("deliveryProof"),
@@ -448,5 +438,90 @@ router.post(
     }
   }
 );
+
+/**
+ * Get active orders for courier dashboard (3 terbaru, belum selesai)
+ * GET /orders/courier/active
+ *
+ * Returns: { activeCount: number, orders: [...] }
+ * Only shows 3 latest orders that are NOT COMPLETED, CANCELED, or DISPUTED
+ */
+router.get("/courier/active", authenticate, async (req, res) => {
+  try {
+    const courierId = req.user.id;
+
+    // Status yang dianggap masih aktif (belum selesai)
+    const activeStatuses = [
+      "PENDING",
+      "IN_PREPARATION",
+      "READY_FOR_PICKUP",
+      "OUT_FOR_DELIVERY",
+      "DELIVERED",
+      "GRACE_PERIOD",
+    ];
+
+    const activeOrders = await prisma.order.findMany({
+      where: {
+        courierId,
+        orderStatus: {
+          in: activeStatuses,
+        },
+        // isDeleted: false,
+      },
+      select: {
+        id: true,
+        orderStatus: true,
+        subtotal: true,
+        deliveryFee: true,
+        changeAmount: true,
+        cashAmount: true,
+        orderItems: true, // ✅ JSON field - langsung ambil tanpa nested select
+        createdAt: true,
+        updatedAt: true,
+        deliveryAddress: {
+          select: {
+            id: true,
+            fullAddress: true,
+            recipientName: true,
+            recipientPhone: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+        pickupStore: {
+          select: {
+            id: true,
+            name: true, // ✅ Field name di Store model adalah 'name'
+            phoneNumber: true,
+            address: {
+              select: {
+                fullAddress: true,
+                latitude: true,
+                longitude: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc", // Order terbaru dulu
+      },
+      take: 3, // Hanya ambil 3 data
+    });
+
+    res.json({
+      success: true,
+      activeCount: activeOrders.length,
+      orders: activeOrders,
+    });
+  } catch (error) {
+    console.error("Error fetching active orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Gagal mengambil data order aktif",
+      error: error.message,
+    });
+  }
+});
 
 export default router;

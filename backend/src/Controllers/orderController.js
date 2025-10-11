@@ -9,11 +9,23 @@ import {
 
 // ==================== GET ORDER ROUTES ====================
 
-// Get all orders for authenticated user with filters (status, date)
+// Get all orders for authenticated user with filters (status, date, pagination, search)
 router.get("/my-orders", authenticate, async (req, res) => {
   try {
     const userId = req.user.id; // Dari authenticate middleware
-    const { status, date, startDate, endDate } = req.query;
+    const {
+      status,
+      date,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 6,
+      search = "",
+    } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
 
     // Build where clause
     const whereClause = {
@@ -69,6 +81,20 @@ router.get("/my-orders", authenticate, async (req, res) => {
       }
     }
 
+    // Search by order ID (case insensitive partial match)
+    if (search && search.trim() !== "") {
+      whereClause.id = {
+        contains: search.trim(),
+        mode: "insensitive",
+      };
+    }
+
+    // Count total orders matching the criteria (for pagination)
+    const totalOrders = await prisma.order.count({
+      where: whereClause,
+    });
+
+    // Fetch paginated orders
     const orders = await prisma.order.findMany({
       where: whereClause,
       include: {
@@ -81,6 +107,8 @@ router.get("/my-orders", authenticate, async (req, res) => {
             city: true,
             province: true,
             postalCode: true,
+            latitude: true, // ✅ ADDED for courier tracking
+            longitude: true, // ✅ ADDED for courier tracking
           },
         },
         pickupStore: {
@@ -93,12 +121,21 @@ router.get("/my-orders", authenticate, async (req, res) => {
             id: true,
             name: true,
             phone: true,
+            image: {
+              select: {
+                id: true,
+                url: true,
+                altText: true,
+              },
+            },
           },
         },
       },
       orderBy: {
         createdAt: "desc",
       },
+      take: limitNum,
+      skip: offset,
     });
 
     // Format response
@@ -121,19 +158,123 @@ router.get("/my-orders", authenticate, async (req, res) => {
       updatedAt: order.updatedAt,
     }));
 
+    const totalPages = Math.ceil(totalOrders / limitNum);
+
     return res.status(200).json({
+      success: true,
       orders: formattedOrders,
-      total: formattedOrders.length,
+      pagination: {
+        total: totalOrders,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: totalPages,
+        hasMore: pageNum < totalPages,
+        showing: formattedOrders.length,
+      },
       filters: {
         status: status || "all",
         date: date || null,
         startDate: startDate || null,
         endDate: endDate || null,
+        search: search || null,
       },
     });
   } catch (error) {
     console.error("Error fetching user orders:", error);
     return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// Get single order by ID for authenticated user
+router.get("/detail/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // console.log(`📦 Fetching order ${orderId} for user ${userId}`);
+
+    // Fetch order with full details
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+      },
+      include: {
+        deliveryAddress: {
+          select: {
+            label: true,
+            recipientName: true,
+            recipientPhone: true,
+            fullAddress: true,
+            city: true,
+            province: true,
+            postalCode: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+        pickupStore: {
+          include: {
+            address: true,
+          },
+        },
+        courier: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            // vehicleType: true, !IMPORTANT TO ADD LATER
+            // vehiclePlate: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found or you don't have permission to view it",
+      });
+    }
+
+    // Format response
+    const formattedOrder = {
+      id: order.id,
+      orderItems: order.orderItems, // JSON field
+      subtotal: Number(order.subtotal),
+      deliveryFee: Number(order.deliveryFee),
+      total: Number(order.subtotal) + Number(order.deliveryFee),
+      cashAmount: Number(order.cashAmount),
+      changeAmount: Number(order.changeAmount),
+      deliveryType: order.deliveryType,
+      deliveryAddress: order.deliveryAddress,
+      pickupStore: order.pickupStore,
+      pickupTime: order.pickupTime,
+      courier: order.courier,
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    };
+
+    console.log(`✅ Order fetched successfully:`, {
+      orderId: order.id,
+      status: order.orderStatus,
+      hasCourier: !!order.courier,
+      hasCoordinates: !!(
+        order.deliveryAddress?.latitude && order.deliveryAddress?.longitude
+      ),
+    });
+
+    return res.status(200).json({
+      success: true,
+      order: formattedOrder,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching order:", error);
+    return res.status(500).json({
+      success: false,
       message: "Internal server error",
       error: error.message,
     });
@@ -651,7 +792,6 @@ router.post("/checkout", async (req, res) => {
           select: {
             postalCode: true,
             fullAddress: true,
-            street: true,
             city: true,
             province: true,
           },

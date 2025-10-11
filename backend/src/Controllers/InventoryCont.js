@@ -2,7 +2,6 @@
 
 import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
-import { authenticate } from "../Middlewares/accessControl.js";
 
 /**
  * Helper untuk konversi BigInt dan Decimal -> Number
@@ -25,10 +24,10 @@ function serializeBigInt(obj) {
   return obj;
 }
 
-// GET /inventory - Get all products (authenticated users only)
-router.get("/", authenticate, async (req, res) => {
+// GET /inventory - Get all products (public access - no authentication required)
+router.get("/", async (req, res) => {
   try {
-    console.log("📦 Fetching all products from inventory...");
+    console.log("📦 Fetching all products from inventory (public access)...");
 
     // Fetch all active products with their images and category
     const products = await prisma.product.findMany({
