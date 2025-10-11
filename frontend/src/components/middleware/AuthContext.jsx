@@ -37,6 +37,13 @@ export const AuthProvider = ({ children }) => {
       console.log("   Role object:", userData?.role);
       console.log("   Role type:", roleType);
 
+      // If no role or role is "user", navigate to homepage
+      if (!roleType || roleType === "user") {
+        console.log("   ➡️ Navigating to / (user/no-role)");
+        navigate("/", { replace: true });
+        return;
+      }
+
       switch (roleType) {
         case "courier":
           console.log("   ➡️ Navigating to /courier");
@@ -54,15 +61,28 @@ export const AuthProvider = ({ children }) => {
           console.log("   ➡️ Navigating to /support");
           navigate("/support", { replace: true });
           break;
-        case "user":
         default:
-          console.log("   ➡️ Navigating to / (default/user)");
+          console.log("   ➡️ Navigating to / (default)");
           navigate("/", { replace: true });
           break;
       }
     },
     [navigate]
   );
+
+  // ✅ Declare fetchPermissions BEFORE checkAuth (to avoid hoisting error)
+  const fetchPermissions = useCallback(async () => {
+    try {
+      const res = await api.get("/users/permissions");
+      const perms = Array.isArray(res.data?.permissions)
+        ? res.data.permissions.map((k) => ({ accessKey: k }))
+        : [];
+      setPermissions(perms);
+    } catch (err) {
+      console.error("Failed to fetch permissions:", err);
+      setPermissions([]);
+    }
+  }, []);
 
   const checkAuth = useCallback(async () => {
     setIsChecking(true);
@@ -78,23 +98,49 @@ export const AuthProvider = ({ children }) => {
           setUser(JSON.parse(storedUser));
           setIsAuthenticated(true);
           console.log("✅ Token is valid");
+
+          // ✅ Fetch permissions immediately after authentication
+          await fetchPermissions();
         } catch (verifyError) {
           // Token is invalid, try to refresh
           console.log("🔄 Token invalid, attempting refresh...");
           await attemptTokenRefresh();
+          // ✅ Fetch permissions after successful refresh
+          await fetchPermissions();
         }
       } else {
         // No token or user data, try to refresh using HTTP-only cookie
         console.log("🔄 No stored token, attempting refresh...");
-        await attemptTokenRefresh();
+        try {
+          await attemptTokenRefresh();
+          // ✅ Fetch permissions after successful refresh
+          await fetchPermissions();
+        } catch (refreshError) {
+          // Refresh failed, allow guest access (don't force login)
+          console.log("👤 No valid session found, allowing guest access");
+          setIsAuthenticated(false);
+          setUser(null);
+          setPermissions([]);
+        }
       }
     } catch (err) {
       console.error("❌ Authentication failed", err);
-      handleLogout();
+      // Only logout (redirect) if user had a token but it's now invalid
+      const hadToken = localStorage.getItem("accessToken");
+      if (hadToken) {
+        console.log("🔒 Invalid token detected, clearing session");
+        handleLogout();
+      } else {
+        // No token = guest user, allow access
+        console.log("👤 Guest user detected, allowing access");
+        setIsAuthenticated(false);
+        setUser(null);
+        setPermissions([]);
+      }
     } finally {
       setIsChecking(false);
     }
-  }, [handleLogout]);
+  }, [handleLogout, fetchPermissions]);
 
   const attemptTokenRefresh = useCallback(async () => {
     try {
@@ -121,31 +167,9 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const fetchPermissions = useCallback(async () => {
-    try {
-      const res = await api.get("/users/permissions");
-      const perms = Array.isArray(res.data?.permissions)
-        ? res.data.permissions.map((k) => ({ accessKey: k }))
-        : [];
-      setPermissions(perms);
-    } catch (err) {
-      console.error("Failed to fetch permissions:", err);
-      setPermissions([]);
-    }
-  }, []);
-
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
-
-  // fetch permissions after authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchPermissions();
-    } else {
-      setPermissions([]);
-    }
-  }, [isAuthenticated, fetchPermissions]);
 
   return (
     <AuthContext.Provider

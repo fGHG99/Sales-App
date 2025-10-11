@@ -178,7 +178,7 @@ export default function AuthSection({
           className="w-6 h-6 object-contain"
         />
         {cartCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
+          <span className="absolute -top-[-3px] -right-[-2px] flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
             {cartCount}
           </span>
         )}

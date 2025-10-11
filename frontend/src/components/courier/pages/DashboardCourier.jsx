@@ -13,8 +13,8 @@ import {
   RefreshCw,
   Wifi,
   WifiOff,
-  DollarSign,
   Phone,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import NotificationCard from "./NotificationCard";
@@ -158,7 +158,7 @@ const CourierDashboard = () => {
                 className="border-blue-600 text-blue-600 hover:bg-blue-50"
               >
                 <MapPin className="w-4 h-4 mr-1" />
-                Navigate
+                Navigate to store
               </Button>
             </Link>
             <Button
@@ -264,7 +264,7 @@ const CourierDashboard = () => {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center">
@@ -305,22 +305,6 @@ const CourierDashboard = () => {
                 <p className="text-sm font-medium text-gray-600">In Transit</p>
                 <p className="text-2xl font-bold text-gray-900">
                   {loading ? "..." : stats.inTransit}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <DollarSign className="h-8 w-8 text-emerald-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">
-                  Earnings Today
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {loading ? "..." : formatCurrency(stats.totalEarningsToday)}
                 </p>
               </div>
             </div>
@@ -383,10 +367,19 @@ const CourierDashboard = () => {
                         {formatCurrency(Number(order.deliveryFee || 0))} fee
                       </span>
                     </div>
-                    {order.user?.phone && (
-                      <div className="flex items-center text-gray-600">
-                        <Phone className="h-4 w-4 mr-2" />
-                        {order.user.phone}
+                    {order.deliveryAddress && (
+                      <div className="flex flex-col text-gray-600">
+                        <div className="flex items-center">
+                          <User className="h-4 w-4 mr-2" />
+                          Atas nama,{" "}
+                          <span className="font-semibold ml-1">
+                            {order.deliveryAddress.recipientName}
+                          </span>
+                        </div>
+                        <div className="flex items-center mt-1">
+                          <Phone className="h-4 w-4 mr-2" />
+                          {order.deliveryAddress.recipientPhone}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -402,7 +395,8 @@ const CourierDashboard = () => {
               ))
             )}
 
-            {!loading && activeOrders.length > 0 && (
+            {/* Link to view all orders */}
+            {!loading && activeOrders.length > 3 && (
               <div className="pt-2">
                 <Link to="/courier/orders">
                   <Button variant="outline" className="w-full">

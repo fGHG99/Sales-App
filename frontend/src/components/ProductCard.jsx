@@ -1,15 +1,22 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { Plus, Minus } from "lucide-react";
+import LoginRequiredModal from "./modal/LoginRequiredModal";
 import api from "../utils/api";
 
-const BE_URL =
-  import.meta.env.VITE_BE_API_URL;
+const BE_URL = import.meta.env.VITE_BE_API_URL;
 
 const ProductCard = ({ product, loading = false }) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [quantity, setQuantity] = useState(0); // 0 means not in cart
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    const accessToken = localStorage.getItem("accessToken");
+    return !!accessToken;
+  };
 
   // Handle Add to Cart
   const handleAddToCart = async (e) => {
@@ -17,6 +24,12 @@ const ProductCard = ({ product, loading = false }) => {
     e.stopPropagation();
 
     if (isAddingToCart) return; // Prevent double-click
+
+    // Check authentication first
+    if (!isAuthenticated()) {
+      setShowLoginModal(true);
+      return;
+    }
 
     try {
       setIsAddingToCart(true);
@@ -38,8 +51,8 @@ const ProductCard = ({ product, loading = false }) => {
       console.error("❌ Failed to add product to cart:", error);
 
       if (error.response?.status === 401) {
-        alert("Please login to add items to cart");
-        window.location.href = "/auth/signin";
+        // Show login modal instead of redirect
+        setShowLoginModal(true);
       } else {
         alert(error.response?.data?.message || "Failed to add product to cart");
       }
@@ -288,6 +301,16 @@ const ProductCard = ({ product, loading = false }) => {
         {/* Spacer ensures button stays at the bottom */}
         <div className="flex-grow"></div>
       </div>
+
+      {/* Login Required Modal */}
+      <LoginRequiredModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Masuk Diperlukan"
+        message="Anda perlu masuk untuk menambahkan produk ke keranjang."
+        loginButtonText="Masuk"
+        cancelButtonText="Batal"
+      />
     </div>
   );
 };

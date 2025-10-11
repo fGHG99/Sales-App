@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, Search, ShoppingCart, Menu, X } from "lucide-react";
 import SearchBar from "./SearchBar";
 import AuthSection from "./AuthSection";
+import LoginRequiredModal from "./modal/LoginRequiredModal";
 import api from "../utils/api";
 
 const categories = [
@@ -247,34 +248,15 @@ const Navbar = () => {
         )}
       </nav>
 
-      {/* Login Modal Trigger */}
-      {showLoginModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h2 className="text-xl font-bold mb-4 font-inter">
-              Masuk Diperlukan
-            </h2>
-            <p className="text-gray-600 mb-6 font-inter">
-              Anda perlu masuk untuk mengakses keranjang belanja.
-            </p>
-            <div className="flex space-x-4">
-              <Link
-                to="/auth/signin"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white text-center rounded-lg hover:bg-blue-700 transition-colors duration-200 font-inter font-medium"
-                onClick={() => setShowLoginModal(false)}
-              >
-                Masuk
-              </Link>
-              <button
-                onClick={() => setShowLoginModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200 font-inter"
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Login Required Modal */}
+      <LoginRequiredModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        title="Masuk Diperlukan"
+        message="Anda perlu masuk untuk mengakses keranjang belanja."
+        loginButtonText="Masuk"
+        cancelButtonText="Batal"
+      />
     </>
   );
 };

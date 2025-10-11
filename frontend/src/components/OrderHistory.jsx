@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import {
@@ -26,6 +27,8 @@ import {
   ChevronRight,
   Package,
   Clock,
+  MapPin,
+  Truck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "../lib/utils";
@@ -34,6 +37,7 @@ import Pagination from "./Pagination";
 import api from "../utils/api";
 
 const OrderHistory = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedDate, setSelectedDate] = useState(null);
@@ -42,6 +46,12 @@ const OrderHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState(null);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    totalPages: 0,
+    hasMore: false,
+    showing: 0,
+  });
   const ordersPerPage = 6;
 
   // Debounce status and date changes (500ms delay)
@@ -49,7 +59,7 @@ const OrderHistory = () => {
   const debouncedDate = useDebounce(selectedDate, 500);
   const debouncedSearch = useDebounce(searchQuery, 500);
 
-  // Fetch orders from API with filters
+  // Fetch orders from API with filters and pagination
   useEffect(() => {
     const fetchOrders = async () => {
       setIsLoading(true);
@@ -57,7 +67,10 @@ const OrderHistory = () => {
 
       try {
         // Build query parameters
-        const params = {};
+        const params = {
+          page: currentPage,
+          limit: ordersPerPage,
+        };
 
         // Add status filter if not "all"
         if (debouncedStatus && debouncedStatus !== "all") {
@@ -69,20 +82,55 @@ const OrderHistory = () => {
           params.date = format(debouncedDate, "yyyy-MM-dd");
         }
 
+        // Add search filter
+        if (debouncedSearch && debouncedSearch.trim() !== "") {
+          params.search = debouncedSearch.trim();
+        }
+
         const response = await api.get("/order/my-orders", { params });
 
+        // Debug: Log orders to check courier tracking data
+        console.log("📦 Orders fetched:", response.data.orders);
+        response.data.orders?.forEach((order, idx) => {
+          console.log(`Order ${idx}:`, {
+            id: order.id,
+            status: order.orderStatus,
+            hasCourier: !!order.courier,
+            courier: order.courier,
+            hasLatLng: !!(
+              order.deliveryAddress?.latitude &&
+              order.deliveryAddress?.longitude
+            ),
+            deliveryAddress: order.deliveryAddress,
+          });
+        });
+
         setOrders(response.data.orders || []);
+        setPagination(
+          response.data.pagination || {
+            total: 0,
+            totalPages: 0,
+            hasMore: false,
+            showing: 0,
+          }
+        );
       } catch (err) {
         console.error("Error fetching orders:", err);
         setError(err.response?.data?.message || "Failed to fetch orders");
         setOrders([]);
+        setPagination({
+          total: 0,
+          totalPages: 0,
+          hasMore: false,
+          showing: 0,
+        });
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchOrders();
-  }, [debouncedStatus, debouncedDate]);
+  }, [currentPage, debouncedStatus, debouncedDate, debouncedSearch]);
 
   const orderStatuses = [
     { value: "all", label: "All Orders" },
@@ -114,29 +162,6 @@ const OrderHistory = () => {
   const formatCurrency = (amount) => {
     return `Rp ${parseFloat(amount).toLocaleString("id-ID")}`;
   };
-
-  // Client-side search filter (after API returns filtered data by status and date)
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const matchesSearch =
-        order.id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        (order.orderItems &&
-          Array.isArray(order.orderItems) &&
-          order.orderItems.some((item) =>
-            item.productName
-              ?.toLowerCase()
-              .includes(debouncedSearch.toLowerCase())
-          ));
-
-      return matchesSearch;
-    });
-  }, [orders, debouncedSearch]);
-
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
-  const startIndex = (currentPage - 1) * ordersPerPage;
-  const endIndex = startIndex + ordersPerPage;
-  const currentOrders = filteredOrders.slice(startIndex, endIndex);
 
   // Reset to first page when filters change
   useEffect(() => {
@@ -431,19 +456,19 @@ const OrderHistory = () => {
 
       {/* Orders List */}
       <div className="space-y-4">
-        {filteredOrders.length === 0 ? (
+        {orders.length === 0 ? (
           <NoOrdersComponent />
         ) : (
           <>
             <div className="flex justify-between items-center mb-4">
               <p className="text-sm text-gray-600">
-                Showing {startIndex + 1}-
-                {Math.min(endIndex, filteredOrders.length)} of{" "}
-                {filteredOrders.length} orders
+                Showing {(currentPage - 1) * ordersPerPage + 1}-
+                {Math.min(currentPage * ordersPerPage, pagination.total)} of{" "}
+                {pagination.total} orders
               </p>
             </div>
 
-            {currentOrders.map((order) => {
+            {orders.map((order) => {
               const firstItem = order.orderItems?.[0];
               const itemsCount = order.orderItems?.length || 0;
 
@@ -498,14 +523,38 @@ const OrderHistory = () => {
                         </div>
                       </div>
 
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="p-2">
-                            <ChevronRight className="h-5 w-5" />
-                          </Button>
-                        </DialogTrigger>
-                        <OrderDetailModal order={order} />
-                      </Dialog>
+                      <div className="flex items-center gap-2">
+                        {/* Track Courier Button - Navigate to tracking page */}
+                        {order.courier &&
+                          order.deliveryAddress?.latitude &&
+                          order.deliveryAddress?.longitude &&
+                          (order.orderStatus === "OUT_FOR_DELIVERY" ||
+                            order.orderStatus === "READY_FOR_PICKUP") && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                navigate(`/order/success/${order.id}`)
+                              }
+                              className="flex items-center gap-2"
+                            >
+                              <Truck className="h-4 w-4" />
+                              <span className="hidden sm:inline">
+                                Lacak Kurir
+                              </span>
+                            </Button>
+                          )}
+
+                        {/* Order Details Button */}
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="p-2">
+                              <ChevronRight className="h-5 w-5" />
+                            </Button>
+                          </DialogTrigger>
+                          <OrderDetailModal order={order} />
+                        </Dialog>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -513,10 +562,11 @@ const OrderHistory = () => {
             })}
 
             {/* Pagination Component */}
-            {totalPages > 1 && (
+            {pagination.totalPages > 1 && (
               <div className="mt-8">
                 <Pagination
-                  totalPages={totalPages}
+                  currentPage={currentPage}
+                  totalPages={pagination.totalPages}
                   onPageChange={handlePageChange}
                 />
               </div>

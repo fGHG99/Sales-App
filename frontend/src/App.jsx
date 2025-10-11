@@ -35,7 +35,7 @@ import SuperAdminOrderManagement from "./components/superAdmin/page/OrderManagem
 import ProductManagement from "./components/superAdmin/page/ProductManagement";
 import FeeSetup from "./components/superAdmin/page/FeeSetup";
 import GlobalReports from "./components/superAdmin/page/GlobalReports";
-import CourierDashboard from "./components/courier/pages/Dashboard";
+import CourierDashboard from "./components/courier/pages/DashboardCourier";
 import OrdersPage from "./components/courier/pages/Orders";
 import ProfilePage from "./components/courier/pages/Profile";
 import ForgotPassword from "./components/ForgotPass";
@@ -47,6 +47,7 @@ import NotificationsPage from "./components/User/pages/NotificationsPage";
 import api from "./utils/api";
 import ProtectedRoute from "./components/middleware/ProtecedRoute";
 import PermissionBasedRoute from "./components/middleware/Rbac";
+import RouteRestriction from "./components/middleware/RouteRestriction";
 import AccessDeniedPage from "./components/AccessDeniedPage";
 
 // Mock category and other pages
@@ -111,7 +112,11 @@ const router = createBrowserRouter([
     children: [
       {
         path: "/",
-        element: <Layout />,
+        element: (
+          <RouteRestriction allowedRoles={["user"]}>
+            <Layout />
+          </RouteRestriction>
+        ),
         children: [
           { index: true, element: <Dashboard /> },
           { path: "category/:categoryName", element: <CategoryPage /> },
@@ -155,7 +160,7 @@ const router = createBrowserRouter([
         ),
         children: [
           { path: "checkout/:orderId", element: <OrderCheckout /> },
-          { path: "track/:orderId", element: <CourierTracking /> },
+          { path: "success/:orderId", element: <CourierTracking /> },
         ],
       },
       {
@@ -175,6 +180,10 @@ const router = createBrowserRouter([
           { path: "order/:orderId", element: <MapNavigation /> },
           {
             path: "customer-location/order/:orderId",
+            element: <UserLocation />,
+          },
+          {
+            path: "store-location/order/:orderId",
             element: <UserLocation />,
           },
         ],

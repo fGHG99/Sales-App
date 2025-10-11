@@ -116,6 +116,20 @@ export const getCourierStats = async () => {
 };
 
 /**
+ * Get active orders for dashboard (3 terbaru, belum selesai)
+ * @returns {Promise} Active orders array (max 3)
+ */
+export const getActiveOrders = async () => {
+  try {
+    const response = await api.get("/orders/courier/active");
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching active orders:", error);
+    throw error;
+  }
+};
+
+/**
  * Get order details by ID
  * @param {string} orderId - Order ID
  * @returns {Promise} Order details

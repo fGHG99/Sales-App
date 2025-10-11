@@ -84,8 +84,8 @@ const ProfilePage = () => {
       fields: [
         { label: "Work Location", value: courier.workLocation, icon: MapPin },
         { label: "Post Code", value: courier.postCode, icon: MapPin },
-        { label: "Vehicle Type", value: courier.vehicleType, icon: Truck },
-        { label: "License Number", value: courier.licenseNumber, icon: Key },
+        // { label: "Vehicle Type", value: courier.vehicleType, icon: Truck },
+        // { label: "License Number", value: courier.licenseNumber, icon: Key },
       ],
     },
     {

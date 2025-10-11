@@ -54,12 +54,9 @@ const ProductPageResult = () => {
       setProducts(transformedProducts);
     } catch (err) {
       console.error("❌ Failed to fetch products:", err);
-      setError(err.response?.data?.message || "Failed to load products");
 
-      if (err.response?.status === 401) {
-        // Redirect to login if unauthorized
-        window.location.href = "/auth/signin";
-      }
+      // Set appropriate error message
+      setError(err.response?.data?.message || "Failed to load products");
     } finally {
       setLoading(false);
     }

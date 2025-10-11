@@ -1,8 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export default function Pagination({ totalPages = 5, onPageChange }) {
-  const [currentPage, setCurrentPage] = useState(1);
+export default function Pagination({
+  currentPage: externalCurrentPage = 1,
+  totalPages = 5,
+  onPageChange,
+}) {
+  const [currentPage, setCurrentPage] = useState(externalCurrentPage);
+
+  // Sync internal state with external prop
+  useEffect(() => {
+    setCurrentPage(externalCurrentPage);
+  }, [externalCurrentPage]);
 
   const handleClick = (page) => {
     setCurrentPage(page);

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getCourierDeliveries,
   getCourierStats,
+  getActiveOrders as getActiveOrdersAPI,
   updateOrderStatus as updateOrderStatusAPI,
   uploadDeliveryProof as uploadDeliveryProofAPI,
 } from "../services/courierService";
@@ -14,6 +15,7 @@ import { toast } from "sonner";
  */
 const useCourierDashboard = () => {
   const [orders, setOrders] = useState([]);
+  const [activeOrders, setActiveOrders] = useState([]); // ✅ Active orders dari API
   const [stats, setStats] = useState({
     activeOrders: 0,
     completedToday: 0,
@@ -34,21 +36,23 @@ const useCourierDashboard = () => {
   } = useCourierNotifications();
 
   /**
-   * Fetch all courier data (orders + stats)
+   * Fetch all courier data (orders + stats + active orders)
    */
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch orders and stats in parallel
-      const [ordersData, statsData] = await Promise.all([
+      // Fetch orders, stats, and active orders in parallel
+      const [ordersData, statsData, activeOrdersData] = await Promise.all([
         getCourierDeliveries("all"),
         getCourierStats(),
+        getActiveOrdersAPI(), // ✅ Fetch 3 active orders terbaru
       ]);
 
       setOrders(ordersData.orders || []);
       setStats(statsData);
+      setActiveOrders(activeOrdersData.orders || []); // ✅ Set active orders dari API
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       setError(err.response?.data?.message || "Failed to load dashboard data");
@@ -173,16 +177,6 @@ const useCourierDashboard = () => {
   );
 
   /**
-   * Get active orders only
-   */
-  const getActiveOrders = useCallback(() => {
-    return orders.filter(
-      (order) =>
-        !["COMPLETED", "CANCELED", "DISPUTED"].includes(order.orderStatus)
-    );
-  }, [orders]);
-
-  /**
    * Get completed orders only
    */
   const getCompletedOrders = useCallback(() => {
@@ -229,7 +223,7 @@ const useCourierDashboard = () => {
     unreadCount,
 
     // Computed data
-    activeOrders: getActiveOrders(),
+    activeOrders, // ✅ Active orders dari API (max 3, belum selesai)
     completedOrders: getCompletedOrders(),
 
     // Loading states

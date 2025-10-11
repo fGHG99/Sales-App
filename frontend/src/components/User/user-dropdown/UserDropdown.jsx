@@ -42,7 +42,7 @@ const UserDropdown = ({ userData, onClose, onConfirm }) => {
       console.log("✅ Modal closed");
 
       // Redirect to login
-      console.log("🔵 Redirecting to /auth/login...");
+      console.log("🔵 Redirecting to /auth/signin...");
       navigate("/auth/signin", { replace: true });
 
       // Call parent onConfirm if exists

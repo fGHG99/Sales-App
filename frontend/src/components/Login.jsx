@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
 import api from "../utils/api";
 import { useAuth } from "./middleware/AuthContext";
@@ -13,7 +13,23 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const { redirectBasedOnRole } = useAuth();
+  const { checkAuth } = useAuth();
+  const navigate = useNavigate();
+
+  // ✅ Role to route mapping (more efficient than switch/if-else)
+  const ROLE_ROUTES = {
+    courier: "/courier",
+    superadmin: "/s-admin",
+    admin: "/admin",
+    itsupport: "/support",
+    user: "/",
+    default: "/", // Fallback for null/undefined roles
+  };
+
+  // ✅ Get redirect path based on role type
+  const getRedirectPath = (roleType) => {
+    return ROLE_ROUTES[roleType] || ROLE_ROUTES.default;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,8 +53,19 @@ export default function Login() {
       localStorage.setItem("accessToken", accessToken);
       localStorage.setItem("user", JSON.stringify(user));
 
-      // Redirect based on user role
-      redirectBasedOnRole(user);
+      // Trigger auth check to update context state and fetch permissions
+      console.log("🔄 Triggering checkAuth to fetch permissions...");
+      await checkAuth();
+      console.log("✅ checkAuth completed - permissions should be loaded");
+
+      // ✅ Get redirect path based on role (handles null/undefined automatically)
+      const roleType = user?.role?.roleType || "default";
+      const redirectPath = getRedirectPath(roleType);
+
+      console.log(
+        `🎯 Login: Navigating to ${redirectPath} (role: ${roleType})`
+      );
+      navigate(redirectPath, { replace: true });
     } catch (err) {
       setError(
         err.response?.data?.message || "Login failed. Please try again."
