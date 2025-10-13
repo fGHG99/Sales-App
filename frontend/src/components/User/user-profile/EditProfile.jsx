@@ -12,7 +12,7 @@ import { toast } from "../../hook/useToast";
 import DatePicker from "./DatePicker";
 import ImageCropModal from "../../modal/ImageCropModal";
 import ProfileSkeleton from "./ProfileSkeleton";
-import api from "../../../utils/api";
+import api from "../../../utils/api"; //
 import {
   Camera,
   Check,

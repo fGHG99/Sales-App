@@ -28,11 +28,13 @@ const MAPTILER_API_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
  * - Route polyline rendering
  * - Auto-update lokasi setiap 3 detik
  * - Arrival detection
+ * - Real-time location sharing via Socket.IO
  *
  * @param {Object} destination - { latitude, longitude, address, recipientName }
+ * @param {string} orderId - Order ID for location sharing
  * @param {Function} onArrived - Callback when courier arrives
  */
-const CourierNavigationMap = ({ destination, onArrived }) => {
+const CourierNavigationMap = ({ destination, orderId, onArrived }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const routeLayerRef = useRef(false);
@@ -49,7 +51,18 @@ const CourierNavigationMap = ({ destination, onArrived }) => {
     startNavigation,
     stopNavigation,
     refreshRoute,
+    setOrderId,
   } = useCourierNavigation(destination);
+
+  /**
+   * Set orderId for real-time location sharing
+   */
+  useEffect(() => {
+    if (orderId) {
+      setOrderId(orderId);
+      console.log("📦 Order ID set for location sharing:", orderId);
+    }
+  }, [orderId, setOrderId]);
 
   /**
    * Initialize map

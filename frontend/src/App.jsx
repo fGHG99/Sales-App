@@ -36,11 +36,11 @@ import ProductManagement from "./components/superAdmin/page/ProductManagement";
 import FeeSetup from "./components/superAdmin/page/FeeSetup";
 import GlobalReports from "./components/superAdmin/page/GlobalReports";
 import CourierDashboard from "./components/courier/pages/DashboardCourier";
-import OrdersPage from "./components/courier/pages/Orders";
+import OrdersPage from "./components/courier/pages/OrdersPage";
 import ProfilePage from "./components/courier/pages/Profile";
 import ForgotPassword from "./components/ForgotPass";
 import MapNavigation from "./components/courier/pages/MapNavigation";
-import Navigation from "./components/courier/pages/Navigation";
+import Navigation from "./components/courier/pages/CourierNavbar";
 import UserLocation from "./components/courier/pages/UserLocation";
 import StoreLocation from "./components/courier/pages/StoreLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
@@ -50,6 +50,7 @@ import ProtectedRoute from "./components/middleware/ProtecedRoute";
 import PermissionBasedRoute from "./components/middleware/Rbac";
 import RouteRestriction from "./components/middleware/RouteRestriction";
 import AccessDeniedPage from "./components/AccessDeniedPage";
+import ResetPassword from "./components/ResetPassword";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -178,6 +179,7 @@ const router = createBrowserRouter([
           { path: "orders", element: <OrdersPage /> },
           { path: "profile", element: <ProfilePage /> },
           { path: "forgot-password", element: <ForgotPassword /> },
+          { path: "reset-password", element: <ResetPassword /> },
           { path: "order/:orderId", element: <MapNavigation /> },
           {
             path: "customer-location/order/:orderId",

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  getCourierDeliveries,
+  getCourierOrders,
   getCourierStats,
   getActiveOrders as getActiveOrdersAPI,
   updateOrderStatus as updateOrderStatusAPI,
@@ -15,7 +15,7 @@ import { toast } from "sonner";
  */
 const useCourierDashboard = () => {
   const [orders, setOrders] = useState([]);
-  const [activeOrders, setActiveOrders] = useState([]); // ✅ Active orders dari API
+  const [activeOrders, setActiveOrders] = useState([]); // Active orders untuk dashboard
   const [stats, setStats] = useState({
     activeOrders: 0,
     completedToday: 0,
@@ -45,14 +45,16 @@ const useCourierDashboard = () => {
 
       // Fetch orders, stats, and active orders in parallel
       const [ordersData, statsData, activeOrdersData] = await Promise.all([
-        getCourierDeliveries("all"),
+        getCourierOrders({ enablePagination: false }), // All orders tanpa pagination
         getCourierStats(),
-        getActiveOrdersAPI(), // ✅ Fetch 3 active orders terbaru
+        getActiveOrdersAPI(), // Active orders tanpa pagination untuk dashboard
       ]);
 
       setOrders(ordersData.orders || []);
       setStats(statsData);
-      setActiveOrders(activeOrdersData.orders || []); // ✅ Set active orders dari API
+      // ✅ Ambil hanya 3 order terbaru untuk dashboard
+      const latestActiveOrders = (activeOrdersData.orders || []).slice(0, 3);
+      setActiveOrders(latestActiveOrders);
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       setError(err.response?.data?.message || "Failed to load dashboard data");

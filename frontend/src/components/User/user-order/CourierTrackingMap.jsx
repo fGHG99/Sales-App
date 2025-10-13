@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import * as maptilersdk from "@maptiler/sdk";
 import "@maptiler/sdk/dist/maptiler-sdk.css";
-import { Truck, MapPin, Navigation, AlertCircle } from "lucide-react";
+import {
+  Truck,
+  MapPin,
+  Navigation,
+  AlertCircle,
+  Maximize2,
+} from "lucide-react";
+import useTrackCourierLocation from "../../../hooks/useTrackCourierLocation";
 import api from "../../../utils/api";
 
 const MAPTILER_API_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
 
 /**
- * CourierTrackingMap Component - Optimized for Web-Based Tracking
+ * CourierTrackingMap Component - Real-time Tracking with Socket.IO
  *
  * Features:
  * - Dual markers: Courier (blue truck) + User delivery address (red pin)
- * - Adaptive polling: 5s for OUT_FOR_DELIVERY, 15s for READY_FOR_PICKUP
+ * - Real-time Socket.IO updates for instant location changes
+ * - Fallback to HTTP polling if socket fails
  * - Stale detection: Warning if location > 5 minutes old
- * - Retry logic: Max 5 consecutive failures before stopping
  * - Auto-fit bounds to show both markers
  *
  * @param {Object} order - Order object dengan deliveryAddress dan courier info
@@ -24,61 +31,55 @@ const CourierTrackingMap = ({ order, courierId }) => {
   const map = useRef(null);
   const courierMarker = useRef(null);
   const userMarker = useRef(null);
-  const [courierLocation, setCourierLocation] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [isStale, setIsStale] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   const intervalRef = useRef(null);
+  const hasInitializedBounds = useRef(false); // ✅ Track if bounds already set
 
-  // ✅ Fetch courier location dengan stale detection
-  const fetchCourierLocation = async () => {
+  // Get user ID from localStorage (initialize immediately to avoid null on first render)
+  const [userId] = useState(() => {
     try {
-      const response = await api.get(`/courier/location/${courierId}`);
-
-      if (response.data.success && response.data.location) {
-        const { latitude, longitude, timestamp } = response.data.location;
-
-        const location = {
-          lat: parseFloat(latitude),
-          lng: parseFloat(longitude),
-          timestamp: new Date(timestamp),
-        };
-
-        setCourierLocation(location);
-        setError(null);
-        setRetryCount(0);
-
-        // ✅ Check if location is stale (> 5 minutes old)
-        const ageMinutes = (new Date() - location.timestamp) / (1000 * 60);
-        setIsStale(ageMinutes > 5);
-
-        console.log("📍 Courier location:", {
-          lat: latitude,
-          lng: longitude,
-          ageMinutes: Math.floor(ageMinutes),
-          isStale: ageMinutes > 5,
-        });
-      } else {
-        setError("Lokasi kurir tidak tersedia");
-      }
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return user.id || null;
     } catch (err) {
-      console.error("Error fetching courier location:", err);
+      console.error("Failed to get user info:", err);
+      return null;
+    }
+  });
 
-      setRetryCount((prev) => prev + 1);
+  // Use Socket.IO hook for real-time tracking (with HTTP fallback)
+  const {
+    courierLocation,
+    isConnected,
+    lastUpdate,
+    error,
+    refreshLocation,
+    useHttpFallback,
+  } = useTrackCourierLocation(order?.id, userId, courierId);
 
-      // ✅ Stop polling after 5 consecutive failures
-      if (retryCount >= 5) {
-        setError("Gagal mengambil lokasi kurir setelah beberapa percobaan");
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      } else {
-        setError(`Gagal mengambil lokasi (percobaan ${retryCount + 1}/5)`);
-      }
-    } finally {
-      setIsLoading(false);
+  // Check if location is stale (> 5 minutes old)
+  useEffect(() => {
+    if (lastUpdate) {
+      const ageMinutes = (new Date() - lastUpdate) / (1000 * 60);
+      setIsStale(ageMinutes > 5);
+    }
+  }, [lastUpdate]);
+
+  // ✅ Function to recenter map to show both markers
+  const recenterMap = () => {
+    if (map.current && userMarker.current && courierMarker.current) {
+      const userPos = userMarker.current.getLngLat();
+      const courierPos = courierMarker.current.getLngLat();
+
+      const bounds = new maptilersdk.LngLatBounds()
+        .extend([userPos.lng, userPos.lat])
+        .extend([courierPos.lng, courierPos.lat]);
+
+      map.current.fitBounds(bounds, {
+        padding: { top: 80, bottom: 80, left: 80, right: 80 },
+        maxZoom: 15,
+        duration: 1000,
+      });
     }
   };
 
@@ -191,7 +192,8 @@ const CourierTrackingMap = ({ order, courierId }) => {
   useEffect(() => {
     if (!map.current || !courierLocation) return;
 
-    const { lat, lng } = courierLocation;
+    const lat = courierLocation.latitude;
+    const lng = courierLocation.longitude;
 
     // Create custom HTML element for courier marker (truck icon)
     const courierMarkerEl = document.createElement("div");
@@ -256,9 +258,11 @@ const CourierTrackingMap = ({ order, courierId }) => {
             `<div style="padding: 8px;">
               <strong>🚚 Kurir</strong><br/>
               ${order.courier?.name || "Kurir"}<br/>
-              <small>Diperbarui: ${courierLocation.timestamp.toLocaleTimeString(
-                "id-ID"
-              )}</small>
+              <small>Diperbarui: ${
+                lastUpdate
+                  ? lastUpdate.toLocaleTimeString("id-ID")
+                  : "Baru saja"
+              }</small>
             </div>`
           )
         )
@@ -268,8 +272,12 @@ const CourierTrackingMap = ({ order, courierId }) => {
       courierMarker.current.setLngLat([lng, lat]);
     }
 
-    // Fit bounds to show both markers
-    if (userMarker.current && courierMarker.current) {
+    // ✅ Fit bounds ONLY on first load - after that user can pan/zoom freely
+    if (
+      userMarker.current &&
+      courierMarker.current &&
+      !hasInitializedBounds.current
+    ) {
       const userPos = userMarker.current.getLngLat();
       const courierPos = courierMarker.current.getLngLat();
 
@@ -280,48 +288,12 @@ const CourierTrackingMap = ({ order, courierId }) => {
       map.current.fitBounds(bounds, {
         padding: { top: 80, bottom: 80, left: 80, right: 80 },
         maxZoom: 15,
+        duration: 1000, // Smooth animation on initial fit
       });
+
+      hasInitializedBounds.current = true; // Mark as initialized
     }
-  }, [courierLocation, order]);
-
-  // ✅ Adaptive polling based on order status
-  useEffect(() => {
-    if (!courierId) return;
-
-    // Initial fetch
-    fetchCourierLocation();
-
-    // ✅ Adaptive interval:
-    // - 5 seconds for OUT_FOR_DELIVERY (active delivery)
-    // - 15 seconds for READY_FOR_PICKUP (waiting pickup)
-    // - Stop for other statuses
-    const pollInterval =
-      order.orderStatus === "OUT_FOR_DELIVERY"
-        ? 5000 // 5 seconds
-        : order.orderStatus === "READY_FOR_PICKUP"
-        ? 15000 // 15 seconds
-        : null;
-
-    if (pollInterval) {
-      intervalRef.current = setInterval(() => {
-        fetchCourierLocation();
-      }, pollInterval);
-
-      console.log(
-        `🔄 Polling started: ${pollInterval / 1000}s interval for ${
-          order.orderStatus
-        }`
-      );
-    } else {
-      console.log("⏸️ Polling stopped: Order status not trackable");
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [courierId]);
+  }, [courierLocation, order, lastUpdate]);
 
   return (
     <div className="relative w-full h-full">
@@ -332,13 +304,12 @@ const CourierTrackingMap = ({ order, courierId }) => {
       />
 
       {/* ✅ Stale Location Warning */}
-      {isStale && courierLocation && (
+      {isStale && courierLocation && lastUpdate && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-100 border border-yellow-300 rounded-lg px-4 py-2 z-10 flex items-center gap-2">
           <AlertCircle className="w-5 h-5 text-yellow-600" />
           <span className="text-sm font-medium text-yellow-800">
             ⚠️ Lokasi kurir terakhir diperbarui{" "}
-            {Math.floor((new Date() - courierLocation.timestamp) / 60000)} menit
-            lalu
+            {Math.floor((new Date() - lastUpdate) / 60000)} menit lalu
           </span>
         </div>
       )}
@@ -358,6 +329,14 @@ const CourierTrackingMap = ({ order, courierId }) => {
             </div>
             <span className="font-medium">Alamat Anda</span>
           </div>
+          <button
+            onClick={recenterMap}
+            className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors"
+            title="Tampilkan semua marker"
+          >
+            <Maximize2 className="w-4 h-4" />
+            <span>Lihat Semua</span>
+          </button>
         </div>
       </div>
 
@@ -368,18 +347,41 @@ const CourierTrackingMap = ({ order, courierId }) => {
             <span className="text-gray-500">Memuat peta...</span>
           ) : error ? (
             <span className="text-red-500">{error}</span>
-          ) : courierLocation ? (
+          ) : isConnected && courierLocation ? (
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-600 font-medium">Live Tracking</span>
+              {useHttpFallback ? (
+                <>
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <span className="text-yellow-600 font-medium">
+                    Tracking (HTTP Fallback)
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-green-600 font-medium">
+                    🚀 Real-time (WebSocket)
+                  </span>
+                </>
+              )}
+            </div>
+          ) : isConnected ? (
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span className="text-blue-600 font-medium">Terhubung</span>
             </div>
           ) : (
-            <span className="text-gray-500">Menunggu lokasi kurir...</span>
+            <span className="text-gray-500">Menghubungkan...</span>
           )}
         </div>
-        {courierLocation && (
+        {lastUpdate && (
           <div className="text-xs text-gray-500 mt-1">
-            Update: {courierLocation.timestamp.toLocaleTimeString("id-ID")}
+            Update: {lastUpdate.toLocaleTimeString("id-ID")}
+            {useHttpFallback && (
+              <span className="ml-1 text-yellow-600 font-medium">
+                (Polling 5s)
+              </span>
+            )}
           </div>
         )}
       </div>

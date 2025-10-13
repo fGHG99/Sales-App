@@ -8,7 +8,6 @@ import {
   MapPin,
   Navigation,
   CheckCircle2,
-  AlertCircle,
   Truck,
   RefreshCw,
   Wifi,
@@ -17,19 +16,17 @@ import {
   User,
 } from "lucide-react";
 import { toast } from "sonner";
-import NotificationCard from "./NotificationCard";
-import Pagination from "../../Pagination";
 import useCourierDashboard from "../../../hooks/useCourierDashboard";
 import { useAuth } from "../../middleware/AuthContext";
 import { formatCurrency } from "../../../utils/formatters";
+import QrCodeScanner from "../QrCodeScanner";
+import QrCodeGenerator from "../QrCodeGenerator";
+import { generateQrCode, verifyQrCode } from "../../../services/courierService";
 
 const CourierDashboard = () => {
   const { user } = useAuth();
   const {
-    orders,
-    stats,
     notifications,
-    unreadCount,
     activeOrders,
     loading,
     error,
@@ -38,21 +35,54 @@ const CourierDashboard = () => {
     updateOrderStatus,
     markAsPickedUp,
     markAsDelivered,
-    markNotificationAsRead,
   } = useCourierDashboard();
 
-  const ITEMS_PER_PAGE = 6;
-  const [currentPage, setCurrentPage] = useState(1);
   const [updatingOrder, setUpdatingOrder] = useState(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const recentNotifications = [...notifications].sort(
-    (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
-  );
+  // QR Code handlers
+  const handleGenerateQr = async (orderId) => {
+    try {
+      const result = await generateQrCode(orderId);
+      return result;
+    } catch (err) {
+      console.error("Error generating QR code:", err);
+      toast.error(err.response?.data?.message || "Gagal generate QR code");
+      throw err;
+    }
+  };
 
-  const totalPages = Math.ceil(recentNotifications.length / ITEMS_PER_PAGE);
+  const handleScanSuccess = async (qrCodeString) => {
+    try {
+      setIsVerifying(true);
+      toast.info("Memverifikasi QR code...");
 
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
+      const result = await verifyQrCode(qrCodeString);
+
+      if (result.success) {
+        toast.success(
+          result.message ||
+            "QR code berhasil diverifikasi! Status order diupdate ke OUT_FOR_DELIVERY"
+        );
+
+        // Refresh data after successful verification
+        await refresh();
+      } else {
+        toast.error(result.message || "Gagal memverifikasi QR code");
+      }
+    } catch (err) {
+      console.error("Error verifying QR code:", err);
+      toast.error(
+        err.response?.data?.message ||
+          "QR code tidak valid atau sudah digunakan"
+      );
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleScanError = (err) => {
+    console.error("Scan error:", err);
   };
 
   const handleOrderAction = async (orderId, action) => {
@@ -263,53 +293,22 @@ const CourierDashboard = () => {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <Package className="h-8 w-8 text-blue-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">
-                  Active Orders
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {loading ? "..." : stats.activeOrders}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* QR Code Section - Top Priority */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* QR Code Generator - Development */}
+        {activeOrders.length > 0 && activeOrders[0] && (
+          <QrCodeGenerator
+            orderId={activeOrders[0].id}
+            onGenerate={handleGenerateQr}
+            onError={(err) => console.error("QR Generator error:", err)}
+          />
+        )}
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">
-                  Completed Today
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {loading ? "..." : stats.completedToday}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <Truck className="h-8 w-8 text-purple-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">In Transit</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {loading ? "..." : stats.inTransit}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* QR Code Scanner */}
+        <QrCodeScanner
+          onScanSuccess={handleScanSuccess}
+          onScanError={handleScanError}
+        />
       </div>
 
       {/* Active Orders */}
@@ -319,9 +318,6 @@ const CourierDashboard = () => {
             <CardTitle className="flex items-center text-lg">
               <Truck className="h-5 w-5 text-blue-600 mr-2" />
               Active Orders
-              <Badge className="ml-auto bg-blue-100 text-blue-800">
-                {loading ? "..." : activeOrders.length}
-              </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -396,7 +392,7 @@ const CourierDashboard = () => {
             )}
 
             {/* Link to view all orders */}
-            {!loading && activeOrders.length > 3 && (
+            {!loading && activeOrders.length > 0 && (
               <div className="pt-2">
                 <Link to="/courier/orders">
                   <Button variant="outline" className="w-full">
@@ -406,55 +402,6 @@ const CourierDashboard = () => {
               </div>
             )}
           </CardContent>
-        </Card>
-
-        {/* Recent Notifications */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center text-lg">
-              <AlertCircle className="h-5 w-5 text-blue-600 mr-2" />
-              Recent Notifications
-              <Badge className="ml-auto bg-red-100 text-red-800">
-                {unreadCount}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {loading ? (
-              <div className="text-center py-8">
-                <RefreshCw className="h-6 w-6 mx-auto mb-3 text-gray-400 animate-spin" />
-                <p className="text-gray-500 text-sm">
-                  Loading notifications...
-                </p>
-              </div>
-            ) : recentNotifications.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>No notifications yet</p>
-              </div>
-            ) : (
-              recentNotifications
-                .slice(
-                  (currentPage - 1) * ITEMS_PER_PAGE,
-                  currentPage * ITEMS_PER_PAGE
-                )
-                .map((notification) => (
-                  <NotificationCard
-                    key={notification.id}
-                    notification={notification}
-                    onMarkRead={() => markNotificationAsRead(notification.id)}
-                  />
-                ))
-            )}
-          </CardContent>
-          {totalPages > 1 && (
-            <div className="px-6 pb-6 pt-2">
-              <Pagination
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-              />
-            </div>
-          )}
         </Card>
       </div>
     </div>

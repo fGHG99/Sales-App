@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, MapPin, Truck, Clock, Phone } from "lucide-react";
+import {
+  ArrowLeft,
+  MapPin,
+  Truck,
+  Clock,
+  Phone,
+  Camera,
+  X,
+} from "lucide-react";
+import io from "socket.io-client";
 import CourierTrackingMap from "./CourierTrackingMap";
 import api from "../../../utils/api";
 
@@ -12,6 +21,8 @@ const CourierTracking = () => {
   const [order, setOrder] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showDeliveryProofAlert, setShowDeliveryProofAlert] = useState(false);
+  const socketRef = useRef(null);
 
   // Fetch order details
   useEffect(() => {
@@ -51,6 +62,62 @@ const CourierTracking = () => {
 
     fetchOrderDetails();
   }, [orderId]);
+
+  // Socket.IO listener for delivery proof uploaded
+  useEffect(() => {
+    if (!order?.userId) return;
+
+    // Connect to Socket.IO server
+    const socket = io(
+      import.meta.env.VITE_BE_API_URL || "http://localhost:3000",
+      {
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+      }
+    );
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("✅ Socket connected for delivery proof notifications");
+      // Join user room to receive notifications
+      socket.emit("join", { userId: order.userId });
+    });
+
+    // Listen for delivery proof uploaded event
+    socket.on("delivery-proof-uploaded", (data) => {
+      if (data.order?.id === orderId) {
+        console.log("📸 Delivery proof uploaded:", data);
+
+        // Update order with delivery proof
+        setOrder((prevOrder) => ({
+          ...prevOrder,
+          deliveryProof: data.order.deliveryProof,
+        }));
+
+        // Show alert to user
+        setShowDeliveryProofAlert(true);
+
+        // Auto-hide alert after 10 seconds
+        setTimeout(() => {
+          setShowDeliveryProofAlert(false);
+        }, 10000);
+      }
+    });
+
+    socket.on("disconnect", () => {
+      console.log("🔌 Socket disconnected");
+    });
+
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, [order?.userId, orderId]);
 
   const formatCurrency = (amount) => {
     return `Rp ${parseFloat(amount).toLocaleString("id-ID")}`;
@@ -144,6 +211,28 @@ const CourierTracking = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4">
       <div className="max-w-7xl mx-auto">
+        {/* Delivery Proof Alert */}
+        {showDeliveryProofAlert && (
+          <div className="mb-4 bg-green-100 border border-green-400 rounded-lg p-4 flex items-start gap-3 animate-pulse">
+            <Camera className="h-6 w-6 text-green-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-green-900">
+                Bukti Pengiriman Telah Diunggah!
+              </h3>
+              <p className="text-sm text-green-700 mt-1">
+                Kurir telah mengunggah foto bukti pengiriman. Silakan cek detail
+                pesanan Anda.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDeliveryProofAlert(false)}
+              className="text-green-600 hover:text-green-800"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
         {/* Header with Back Button */}
         <div className="mb-6">
           <button
@@ -175,25 +264,47 @@ const CourierTracking = () => {
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Map Section - Takes 2 columns on large screens */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-              <div className="p-4 border-b bg-gray-50">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Live Location
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  Real-time tracking of your order
-                </p>
-              </div>
-              <div className="h-96 lg:h-[500px]">
-                <CourierTrackingMap
-                  order={order}
-                  courierId={order.courier.id}
-                />
+          {/* Map Section - Only show when OUT_FOR_DELIVERY */}
+          {order.orderStatus === "OUT_FOR_DELIVERY" ? (
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="p-4 border-b bg-gray-50">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Live Location
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Real-time tracking of your order
+                  </p>
+                </div>
+                <div className="h-96 lg:h-[500px]">
+                  <CourierTrackingMap
+                    order={order}
+                    courierId={order.courier.id}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden p-8 text-center">
+                <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Live Tracking Not Available
+                </h3>
+                <p className="text-gray-600">
+                  {order.orderStatus === "PENDING"
+                    ? "Tracking will be available once the courier picks up your order"
+                    : order.orderStatus === "IN_PREPARATION"
+                    ? "Your order is being prepared. Tracking will start when out for delivery."
+                    : order.orderStatus === "READY_FOR_PICKUP"
+                    ? "Your order is ready for pickup. Tracking will start when courier is on the way."
+                    : order.orderStatus === "DELIVERED"
+                    ? "Your order has been delivered. Tracking is no longer available."
+                    : "Live tracking is not available for this order status."}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Sidebar - Courier and Order Info */}
           <div className="space-y-6">

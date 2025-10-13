@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import io from "socket.io-client";
 import api from "../utils/api";
 import {
   getRouteDirections,
@@ -28,29 +29,172 @@ const useCourierNavigation = (destination) => {
   const [hasArrived, setHasArrived] = useState(false);
 
   const watchIdRef = useRef(null);
-  const backendUpdateIntervalRef = useRef(null); // ✅ For 35-second backend updates
+  const backendUpdateIntervalRef = useRef(null); // ✅ For 5-second backend updates
   const lastLocationRef = useRef(null);
+  const socketRef = useRef(null);
+  const [orderId, setOrderId] = useState(null);
+  const [courierId, setCourierId] = useState(null);
+
+  // ✅ Refs for preventing excessive logs and API calls
+  const lastLogTimeRef = useRef(0);
+  const isProcessingRef = useRef(false); // Prevent concurrent API calls
 
   /**
-   * Send location to backend (Redis) - called every 35 seconds
-   * Rate limit safe: Backend allows 1 update per 30 seconds
+   * Initialize Socket.IO connection for real-time location sharing
+   * ✅ WebSocket-first with polling fallback
    */
-  const sendLocationToBackend = useCallback(async (latitude, longitude) => {
-    try {
-      await api.post("/courier/location", {
-        latitude,
-        longitude,
-      });
-      console.log("📍 Location sent to Redis:", { latitude, longitude });
-    } catch (err) {
-      // Silently fail if rate limited (shouldn't happen with 35s interval)
-      if (err.response?.status !== 429) {
-        console.error("❌ Failed to send location:", err);
-      } else {
-        console.warn("⚠️ Rate limit hit (unexpected with 35s interval)");
+  useEffect(() => {
+    // Connect to Socket.IO server
+    const socket = io(
+      import.meta.env.VITE_BE_API_URL || "http://localhost:3000",
+      {
+        transports: ["websocket", "polling"], // Try WebSocket first
+        upgrade: true, // Allow upgrade from polling to WebSocket
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        timeout: 10000,
+        autoConnect: true,
       }
+    );
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("✅ Socket connected for courier navigation");
+      console.log(`   Transport: ${socket.io.engine.transport.name}`);
+    });
+
+    // ✅ Handle connection errors gracefully
+    socket.on("connect_error", (error) => {
+      console.warn("⚠️ Socket connection error, will retry or use polling");
+    });
+
+    // ✅ Log transport upgrades
+    socket.io.engine.on("upgrade", (transport) => {
+      console.log(`🚀 Courier socket upgraded to: ${transport.name}`);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("🔌 Socket disconnected");
+    });
+
+    socket.on("error", (err) => {
+      console.error("❌ Socket error:", err);
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  /**
+   * Get user/courier info from localStorage
+   */
+  useEffect(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      if (user.id) {
+        setCourierId(user.id);
+      }
+    } catch (err) {
+      console.error("Failed to get user info:", err);
     }
   }, []);
+
+  /**
+   * Throttled console log - only log every 3 seconds to prevent spam
+   */
+  const throttledLog = useCallback((message, data) => {
+    const now = Date.now();
+    if (now - lastLogTimeRef.current > 3000) {
+      if (data) {
+        console.log(message, data);
+      } else {
+        console.log(message);
+      }
+      lastLogTimeRef.current = now;
+    }
+  }, []);
+
+  /**
+   * Send location to backend (Redis) AND emit socket - called every 5 seconds
+   * Always sends location regardless of movement (no distance check)
+   */
+  const sendLocationToBackend = useCallback(
+    async (latitude, longitude) => {
+      // ✅ Prevent concurrent API calls
+      if (isProcessingRef.current) {
+        throttledLog(
+          "⏳ [COURIER] Already processing location update - skipping"
+        );
+        return;
+      }
+
+      isProcessingRef.current = true;
+      const startTime = Date.now();
+
+      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+      console.log("📤 [COURIER] Sending location update...");
+      console.log(`   Courier ID: ${courierId}`);
+      console.log(`   Order ID: ${orderId || "none"}`);
+      console.log(`   Coordinates: ${latitude}, ${longitude}`);
+      console.log(`   Timestamp: ${new Date().toISOString()}`);
+
+      try {
+        // 1. Send to REST API (for Redis cache)
+        console.log("   🌐 Sending to REST API...");
+        await api.post("/courier/location", {
+          latitude,
+          longitude,
+        });
+        console.log("   ✅ Successfully stored in Redis");
+
+        // 2. Emit socket event for real-time updates to customers
+        if (
+          socketRef.current &&
+          socketRef.current.connected &&
+          courierId &&
+          orderId
+        ) {
+          console.log("   📡 Broadcasting via Socket.IO...");
+          socketRef.current.emit("courier-share-location", {
+            courierId,
+            orderId,
+            latitude,
+            longitude,
+          });
+          console.log(`   ✅ Broadcasted to order:${orderId}`);
+        } else {
+          const reasons = [];
+          if (!socketRef.current?.connected)
+            reasons.push("socket not connected");
+          if (!courierId) reasons.push("no courierId");
+          if (!orderId) reasons.push("no orderId");
+          console.warn(`   ⚠️ Socket broadcast skipped: ${reasons.join(", ")}`);
+        }
+
+        const processingTime = Date.now() - startTime;
+        console.log(`   ⏱️ Processing time: ${processingTime}ms`);
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log("");
+      } catch (err) {
+        const processingTime = Date.now() - startTime;
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.error("❌ [COURIER] Location update FAILED");
+        console.error(`   Error: ${err.message}`);
+        console.error(`   Status: ${err.response?.status || "unknown"}`);
+        console.error(`   Processing time: ${processingTime}ms`);
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.error("");
+      } finally {
+        isProcessingRef.current = false;
+      }
+    },
+    [courierId, orderId, throttledLog]
+  );
 
   /**
    * Fetch route from current location to destination
@@ -119,13 +263,14 @@ const useCourierNavigation = (destination) => {
   /**
    * Handle position update from Geolocation API
    * ✅ GPS watchPosition updates every ~3 seconds (smooth tracking)
-   * ✅ Backend updates sent separately via interval (every 35 seconds)
+   * ✅ Backend updates sent separately via interval (every 5 seconds)
    */
   const handlePositionUpdate = useCallback(
     async (position) => {
       const { latitude, longitude, accuracy } = position.coords;
 
-      console.log("📍 GPS Position updated:", {
+      // ✅ Throttled GPS log to prevent console spam
+      throttledLog("📍 GPS Position updated:", {
         lat: latitude,
         lng: longitude,
         accuracy: `${Math.round(accuracy)}m`,
@@ -168,7 +313,15 @@ const useCourierNavigation = (destination) => {
         await fetchRoute(longitude, latitude);
       }
     },
-    [destination, route, isLoadingRoute, hasArrived, fetchRoute, stopNavigation]
+    [
+      destination,
+      route,
+      isLoadingRoute,
+      hasArrived,
+      fetchRoute,
+      stopNavigation,
+      throttledLog,
+    ]
   );
 
   /**
@@ -213,6 +366,33 @@ const useCourierNavigation = (destination) => {
     setError(null);
     setHasArrived(false);
 
+    // ✅ Get initial position and send immediately
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log("📍 Initial position obtained:", { latitude, longitude });
+
+        // Send initial location immediately
+        sendLocationToBackend(latitude, longitude);
+
+        // Store for interval updates
+        lastLocationRef.current = {
+          lat: latitude,
+          lng: longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: new Date().toISOString(),
+        };
+      },
+      (err) => {
+        console.warn("⚠️ Failed to get initial position:", err);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000,
+      }
+    );
+
     // ✅ Start GPS tracking with high accuracy (updates every ~3 seconds)
     watchIdRef.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
@@ -224,9 +404,8 @@ const useCourierNavigation = (destination) => {
       }
     );
 
-    // ✅ Send location to backend every 35 seconds (rate limit safe)
-    // Backend rate limit: 1 update per 30 seconds
-    // 35 seconds = safe margin to avoid 429 errors
+    // ✅ Send location to backend every 5 seconds
+    // No rate limiting, no distance check - always sends
     backendUpdateIntervalRef.current = setInterval(() => {
       if (lastLocationRef.current) {
         sendLocationToBackend(
@@ -234,11 +413,14 @@ const useCourierNavigation = (destination) => {
           lastLocationRef.current.lng
         );
       }
-    }, 35000); // 35 seconds interval
+    }, 5000); // 5 seconds interval
 
     console.log("🚀 Navigation started");
+    console.log("  → Initial location: sent immediately");
     console.log("  → GPS tracking: ~3 second updates (smooth map)");
-    console.log("  → Backend updates: 35 second interval (rate limit safe)");
+    console.log(
+      "  → Backend updates: every 5 seconds (regardless of movement)"
+    );
   }, [
     destination,
     handlePositionUpdate,
@@ -286,7 +468,7 @@ const useCourierNavigation = (destination) => {
               lastLocationRef.current.lng
             );
           }
-        }, 35000); // 35 seconds
+        }, 5000); // 5 seconds
       }
     };
 
@@ -309,6 +491,7 @@ const useCourierNavigation = (destination) => {
     startNavigation,
     stopNavigation,
     refreshRoute,
+    setOrderId, // Expose setOrderId for parent component to set active order
   };
 };
 

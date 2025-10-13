@@ -167,17 +167,43 @@ const UserLocation = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Navigation Map - 2 columns */}
+        {/* Navigation Map - Only show when OUT_FOR_DELIVERY */}
         <div className="lg:col-span-2">
-          <CourierNavigationMap
-            destination={{
-              latitude: order.deliveryAddress.latitude,
-              longitude: order.deliveryAddress.longitude,
-              address: order.deliveryAddress.fullAddress,
-              recipientName: order.deliveryAddress.recipientName,
-            }}
-            onArrived={handleArrival}
-          />
+          {order.orderStatus === "OUT_FOR_DELIVERY" ? (
+            <CourierNavigationMap
+              destination={{
+                latitude: order.deliveryAddress.latitude,
+                longitude: order.deliveryAddress.longitude,
+                address: order.deliveryAddress.fullAddress,
+                recipientName: order.deliveryAddress.recipientName,
+              }}
+              orderId={order.id}
+              onArrived={handleArrival}
+            />
+          ) : (
+            <Card className="h-96">
+              <CardContent className="flex flex-col items-center justify-center h-full text-center p-8">
+                <MapPin className="w-16 h-16 text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Navigation Not Available
+                </h3>
+                <p className="text-gray-600 max-w-md">
+                  {order.orderStatus === "PENDING"
+                    ? "You can only navigate when order status is OUT_FOR_DELIVERY"
+                    : order.orderStatus === "IN_PREPARATION"
+                    ? "Order is being prepared. Navigation will be available once you pick it up."
+                    : order.orderStatus === "READY_FOR_PICKUP"
+                    ? "Please pick up the order from the store first."
+                    : order.orderStatus === "DELIVERED"
+                    ? "Order has been delivered. Navigation is no longer needed."
+                    : "Navigation is not available for this order status."}
+                </p>
+                <Badge className="mt-4 bg-gray-100 text-gray-800">
+                  Status: {order.orderStatus.replace(/_/g, " ")}
+                </Badge>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Order Details Sidebar - 1 column */}

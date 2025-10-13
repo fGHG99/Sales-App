@@ -30,7 +30,7 @@ const useCourierNotifications = () => {
 
     try {
       setIsLoading(true);
-      const response = await getNotifications(20, 0, false);
+      const response = await getNotifications(1, 20, false); // Page 1, 20 items per page
 
       // Transform backend notifications to match frontend format
       const transformedNotifications = response.notifications.map((notif) => ({

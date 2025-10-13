@@ -6,18 +6,34 @@ import api from "../utils/api";
  */
 
 /**
- * Get courier's assigned deliveries
- * @param {string} status - Filter by status: 'active', 'completed', 'all'
- * @returns {Promise} Orders array
+ * Get courier's orders with flexible filtering
+ * @param {Object} options - Query options
+ * @param {string} options.filter - Filter type: "active", specific status, or omit for all
+ * @param {number} options.page - Page number for pagination
+ * @param {number} options.limit - Items per page
+ * @param {boolean} options.enablePagination - Enable/disable pagination (default: true)
+ * @returns {Promise} Orders with pagination and status counts
  */
-export const getCourierDeliveries = async (status = "all") => {
+export const getCourierOrders = async ({
+  filter = null,
+  page = 1,
+  limit = 10,
+  enablePagination = true,
+} = {}) => {
   try {
-    const response = await api.get("/orders/courier/my-deliveries", {
-      params: { status },
-    });
+    const params = {};
+    if (filter) params.filter = filter;
+    if (enablePagination) {
+      params.page = page;
+      params.limit = limit;
+    } else {
+      params.enablePagination = "false";
+    }
+
+    const response = await api.get("/orders/courier", { params });
     return response.data;
   } catch (error) {
-    console.error("Error fetching courier deliveries:", error);
+    console.error("Error fetching courier orders:", error);
     throw error;
   }
 };
@@ -75,18 +91,18 @@ export const uploadDeliveryProof = async (orderId, photoFile) => {
  */
 export const getCourierStats = async () => {
   try {
-    // Get all orders
-    const response = await api.get("/orders/courier/my-deliveries", {
-      params: { status: "all" },
-    });
+    // Get all orders without pagination
+    const response = await getCourierOrders({ enablePagination: false });
 
-    const orders = response.data.orders || [];
+    const orders = response.orders || [];
     const today = new Date().toDateString();
 
     // Calculate stats
     const activeOrders = orders.filter(
       (order) =>
-        !["COMPLETED", "CANCELED", "DISPUTED"].includes(order.orderStatus)
+        !["COMPLETED", "CANCELED", "DISPUTED", "GRACE_PERIOD"].includes(
+          order.orderStatus
+        )
     );
 
     const completedToday = orders.filter((order) => {
@@ -116,13 +132,16 @@ export const getCourierStats = async () => {
 };
 
 /**
- * Get active orders for dashboard (3 terbaru, belum selesai)
- * @returns {Promise} Active orders array (max 3)
+ * Get active orders for dashboard (no pagination)
+ * @returns {Promise} Active orders array
  */
 export const getActiveOrders = async () => {
   try {
-    const response = await api.get("/orders/courier/active");
-    return response.data;
+    const response = await getCourierOrders({
+      filter: "active",
+      enablePagination: false,
+    });
+    return response;
   } catch (error) {
     console.error("Error fetching active orders:", error);
     throw error;
@@ -179,20 +198,20 @@ export const updateCourierLocation = async (latitude, longitude) => {
 };
 
 /**
- * Get courier's notifications
- * @param {number} limit - Number of notifications to fetch
- * @param {number} offset - Pagination offset
- * @param {boolean} unreadOnly - Fetch only unread notifications
- * @returns {Promise} Notifications array with pagination
+ * Get courier's notifications with page-based pagination
+ * @param {number} page - Page number (default: 1)
+ * @param {number} limit - Items per page (default: 20)
+ * @param {boolean} unreadOnly - Fetch only unread notifications (default: false)
+ * @returns {Promise} Notifications array with pagination metadata
  */
 export const getNotifications = async (
+  page = 1,
   limit = 20,
-  offset = 0,
   unreadOnly = false
 ) => {
   try {
     const response = await api.get("/notifications/courier", {
-      params: { limit, offset, unreadOnly },
+      params: { page, limit, unreadOnly },
     });
     return response.data;
   } catch (error) {
@@ -241,6 +260,46 @@ export const deleteNotification = async (notificationId) => {
     return response.data;
   } catch (error) {
     console.error("Error deleting notification:", error);
+    throw error;
+  }
+};
+
+/**
+ * Generate QR code for order pickup
+ * @param {string} orderId - Order ID
+ * @returns {Promise} QR code data
+ */
+export const generateQrCode = async (orderId) => {
+  try {
+    const response = await api.post(`/orders/${orderId}/generate-qr`);
+    return response.data;
+  } catch (error) {
+    console.error("Error generating QR code:", error);
+    throw error;
+  }
+};
+
+/**
+ * Verify QR code and update order status to OUT_FOR_DELIVERY
+ * @param {string} qrCode - QR code string
+ * @returns {Promise} Verified order data
+ */
+export const verifyQrCode = async (qrCode) => {
+  try {
+    const response = await api.post("/orders/verify-qr", { qrCode });
+    return response.data;
+  } catch (error) {
+    console.error("Error verifying QR code:", error);
+    throw error;
+  }
+};
+
+export const getCourierProfile = async () => {
+  try {
+    const response = await api.get("/users/courier/me");
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching courier profile:", error);
     throw error;
   }
 };

@@ -111,12 +111,13 @@ const ForgotPassword = () => {
                   }}
                   variant="outline"
                   className="w-full"
+                  data-testid="try-different-email-button"
                 >
                   Try Different Email
                 </Button>
                 
-                <Link to="/profile">
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700">
+                <Link to="/courier/profile">
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700" data-testid="back-to-profile-success-button">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Profile
                   </Button>
@@ -178,6 +179,7 @@ const ForgotPassword = () => {
                   className={`pl-10 ${errors.email ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-blue-500'}`}
                   disabled={isLoading}
                   autoComplete="email"
+                  data-testid="forgot-password-email-input"
                 />
               </div>
               
@@ -193,6 +195,7 @@ const ForgotPassword = () => {
               type="submit" 
               className="w-full bg-blue-600 hover:bg-blue-700"
               disabled={isLoading}
+              data-testid="send-reset-email-button"
             >
               {isLoading ? (
                 <div className="flex items-center">
@@ -213,8 +216,8 @@ const ForgotPassword = () => {
               Remember your password?
             </p>
             
-            <Link to="/profile">
-              <Button variant="outline" className="w-full">
+            <Link to="/courier/profile">
+              <Button variant="outline" className="w-full" data-testid="back-to-profile-button">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Profile
               </Button>
