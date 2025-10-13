@@ -18,6 +18,7 @@ export const getIO = () => {
 export const initializeSocketHandlers = (io) => {
   io.on("connection", (socket) => {
     console.log(`🔌 Client connected: ${socket.id}`);
+    console.log(`   Transport: ${socket.conn.transport.name}`); // Log transport type (websocket/polling)
 
     // User joins their personal room for notifications
     socket.on("join", ({ userId }) => {
@@ -58,13 +59,19 @@ export const initializeSocketHandlers = (io) => {
           console.warn("⚠️ Redis not available, skipping location cache");
         }
 
-        // Get order to find customer
+        // Get order to find customer - using valid OrderStatus enum values
         const order = await prisma.order.findFirst({
           where: {
             id: orderId,
             courierId,
-            status: { in: ["ASSIGNED_TO_COURIER", "OUT_FOR_DELIVERY"] },
-            isDeleted: false,
+            orderStatus: {
+              in: [
+                "IN_PREPARATION",
+                "READY_FOR_PICKUP",
+                "OUT_FOR_DELIVERY",
+                "DELIVERED",
+              ],
+            },
           },
           select: { userId: true },
         });
@@ -84,29 +91,34 @@ export const initializeSocketHandlers = (io) => {
         }
       } catch (error) {
         console.error("❌ Error handling courier location:", error);
-        socket.emit("error", { message: "Failed to update location" });
+        // ✅ Just log the error, courier will retry on next GPS update
+        // No need to emit error event that triggers fallback
       }
     });
 
     // Customer requests current courier location
     socket.on("request-courier-location", async (data) => {
-      try {
-        const { orderId, userId } = data;
+      const { orderId, userId } = data; // ✅ Move to outer scope for catch block
 
+      try {
         // Verify order belongs to this user
         const order = await prisma.order.findFirst({
           where: {
             id: orderId,
             userId,
-            isDeleted: false,
           },
           select: { courierId: true },
         });
 
         if (!order || !order.courierId) {
-          socket.emit("error", {
+          // ✅ Don't emit "error" for business logic issues - use specific event
+          socket.emit("courier-location-unavailable", {
+            orderId,
             message: "Order not found or no courier assigned",
           });
+          console.log(
+            `⚠️ User ${userId} requested location for order ${orderId} - no courier assigned`
+          );
           return;
         }
 
@@ -125,7 +137,13 @@ export const initializeSocketHandlers = (io) => {
         const locationData = await redis.get(locationKey);
 
         if (locationData) {
-          const location = JSON.parse(locationData);
+          // ✅ Upstash Redis returns object directly, not string
+          // Check if already parsed or needs parsing
+          const location =
+            typeof locationData === "string"
+              ? JSON.parse(locationData)
+              : locationData;
+
           socket.emit("courier-location-update", {
             orderId,
             courierLocation: {
@@ -143,7 +161,11 @@ export const initializeSocketHandlers = (io) => {
         }
       } catch (error) {
         console.error("❌ Error fetching courier location:", error);
-        socket.emit("error", { message: "Failed to get location" });
+        // ✅ Don't emit "error" - use specific unavailable event
+        socket.emit("courier-location-unavailable", {
+          orderId, // ✅ Now in scope!
+          message: "Failed to get location - server error",
+        });
       }
     });
 

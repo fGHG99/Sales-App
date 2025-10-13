@@ -3,6 +3,9 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import prisma from "../../utils/prisma.js";
+import { authenticate } from "../Middlewares/accessControl.js";
+import { format } from "date-fns-tz";
+import { id as localeId } from "date-fns/locale";
 
 /**
  * !IMPORTANT PAKE ADD ERROR HANDLING UNTUK VALIDATOR EMAIL, PASSWORD DLL
@@ -280,6 +283,90 @@ router.post("/refresh", async (req, res) => {
     return res
       .status(403)
       .json({ message: "Invalid or expired refresh token" });
+  }
+});
+
+router.post("/change-password", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+    
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: "Semua field wajib diisi." });
+    }
+    
+    if (newPassword !== confirmPassword) {
+      return res
+        .status(400)
+        .json({ error: "Konfirmasi password tidak cocok." });
+    }
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: "User tidak ditemukan." });
+    }
+    
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: "Password lama salah." });
+    }
+    
+    // Validasi: password baru tidak boleh sama dengan password lama
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      return res.status(400).json({ 
+        error: "Password baru tidak boleh sama dengan password lama." 
+      });
+    }
+    
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Gunakan format waktu WIB (Asia/Jakarta)
+    const nowWIB = format(new Date(), "dd MMMM yyyy HH:mm:ss", {
+      timeZone: "Asia/Jakarta",
+      locale: localeId,
+    });
+    
+    // Kirim email konfirmasi password change SEBELUM update
+    try {
+      await transporter.sendMail({
+        from: `"Sales App Support" <${process.env.SMTP_USER}>`,
+        to: user.email,
+        subject: "Konfirmasi Perubahan Password",
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h2 style="color: #333;">Halo ${user.name || "User"},</h2>
+            <p>Password akun kamu baru saja diubah pada:</p>
+            <p><strong>${nowWIB} WIB</strong></p>
+            <p>Jika kamu tidak melakukan perubahan ini, segera hubungi tim support kami.</p>
+            <br />
+            <p>Salam hangat,</p>
+            <p><strong>Tim Sales App</strong></p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error("❌ Error sending email:", emailError);
+      return res.status(500).json({ 
+        error: "Gagal mengirim email konfirmasi. Password tidak diubah." 
+      });
+    }
+    
+    // Update password HANYA jika email berhasil dikirim
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+    
+    return res.json({
+      message: "Password berhasil diubah. Email konfirmasi telah dikirim.",
+    });
+  } catch (error) {
+    console.error("❌ Error in change-password:", error);
+    return res.status(500).json({ error: "Terjadi kesalahan pada server." });
   }
 });
 

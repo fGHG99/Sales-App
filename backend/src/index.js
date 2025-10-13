@@ -24,11 +24,23 @@ import { fileURLToPath } from "url";
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.IO
+// Initialize Socket.IO with WebSocket-first configuration
 const io = new SocketIOServer(server, {
   cors: {
     origin: ["http://localhost:5173"],
     credentials: true,
+    methods: ["GET", "POST"],
+  },
+  // ✅ WebSocket optimization
+  transports: ["websocket", "polling"], // Prefer WebSocket
+  allowUpgrades: true, // Allow upgrade from polling to WebSocket
+  pingTimeout: 60000, // How long to wait for ping response
+  pingInterval: 25000, // How often to send ping
+  upgradeTimeout: 10000, // How long to wait for upgrade
+  maxHttpBufferSize: 1e6, // 1MB max message size
+  // ✅ Performance
+  perMessageDeflate: {
+    threshold: 1024, // Compress messages > 1KB
   },
 });
 

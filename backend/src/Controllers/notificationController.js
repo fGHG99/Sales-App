@@ -6,13 +6,23 @@ import { authenticate } from "../Middlewares/accessControl.js";
  * Get courier's notifications
  * GET /notifications/courier
  *
+ * Query params:
+ *  - page (default: 1): Page number
+ *  - limit (default: 20): Items per page
+ *  - unreadOnly (default: false): Filter only unread notifications
+ *
  * Returns all notifications for the authenticated courier user
- * Sorted by newest first
+ * Sorted by newest first with page-based pagination
  */
 router.get("/courier", authenticate, async (req, res) => {
   try {
     const courierId = req.user.id;
-    const { limit = 20, offset = 0, unreadOnly = false } = req.query;
+    const { limit = 20, page = 1, unreadOnly = false } = req.query;
+
+    // Parse and validate pagination params
+    const itemsPerPage = parseInt(limit);
+    const currentPage = parseInt(page);
+    const skip = (currentPage - 1) * itemsPerPage;
 
     const whereClause = {
       userId: courierId,
@@ -29,8 +39,8 @@ router.get("/courier", authenticate, async (req, res) => {
       orderBy: {
         createdAt: "desc",
       },
-      take: parseInt(limit),
-      skip: parseInt(offset),
+      take: itemsPerPage,
+      skip: skip,
     });
 
     // Count total and unread
@@ -49,6 +59,11 @@ router.get("/courier", authenticate, async (req, res) => {
       },
     });
 
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / itemsPerPage);
+    const hasNextPage = currentPage < totalPages;
+    const hasPreviousPage = currentPage > 1;
+
     return res.status(200).json({
       message: "Notifications retrieved successfully",
       notifications: notifications.map((notif) => ({
@@ -64,9 +79,11 @@ router.get("/courier", authenticate, async (req, res) => {
       pagination: {
         total,
         unreadCount,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: total > parseInt(offset) + parseInt(limit),
+        page: currentPage,
+        limit: itemsPerPage,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
       },
     });
   } catch (error) {

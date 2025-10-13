@@ -258,6 +258,9 @@ model Order {
   pickupTime   DateTime? // Waktu pickup (jika PICKUP_TO_STORE)
   deliveryProof String? @db.VarChar(255) // Path to delivery proof photo
 
+  // QR Code for order pickup verification
+  qrCode String? @db.Text // QR code data in JSON string format
+
   // Order items stored as JSON
   orderItems Json?
   

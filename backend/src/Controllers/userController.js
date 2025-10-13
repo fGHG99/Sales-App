@@ -211,6 +211,84 @@ router.get("/me", authenticate, async (req, res) => {
   }
 });
 
+// GET /courier/me
+router.get("/courier/me", authenticate, async (req, res) => {
+  try {
+    const courierId = req.user.id; // from authenticate middleware
+
+    const courier = await prisma.user.findUnique({
+      where: { id: courierId },
+      include: {
+        image: true,
+        addresses: true,
+        role: true,
+      },
+    });
+
+    if (!courier) {
+      return res.status(404).json({ error: "Courier not found" });
+    }
+
+    // Hitung total delivery (status DELIVERED atau COMPLETED)
+    const totalDeliveries = await prisma.order.count({
+      where: {
+        courierId,
+        orderStatus: { in: ["DELIVERED", "COMPLETED"] },
+      },
+    });
+
+    // Waktu sekarang dalam zona waktu WIB
+    const now = new Date();
+    const wibOffset = 7 * 60; // menit
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const nowWIB = new Date(utc + wibOffset * 60000);
+
+    // Tentukan rentang hari ini (00:00:00 - 23:59:59 WIB)
+    const startOfTodayWIB = new Date(nowWIB);
+    startOfTodayWIB.setHours(0, 0, 0, 0);
+
+    const endOfTodayWIB = new Date(nowWIB);
+    endOfTodayWIB.setHours(23, 59, 59, 999);
+
+    // Konversi kembali ke UTC agar Prisma dapat memproses
+    const startUTC = new Date(startOfTodayWIB.getTime() - wibOffset * 60000);
+    const endUTC = new Date(endOfTodayWIB.getTime() - wibOffset * 60000);
+
+    // Hitung today deliveries (DELIVERED/COMPLETED hari ini)
+    const todayDeliveries = await prisma.order.count({
+      where: {
+        courierId,
+        orderStatus: { in: ["DELIVERED", "COMPLETED"] },
+        updatedAt: {
+          gte: startUTC,
+          lte: endUTC,
+        },
+      },
+    });
+
+    // Hitung active orders (READY_FOR_PICKUP dan OUT_FOR_DELIVERY)
+    const activeOrders = await prisma.order.count({
+      where: {
+        courierId,
+        orderStatus: { in: ["READY_FOR_PICKUP", "OUT_FOR_DELIVERY"] },
+      },
+    });
+
+    res.json({
+      courier,
+      stats: {
+        totalDeliveries,
+        todayDeliveries,
+        activeOrders,
+      },
+    });
+  } catch (error) {
+    console.error("Get courier data error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
 // Get access permissions owned by the authenticated user's role
 router.get("/permissions", authenticate, async (req, res) => {
   try {

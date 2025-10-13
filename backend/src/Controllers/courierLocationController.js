@@ -99,7 +99,6 @@ router.post(
             id: orderId,
             courierId,
             status: { in: ["ASSIGNED_TO_COURIER", "OUT_FOR_DELIVERY"] },
-            isDeleted: false,
           },
           select: { userId: true },
         });
