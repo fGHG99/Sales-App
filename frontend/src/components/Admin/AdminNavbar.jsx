@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Menu, LogOut } from "lucide-react";
 import AdminSearch from "./AdminSearch";
 import LogoutModal from "../modal/logout-confirmation";
 import NotificationDropdown from "../User/user-dropdown/NotificationDropdown";
+import { Avatar, AvatarImage, AvatarFallback } from "../ui/avatar";
 import api from "../../utils/api";
+import { getCurrentUser, getNotifications } from "../../services/adminService";
 
 export default function AdminNavbar({
   searchQuery,
@@ -16,9 +19,28 @@ export default function AdminNavbar({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [, setIsUserDropdownOpen] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const closeTimeoutRef = useRef(null);
   const userDropdownRef = useRef(null);
+
+  // Get user initials from name
+  const getInitials = (name) => {
+    if (!name) return "U";
+
+    const nameParts = name.trim().split(" ");
+
+    if (nameParts.length >= 2) {
+      // Take first letter of first two words
+      return (nameParts[0][0] + nameParts[1][0]).toUpperCase();
+    } else {
+      // Take first two letters of single word
+      return name.substring(0, 2).toUpperCase();
+    }
+  };
 
   const openDropdown = () => {
     if (closeTimeoutRef.current) {
@@ -50,6 +72,41 @@ export default function AdminNavbar({
     };
   }, []);
 
+  // Fetch user data on mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        setLoadingUser(true);
+        const response = await getCurrentUser();
+        setUserData(response.user);
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        // If user data fetch fails, might indicate auth issue
+        // Keep userData as null, component will show loading state or fallback
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  // Fetch notifications on mount
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await getNotifications(10, 1, "all");
+        setNotifications(response.notifications || []);
+        setUnreadCount(response.pagination?.unreadCount || 0);
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+        // Keep empty notifications on error
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
   // Cleanup timer saat component unmount
   useEffect(() => {
     return () => {
@@ -59,8 +116,7 @@ export default function AdminNavbar({
     };
   }, []);
 
-  const hasNotification = true;
-  const notif = [1, 2];
+  const hasNotification = unreadCount > 0;
 
   const handleLogout = () => {
     setShowLogoutModal(true);
@@ -87,7 +143,7 @@ export default function AdminNavbar({
 
       // Redirect to login page
       console.log("🔵 [AdminNavbar] Redirecting to /login...");
-      navigate("/login");
+      navigate("/auth/signin");
       console.log("✅ [AdminNavbar] Logout complete");
     } catch (error) {
       console.error("❌ [AdminNavbar] Logout API error:", error);
@@ -100,7 +156,7 @@ export default function AdminNavbar({
       setShowLogoutModal(false);
 
       // Redirect
-      navigate("/login");
+      navigate("/auth/signin");
     } finally {
       setIsLoggingOut(false);
     }
@@ -146,7 +202,7 @@ export default function AdminNavbar({
                   />
                   {hasNotification && (
                     <span className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
-                      {notif.length}
+                      {unreadCount}
                     </span>
                   )}
                 </div>
@@ -157,32 +213,44 @@ export default function AdminNavbar({
                   <NotificationDropdown
                     isOpen={isOpen}
                     onToggle={setIsOpen}
-                    notifications={notif}
+                    notifications={notifications}
                   />
                 </div>
               )}
             </div>
 
-            {/* Profile dropdown */}
+            {/* Profile section */}
             <div className="flex items-center space-x-3">
-              <img
-                className="h-8 w-8 rounded-full"
-                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
-                alt="Admin Avatar"
-                data-testid="admin-avatar"
-              />
+              <Avatar className="h-8 w-8">
+                {userData?.image?.url ? (
+                  <AvatarImage
+                    src={`${import.meta.env.VITE_BE_API_URL}${
+                      userData.image.url
+                    }`}
+                    alt={userData?.name || "Admin Avatar"}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-blue-600 text-white text-sm font-semibold">
+                  {loadingUser
+                    ? "..."
+                    : getInitials(userData?.name || "Admin User")}
+                </AvatarFallback>
+              </Avatar>
               <div className="hidden md:block">
                 <div
                   className="text-sm font-medium text-gray-900"
                   data-testid="admin-name"
                 >
-                  John Admin
+                  {loadingUser ? "Loading..." : userData?.name || "Admin User"}
                 </div>
                 <div
                   className="text-xs text-gray-500"
                   data-testid="admin-email"
                 >
-                  admin@geeksales.com
+                  {loadingUser
+                    ? "..."
+                    : userData?.email || "admin@geeksales.com"}
                 </div>
               </div>
               <div className="p-4">
@@ -197,12 +265,16 @@ export default function AdminNavbar({
           </div>
         </div>
       </div>
-      <LogoutModal
-        isOpen={showLogoutModal}
-        onClose={() => setShowLogoutModal(false)}
-        onConfirm={confirmLogout}
-        isLoading={isLoggingOut}
-      />
+      {showLogoutModal &&
+        createPortal(
+          <LogoutModal
+            isOpen={showLogoutModal}
+            onClose={() => setShowLogoutModal(false)}
+            onConfirm={confirmLogout}
+            isLoading={isLoggingOut}
+          />,
+          document.body
+        )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { Badge } from "../../ui/badge";
@@ -14,6 +14,7 @@ import {
   WifiOff,
   Phone,
   User,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import useCourierDashboard from "../../../hooks/useCourierDashboard";
@@ -21,7 +22,13 @@ import { useAuth } from "../../middleware/AuthContext";
 import { formatCurrency } from "../../../utils/formatters";
 import QrCodeScanner from "../QrCodeScanner";
 import QrCodeGenerator from "../QrCodeGenerator";
-import { generateQrCode, verifyQrCode } from "../../../services/courierService";
+import UploadDeliveryProofModal from "../modal/UploadDeliveryProofModal";
+import {
+  generateQrCode,
+  verifyQrCode,
+  uploadDeliveryProof as uploadDeliveryProofAPI,
+} from "../../../services/courierService";
+import useAwaitingProofOrders from "../../../hooks/useAwaitingProofOrders";
 
 const CourierDashboard = () => {
   const { user } = useAuth();
@@ -34,11 +41,56 @@ const CourierDashboard = () => {
     refresh,
     updateOrderStatus,
     markAsPickedUp,
-    markAsDelivered,
+    markAsDelivered: markAsDeliveredFromHook, // Rename to avoid conflict
   } = useCourierDashboard();
 
   const [updatingOrder, setUpdatingOrder] = useState(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isUploadProofModalOpen, setIsUploadProofModalOpen] = useState(false);
+  const [selectedOrderForProof, setSelectedOrderForProof] = useState(null);
+
+  // ✅ ADD: Memoized awaiting proof map
+  const [awaitingProofMap, setAwaitingProofMap] = useState(new Set());
+
+  // Use custom hook for cross-component synchronization
+  const {
+    awaitingProofOrders,
+    addAwaitingProofOrder,
+    removeAwaitingProofOrder,
+    isAwaitingProof,
+  } = useAwaitingProofOrders();
+
+  // ✅ ADD: Update map when awaitingProofOrders changes
+  useEffect(() => {
+    setAwaitingProofMap(new Set(awaitingProofOrders));
+  }, [awaitingProofOrders]);
+
+  // Listen for delivery proof upload completion
+  // Refresh data AFTER modal has fully closed to prevent race conditions
+  // useEffect(() => {
+  //   const handleDeliveryProofUploaded = (event) => {
+  //     console.log(
+  //       "Delivery proof uploaded, refreshing dashboard...",
+  //       event.detail
+  //     );
+  //     // Small delay to ensure modal is fully unmounted
+  //     setTimeout(() => {
+  //       refresh();
+  //     }, 100);
+  //   };
+
+  //   window.addEventListener(
+  //     "deliveryProofUploaded",
+  //     handleDeliveryProofUploaded
+  //   );
+
+  //   return () => {
+  //     window.removeEventListener(
+  //       "deliveryProofUploaded",
+  //       handleDeliveryProofUploaded
+  //     );
+  //   };
+  // }, [refresh]);
 
   // QR Code handlers
   const handleGenerateQr = async (orderId) => {
@@ -85,32 +137,115 @@ const CourierDashboard = () => {
     console.error("Scan error:", err);
   };
 
-  const handleOrderAction = async (orderId, action) => {
+  /**
+   * Mark order as ready for delivery proof upload
+   * This does NOT change the status to DELIVERED yet
+   */
+  const markAsDelivered = async (orderId) => {
+    try {
+      // Add order to awaiting proof set (synced across components)
+      addAwaitingProofOrder(orderId);
+
+      toast.success(
+        "Order marked as delivered. Please upload delivery proof to complete."
+      );
+
+      return { success: true };
+    } catch (err) {
+      console.error("Error marking as delivered:", err);
+      toast.error("Failed to mark order as delivered");
+      throw err;
+    }
+  };
+
+  /**
+   * Upload delivery proof and change status to DELIVERED
+   */
+  const uploadDeliveryProof = async (orderId, photoFile) => {
+    try {
+      // Upload the photo
+      const response = await uploadDeliveryProofAPI(orderId, photoFile);
+
+      // Remove from awaiting proof set (synced across components)
+      removeAwaitingProofOrder(orderId);
+
+      // DON'T refresh here - it causes re-render conflict with modal closing
+      // Refresh will be called AFTER modal closes in handleUploadFromModal
+
+      return response;
+    } catch (err) {
+      console.error("Error uploading delivery proof:", err);
+      const errorMsg =
+        err.response?.data?.message || "Failed to upload delivery proof";
+      toast.error(errorMsg);
+      throw err;
+    }
+  };
+
+  /**
+   * Open upload proof modal
+   */
+  const handleOpenUploadModal = (orderId) => {
+    setSelectedOrderForProof(orderId);
+    setIsUploadProofModalOpen(true);
+  };
+
+  /**
+   * Close upload proof modal
+   */
+  const handleCloseUploadModal = () => {
+    setIsUploadProofModalOpen(false);
+    setSelectedOrderForProof(null);
+
+    setTimeout(() => {
+      refresh();
+    }, 100); // Small delay to ensure modal is fully unmounted
+  };
+
+  /**
+   * Handle upload from modal
+   */
+  const handleUploadFromModal = async (orderId, file) => {
     try {
       setUpdatingOrder(orderId);
 
-      switch (action) {
-        case "ready":
-          await updateOrderStatus(
-            orderId,
-            "READY_FOR_PICKUP",
-            "Paket siap diambil"
-          );
-          break;
-        case "pickup":
-          await markAsPickedUp(orderId);
-          break;
-        case "delivered":
-          await markAsDelivered(orderId);
-          break;
-        default:
-          break;
-      }
+      // Upload delivery proof
+      await uploadDeliveryProof(orderId, file);
 
-      // Refresh data after update
+      // ✅ Important: Reset updating state immediately
+      setUpdatingOrder(null);
+
+      // ✅ Return success first - let modal close
+      return Promise.resolve();
+    } catch (err) {
+      setUpdatingOrder(null);
+      throw err;
+    }
+  };
+
+  // Order action handlers configuration
+  const ACTION_HANDLERS = {
+    ready: (orderId) =>
+      updateOrderStatus(orderId, "READY_FOR_PICKUP", "Paket siap diambil"),
+    pickup: (orderId) => markAsPickedUp(orderId),
+    delivered: (orderId) => markAsDelivered(orderId),
+  };
+
+  const handleOrderAction = async (orderId, action) => {
+    const handler = ACTION_HANDLERS[action];
+
+    if (!handler) {
+      console.warn(`Unknown action: ${action}`);
+      return;
+    }
+
+    try {
+      setUpdatingOrder(orderId);
+      await handler(orderId);
       await refresh();
     } catch (err) {
       console.error("Error updating order:", err);
+      toast.error("Failed to update order");
     } finally {
       setUpdatingOrder(null);
     }
@@ -151,103 +286,145 @@ const CourierDashboard = () => {
     return <Badge className={config.color}>{config.text}</Badge>;
   };
 
+  // Button factory functions for reusability
+  const createNavigateButton = (to, label, Icon) => (
+    <Link to={to}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="border-blue-600 text-blue-600 hover:bg-blue-50"
+      >
+        <Icon className="w-4 h-4 mr-1" />
+        {label}
+      </Button>
+    </Link>
+  );
+
+  const createActionButton = (onClick, isUpdating, className, label, Icon) => (
+    <Button
+      onClick={onClick}
+      size="sm"
+      className={className}
+      disabled={isUpdating}
+    >
+      {isUpdating ? (
+        <>
+          <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+          Updating...
+        </>
+      ) : (
+        <>
+          {Icon && <Icon className="w-4 h-4 mr-1" />}
+          {label}
+        </>
+      )}
+    </Button>
+  );
+
+  const createUploadProofButton = (
+    orderId,
+    className,
+    label,
+    Icon,
+    isUpdating
+  ) => (
+    <Button
+      onClick={() => handleOpenUploadModal(orderId)}
+      size="sm"
+      className={className}
+      disabled={isUpdating}
+    >
+      {isUpdating ? (
+        <>
+          <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+          Uploading...
+        </>
+      ) : (
+        <>
+          {Icon && <Icon className="w-4 h-4 mr-1" />}
+          {label}
+        </>
+      )}
+    </Button>
+  );
+
+  // Action button configuration map
+  const BUTTON_CONFIG = {
+    IN_PREPARATION: (order, isUpdating) =>
+      createActionButton(
+        () => handleOrderAction(order.id, "ready"),
+        isUpdating,
+        "bg-orange-600 hover:bg-orange-700",
+        "Mark Ready",
+        null
+      ),
+
+    READY_FOR_PICKUP: (order, isUpdating) => (
+      <div className="flex space-x-2">
+        {createNavigateButton(
+          `/courier/store-location/order/${order.id}`,
+          "Navigate to store",
+          MapPin
+        )}
+        {createActionButton(
+          () => handleOrderAction(order.id, "pickup"),
+          isUpdating,
+          "bg-purple-600 hover:bg-purple-700",
+          "Pick Up",
+          Package
+        )}
+      </div>
+    ),
+
+    OUT_FOR_DELIVERY: (order, isUpdating) => {
+      // ✅ FIX: Use Set lookup instead of function call - no re-render
+      const awaitingProof = awaitingProofMap.has(order.id);
+
+      return (
+        <div className="flex space-x-2">
+          {createNavigateButton(
+            `/courier/customer-location/order/${order.id}`,
+            "Customer",
+            Navigation
+          )}
+          {/* Show different button based on whether awaiting proof upload */}
+          {awaitingProof
+            ? createUploadProofButton(
+                order.id,
+                "bg-blue-600 hover:bg-blue-700",
+                "Upload Proof",
+                Upload,
+                isUpdating
+              )
+            : createActionButton(
+                () => handleOrderAction(order.id, "delivered"),
+                isUpdating,
+                "bg-green-600 hover:bg-green-700",
+                "Mark Delivered",
+                CheckCircle2
+              )}
+        </div>
+      );
+    },
+
+    DELIVERED: (order) => null,
+  };
+
   const getActionButton = (order) => {
     const isUpdating = updatingOrder === order.id;
 
-    if (order.orderStatus === "CANCELED" || order.orderStatus === "DISPUTED") {
+    // Early return for non-actionable statuses
+    if (["CANCELED", "DISPUTED"].includes(order.orderStatus)) {
       return null;
     }
 
-    switch (order.orderStatus) {
-      case "IN_PREPARATION":
-        return (
-          <Button
-            onClick={() => handleOrderAction(order.id, "ready")}
-            size="sm"
-            className="bg-orange-600 hover:bg-orange-700"
-            disabled={isUpdating}
-          >
-            {isUpdating ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              <>Mark Ready</>
-            )}
-          </Button>
-        );
-
-      case "READY_FOR_PICKUP":
-        return (
-          <div className="flex space-x-2">
-            <Link to={`/courier/store-location/order/${order.id}`}>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-blue-600 text-blue-600 hover:bg-blue-50"
-              >
-                <MapPin className="w-4 h-4 mr-1" />
-                Navigate to store
-              </Button>
-            </Link>
-            <Button
-              onClick={() => handleOrderAction(order.id, "pickup")}
-              size="sm"
-              className="bg-purple-600 hover:bg-purple-700"
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
-                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-              ) : (
-                <Package className="w-4 h-4 mr-1" />
-              )}
-              Pick Up
-            </Button>
-          </div>
-        );
-
-      case "OUT_FOR_DELIVERY":
-        return (
-          <div className="flex space-x-2">
-            <Link to={`/courier/customer-location/order/${order.id}`}>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-blue-600 text-blue-600 hover:bg-blue-50"
-              >
-                <Navigation className="w-4 h-4 mr-1" />
-                Customer
-              </Button>
-            </Link>
-            <Button
-              onClick={() => handleOrderAction(order.id, "delivered")}
-              size="sm"
-              className="bg-green-600 hover:bg-green-700"
-              disabled={isUpdating}
-            >
-              {isUpdating ? (
-                <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 mr-1" />
-              )}
-              Delivered
-            </Button>
-          </div>
-        );
-
-      case "DELIVERED":
-        return (
-          <Link to={`/courier/order/${order.id}`}>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-              Upload Proof
-            </Button>
-          </Link>
-        );
-
-      default:
-        return null;
+    // ✅ ADD COMPLETED to prevent button after fully done
+    if (order.orderStatus === "DELIVERED") {
+      return null;
     }
+
+    const buttonFactory = BUTTON_CONFIG[order.orderStatus];
+    return buttonFactory ? buttonFactory(order, isUpdating) : null;
   };
 
   return (
@@ -293,26 +470,18 @@ const CourierDashboard = () => {
         </div>
       )}
 
-      {/* QR Code Section - Top Priority */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* QR Code Generator - Development */}
-        {activeOrders.length > 0 && activeOrders[0] && (
-          <QrCodeGenerator
-            orderId={activeOrders[0].id}
-            onGenerate={handleGenerateQr}
-            onError={(err) => console.error("QR Generator error:", err)}
-          />
-        )}
-
-        {/* QR Code Scanner */}
-        <QrCodeScanner
-          onScanSuccess={handleScanSuccess}
-          onScanError={handleScanError}
+      {/* QR Code Generator - Development (Commented) */}
+      {/* {activeOrders.length > 0 && activeOrders[0] && (
+        <QrCodeGenerator
+          orderId={activeOrders[0].id}
+          onGenerate={handleGenerateQr}
+          onError={(err) => console.error("QR Generator error:", err)}
         />
-      </div>
+      )} */}
 
-      {/* Active Orders */}
+      {/* Active Orders & QR Scanner Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Active Orders - Left Column */}
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center text-lg">
@@ -403,7 +572,23 @@ const CourierDashboard = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* QR Code Scanner - Right Column */}
+        <div>
+          <QrCodeScanner
+            onScanSuccess={handleScanSuccess}
+            onScanError={handleScanError}
+          />
+        </div>
       </div>
+
+      {/* Upload Delivery Proof Modal */}
+      <UploadDeliveryProofModal
+        isOpen={isUploadProofModalOpen}
+        onClose={handleCloseUploadModal}
+        orderId={selectedOrderForProof}
+        onUploadSuccess={handleUploadFromModal}
+      />
     </div>
   );
 };

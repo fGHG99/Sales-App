@@ -289,12 +289,12 @@ export default function OrderSummary({
       window.dispatchEvent(new CustomEvent("cartUpdated"));
 
       // Navigate to order success/detail page
-      const orderId = response.data.order.id;
-      navigate(`/order/success/${orderId}`, {
-        state: { orderData: response.data.order },
+      // const orderId = response.data.order.id;
+      navigate("/user/orders", {
+        // state: { orderData: response.data.order },
       });
     } catch (error) {
-      console.error("❌ Checkout failed:", error);
+      console.error("❌ Checkout failed:", error);  
 
       setShowConfirmModal(false);
 

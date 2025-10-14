@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Package,
   Clock,
@@ -8,6 +8,7 @@ import {
   User,
   MapPin,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -27,119 +28,147 @@ import {
   DialogTrigger,
 } from "../../ui/dialog";
 import {
-  orders as initialOrders,
+  getAllOrders,
+  updateOrderStatus as updateOrderStatusAPI,
   formatCurrency,
-  formatDate,
-  getStatusColor,
-} from "../../../utils/mockDataAdmin";
+  getStatusBadgeColor,
+  formatOrderStatus,
+  getStatusButtonConfig,
+} from "../../../services/adminService";
 import Pagination from "../../Pagination";
 
 const OrderManagement = () => {
-  const [orders, setOrders] = useState(initialOrders);
+  const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(null); // null for "all"
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
+
   const itemsPerPage = 5;
 
-  const statusWorkflow = {
-    "menunggu persiapan": "pesanan selesai disiapkan",
-    "pesanan selesai disiapkan": "menunggu kurir", // Auto-transition
-    "menunggu kurir": "sedang dikirim",
-    "sedang dikirim": "selesai",
-  };
+  // Status tabs configuration
+  const statusTabs = [
+    { key: null, label: "Semua Order" },
+    { key: "PENDING", label: "Pending" },
+    { key: "IN_PREPARATION", label: "Sedang Disiapkan" },
+    { key: "PREPARED", label: "Sudah Disiapkan" },
+    { key: "READY_FOR_PICKUP", label: "Siap Diambil" },
+    { key: "OUT_FOR_DELIVERY", label: "Dalam Perjalanan" },
+    { key: "ARRIVED_AT_DESTINATION", label: "Telah Tiba" },
+    { key: "DELIVERED", label: "Dikirimkan" },
+    { key: "COMPLETED", label: "Selesai" },
+    { key: "DISPUTED", label: "Dalam Sengketa" },
+    { key: "CANCELED", label: "Dibatalkan" },
+  ];
 
-  const updateOrderStatus = (orderId, newStatus) => {
-    setOrders((prevOrders) =>
-      prevOrders.map((order) => {
-        if (order.id === orderId) {
-          let updatedOrder = { ...order, status: newStatus };
+  // Fetch orders whenever page or filter changes
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-          // Auto-transition logic
-          if (newStatus === "pesanan selesai disiapkan") {
-            updatedOrder.isPrepared = true;
-            // Simulate auto-transition to 'menunggu kurir' after preparation
-            setTimeout(() => {
-              setOrders((current) =>
-                current.map((o) =>
-                  o.id === orderId ? { ...o, status: "menunggu kurir" } : o
-                )
-              );
-            }, 2000);
-          }
+        const response = await getAllOrders({
+          page: currentPage,
+          limit: itemsPerPage,
+          status: filter,
+        });
 
-          return updatedOrder;
-        }
-        return order;
-      })
-    );
-  };
+        setOrders(response.data);
+        setTotalPages(response.pagination.totalPages);
+      } catch (err) {
+        console.error("Error fetching orders:", err);
+        setError("Gagal memuat data order. Silakan coba lagi.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const filteredOrders = orders.filter((order) => {
-    if (filter === "all") return true;
-    if (filter === "pending") return order.status === "menunggu persiapan";
-    if (filter === "ready") return order.status === "pesanan selesai disiapkan";
-    if (filter === "shipping") return order.status === "sedang dikirim";
-    if (filter === "disputed") return order.isDisputed;
-    return true;
-  });
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+    fetchOrders();
+  }, [currentPage, filter]);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
 
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    setCurrentPage(1); // Reset to page 1 when filter changes
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      setUpdatingOrderId(orderId);
+
+      await updateOrderStatusAPI(orderId, newStatus);
+
+      // Refresh orders after successful update
+      const response = await getAllOrders({
+        page: currentPage,
+        limit: itemsPerPage,
+        status: filter,
+      });
+
+      setOrders(response.data);
+      setTotalPages(response.pagination.totalPages);
+    } catch (err) {
+      console.error("Error updating order status:", err);
+      alert("Gagal memperbarui status order. Silakan coba lagi.");
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   const getActionButton = (order) => {
-    const nextStatus = statusWorkflow[order.status];
-    if (!nextStatus) return null;
+    const buttonConfig = getStatusButtonConfig(order.orderStatus);
+    if (!buttonConfig) return null;
 
-    const buttonConfig = {
-      "menunggu persiapan": {
-        text: "Mark as Prepared",
-        icon: CheckCircle,
-        variant: "default",
-        testId: `mark-prepared-${order.id}`,
-      },
-      "menunggu kurir": {
-        text: "Courier Picked Up",
-        icon: Package,
-        variant: "outline",
-        testId: `courier-pickup-${order.id}`,
-      },
-      "sedang dikirim": {
-        text: "Mark Delivered",
-        icon: CheckCircle,
-        variant: "default",
-        testId: `mark-delivered-${order.id}`,
-      },
-    };
+    const isUpdating = updatingOrderId === order.id;
 
-    const config = buttonConfig[order.status];
-    if (!config) return null;
-
-    const Icon = config.icon;
     return (
       <Button
-        variant={config.variant}
+        variant="default"
         size="sm"
-        onClick={() => updateOrderStatus(order.id, nextStatus)}
+        onClick={() =>
+          handleUpdateOrderStatus(order.id, buttonConfig.nextStatus)
+        }
         className="ml-2"
-        data-testid={config.testId}
+        disabled={isUpdating}
+        data-testid={`update-status-${order.id}`}
       >
-        <Icon className="w-4 h-4 mr-2" />
-        {config.text}
+        {isUpdating ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Memproses...
+          </>
+        ) : (
+          <>
+            <CheckCircle className="w-4 h-4 mr-2" />
+            {buttonConfig.text}
+          </>
+        )}
       </Button>
     );
   };
 
-  const OrderDetailsModal = ({ order, onClose }) => (
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const OrderDetailsModal = ({ order }) => (
     <DialogContent className="max-w-2xl" data-testid="order-details-modal">
       <DialogHeader>
-        <DialogTitle>Order Details - {order.id}</DialogTitle>
+        <DialogTitle>Order Details - #{order.id.slice(0, 8)}</DialogTitle>
         <DialogDescription>
           Complete information about this order
         </DialogDescription>
@@ -150,32 +179,42 @@ const OrderManagement = () => {
         <div>
           <h3 className="font-semibold mb-3">Order Items</h3>
           <div className="space-y-2">
-            {order.items.map((item, index) => (
+            {order.orderItems.map((item, index) => (
               <div
                 key={index}
                 className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
               >
                 <div>
-                  <p className="font-medium">{item.name}</p>
+                  <p className="font-medium">{item.productName}</p>
                   <p className="text-sm text-gray-600">
                     Quantity: {item.quantity}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium">
-                    {formatCurrency(item.price * item.quantity)}
-                  </p>
+                  <p className="font-medium">{formatCurrency(item.total)}</p>
                   <p className="text-sm text-gray-600">
-                    {formatCurrency(item.price)} each
+                    {formatCurrency(item.pricePerItem)} each
                   </p>
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-3 pt-3 border-t">
-            <div className="flex justify-between font-bold">
+          <div className="mt-3 pt-3 border-t space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Subtotal:</span>
+              <span>{formatCurrency(Number(order.subtotal))}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Biaya Pengiriman:</span>
+              <span>{formatCurrency(Number(order.deliveryFee))}</span>
+            </div>
+            <div className="flex justify-between font-bold pt-2 border-t">
               <span>Total Amount:</span>
-              <span>{formatCurrency(order.totalAmount)}</span>
+              <span>
+                {formatCurrency(
+                  Number(order.subtotal) + Number(order.deliveryFee)
+                )}
+              </span>
             </div>
           </div>
         </div>
@@ -187,7 +226,7 @@ const OrderManagement = () => {
             <div className="space-y-2">
               <div className="flex items-center">
                 <User className="w-4 h-4 mr-2 text-gray-500" />
-                <span>{order.customerName}</span>
+                <span>{order.deliveryAddress.recipientName}</span>
               </div>
               <div className="flex items-center">
                 <Calendar className="w-4 h-4 mr-2 text-gray-500" />
@@ -201,12 +240,8 @@ const OrderManagement = () => {
             <div className="space-y-2">
               <div className="flex items-start">
                 <MapPin className="w-4 h-4 mr-2 text-gray-500 mt-0.5" />
-                <span className="text-sm">{order.deliveryAddress}</span>
-              </div>
-              <div className="flex items-center">
-                <Clock className="w-4 h-4 mr-2 text-gray-500" />
                 <span className="text-sm">
-                  ETA: {formatDate(order.estimatedDelivery)}
+                  {order.deliveryAddress.fullAddress}
                 </span>
               </div>
             </div>
@@ -214,17 +249,16 @@ const OrderManagement = () => {
         </div>
 
         {/* Courier Information */}
-        {order.courierId && (
+        {order.courier && (
           <div>
             <h3 className="font-semibold mb-3">Assigned Courier</h3>
             <div className="p-3 bg-blue-50 rounded-lg">
               <p>
-                <span className="font-medium">Courier ID:</span>{" "}
-                {order.courierId}
+                <span className="font-medium">Name:</span> {order.courier.name}
               </p>
               <p className="text-sm text-gray-600 mt-1">
-                Note: For privacy, courier details are available in the courier
-                tracking section
+                <span className="font-medium">Phone:</span>{" "}
+                {order.courier.phone}
               </p>
             </div>
           </div>
@@ -234,25 +268,65 @@ const OrderManagement = () => {
         <div className="flex items-center justify-between pt-4 border-t">
           <div>
             <Badge
-              className={getStatusColor(order.status)}
+              className={getStatusBadgeColor(order.orderStatus)}
               data-testid={`order-status-${order.id}`}
             >
-              {order.status}
+              {formatOrderStatus(order.orderStatus)}
             </Badge>
-            {order.isDisputed && (
-              <Badge
-                variant="destructive"
-                className="ml-2"
-                data-testid="dispute-indicator"
-              >
-                Disputed
-              </Badge>
-            )}
           </div>
           {getActionButton(order)}
         </div>
       </div>
     </DialogContent>
+  );
+
+  // Loading state
+  if (loading && orders.length === 0) {
+    return (
+      <div className="space-y-6" data-testid="order-management">
+        <div className="border-b border-gray-200 pb-4">
+          <h1 className="text-2xl font-bold text-gray-900">Order Management</h1>
+          <p className="text-gray-600">
+            Manage order preparation and fulfillment workflow
+          </p>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+            <p className="text-gray-600">Loading orders...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6" data-testid="order-management">
+        <div className="border-b border-gray-200 pb-4">
+          <h1 className="text-2xl font-bold text-gray-900">Order Management</h1>
+          <p className="text-gray-600">
+            Manage order preparation and fulfillment workflow
+          </p>
+        </div>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-8 text-center">
+            <AlertTriangle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+            <h3 className="text-lg font-medium text-red-900 mb-2">Error</h3>
+            <p className="text-red-700">{error}</p>
+            <Button className="mt-4" onClick={() => window.location.reload()}>
+              Reload Page
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const pendingPreparationOrders = orders.filter(
+    (order) =>
+      order.orderStatus === "PENDING" || order.orderStatus === "IN_PREPARATION"
   );
 
   return (
@@ -266,23 +340,17 @@ const OrderManagement = () => {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-        {[
-          { key: "all", label: "All Orders" },
-          { key: "pending", label: "Need Preparation" },
-          { key: "ready", label: "Ready for Pickup" },
-          { key: "shipping", label: "In Delivery" },
-          { key: "disputed", label: "Disputed" },
-        ].map((tab) => (
+      <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg">
+        {statusTabs.map((tab) => (
           <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            key={tab.key || "all"}
+            onClick={() => handleFilterChange(tab.key)}
+            className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               filter === tab.key
                 ? "bg-white text-blue-600 shadow-sm"
                 : "text-gray-600 hover:text-gray-900"
             }`}
-            data-testid={`filter-${tab.key}`}
+            data-testid={`filter-${tab.key || "all"}`}
           >
             {tab.label}
           </button>
@@ -290,7 +358,7 @@ const OrderManagement = () => {
       </div>
 
       {/* Preparation notifications */}
-      {filter === "pending" && filteredOrders.length > 0 && (
+      {filter === null && pendingPreparationOrders.length > 0 && (
         <Card
           className="border-orange-200 bg-orange-50"
           data-testid="preparation-alert"
@@ -301,7 +369,8 @@ const OrderManagement = () => {
               Items Need Preparation
             </CardTitle>
             <CardDescription className="text-orange-700">
-              {filteredOrders.length} orders are waiting for item preparation
+              {pendingPreparationOrders.length} orders are waiting for item
+              preparation
             </CardDescription>
           </CardHeader>
         </Card>
@@ -309,7 +378,7 @@ const OrderManagement = () => {
 
       {/* Orders list */}
       <div className="space-y-4">
-        {paginatedOrders.length === 0 ? (
+        {orders.length === 0 ? (
           <Card data-testid="no-orders-message">
             <CardContent className="p-8 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -317,14 +386,14 @@ const OrderManagement = () => {
                 No orders found
               </h3>
               <p className="text-gray-500">
-                {filter === "all"
-                  ? "No orders available at the moment."
-                  : `No orders match the "${filter}" filter.`}
+                {filter
+                  ? `No orders match the "${formatOrderStatus(filter)}" filter.`
+                  : "No orders available at the moment."}
               </p>
             </CardContent>
           </Card>
         ) : (
-          paginatedOrders.map((order) => (
+          orders.map((order) => (
             <Card
               key={order.id}
               className="hover:shadow-md transition-shadow"
@@ -335,14 +404,20 @@ const OrderManagement = () => {
                   <div className="flex-1">
                     <div className="flex items-center space-x-4">
                       <div>
-                        <h3 className="font-semibold text-lg">{order.id}</h3>
-                        <p className="text-gray-600">{order.customerName}</p>
+                        <h3 className="font-semibold text-lg">
+                          #{order.id.slice(0, 8)}
+                        </h3>
+                        <p className="text-gray-600">
+                          {order.deliveryAddress.recipientName}
+                        </p>
                       </div>
 
                       <div className="flex-1">
                         <p className="text-sm text-gray-600 mb-1">
-                          {order.items.length} items •{" "}
-                          {formatCurrency(order.totalAmount)}
+                          {order.orderItems.length} items •{" "}
+                          {formatCurrency(
+                            Number(order.subtotal) + Number(order.deliveryFee)
+                          )}
                         </p>
                         <p className="text-sm text-gray-500">
                           Ordered: {formatDate(order.createdAt)}
@@ -351,7 +426,8 @@ const OrderManagement = () => {
                     </div>
 
                     {/* Show items that need preparation */}
-                    {order.status === "menunggu persiapan" && (
+                    {(order.orderStatus === "PENDING" ||
+                      order.orderStatus === "IN_PREPARATION") && (
                       <div
                         className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
                         data-testid={`preparation-items-${order.id}`}
@@ -360,17 +436,19 @@ const OrderManagement = () => {
                           Items to Prepare:
                         </h4>
                         <div className="space-y-1">
-                          {order.items.map((item, index) => (
+                          {order.orderItems.map((item, index) => (
                             <div
                               key={index}
                               className="flex items-center justify-between text-sm"
                             >
                               <span className="text-yellow-700">
-                                {item.quantity}x {item.name}
+                                {item.quantity}x {item.productName}
                               </span>
-                              <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
-                                Prepare Now
-                              </span>
+                              {order.orderStatus === "PENDING" && (
+                                <span className="inline-flex items-center px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                                  Prepare Now
+                                </span>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -381,30 +459,11 @@ const OrderManagement = () => {
                   <div className="flex items-center space-x-3">
                     <div className="text-right">
                       <Badge
-                        className={getStatusColor(order.status)}
+                        className={getStatusBadgeColor(order.orderStatus)}
                         data-testid={`status-badge-${order.id}`}
                       >
-                        {order.status}
+                        {formatOrderStatus(order.orderStatus)}
                       </Badge>
-                      {order.isDisputed && (
-                        <Badge
-                          variant="destructive"
-                          className="block mt-1"
-                          data-testid={`dispute-badge-${order.id}`}
-                        >
-                          Disputed
-                        </Badge>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">
-                        ETA:{" "}
-                        {new Date(order.estimatedDelivery).toLocaleTimeString(
-                          "id-ID",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )}
-                      </p>
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -435,7 +494,11 @@ const OrderManagement = () => {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <Pagination totalPages={totalPages} onPageChange={handlePageChange} />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
       )}
 
       {/* Status transition info */}
@@ -449,33 +512,39 @@ const OrderManagement = () => {
               <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
                 1
               </div>
-              <p className="text-yellow-700">Menunggu Persiapan</p>
+              <p className="text-yellow-700 text-xs">Pending</p>
             </div>
-            <div className="flex-1 h-px bg-blue-300 mx-4"></div>
+            <div className="flex-1 h-px bg-blue-300 mx-2"></div>
             <div className="text-center">
-              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
+              <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
                 2
               </div>
-              <p className="text-blue-700">Selesai Disiapkan</p>
+              <p className="text-orange-700 text-xs">Sedang Disiapkan</p>
             </div>
-            <div className="flex-1 h-px bg-blue-300 mx-4"></div>
+            <div className="flex-1 h-px bg-blue-300 mx-2"></div>
             <div className="text-center">
-              <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
                 3
               </div>
-              <p className="text-purple-700">Menunggu Kurir</p>
+              <p className="text-blue-700 text-xs">Sudah Disiapkan</p>
             </div>
-            <div className="flex-1 h-px bg-blue-300 mx-4"></div>
+            <div className="flex-1 h-px bg-blue-300 mx-2"></div>
             <div className="text-center">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
+              <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
                 4
               </div>
-              <p className="text-green-700">Sedang Dikirim</p>
+              <p className="text-purple-700 text-xs">Siap Diambil</p>
+            </div>
+            <div className="flex-1 h-px bg-blue-300 mx-2"></div>
+            <div className="text-center">
+              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white font-bold mb-2">
+                5
+              </div>
+              <p className="text-green-700 text-xs">Dalam Perjalanan</p>
             </div>
           </div>
           <p className="text-blue-700 text-xs mt-4 text-center">
-            * System automatically transitions from "Selesai Disiapkan" to
-            "Menunggu Kurir"
+            * Admin can update status from Pending → Ready for Pickup
           </p>
         </CardContent>
       </Card>

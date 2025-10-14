@@ -1,13 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Truck,
-  MapPin,
   Phone,
-  Star,
-  Clock,
   Package,
   Navigation,
-  RefreshCw,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Card,
@@ -16,68 +14,80 @@ import {
   CardHeader,
   CardTitle,
 } from "../../ui/card";
-import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
-import MapComponent from "../Map-Component";
-import { couriers, orders, formatDate } from "../../../utils/mockDataAdmin";
+import {
+  getCouriersInWorkspace,
+  getCouriersWithActiveDeliveries,
+  getCourierStatusBadgeColor,
+  formatCourierStatus,
+  formatCurrency,
+  formatOrderStatus,
+} from "../../../services/adminService";
 import Pagination from "../../Pagination";
 
 const CourierTracking = () => {
-  const [selectedCourier, setSelectedCourier] = useState(null);
-  const [showMap, setShowMap] = useState(false);
-  const [filter, setFilter] = useState("all");
+  const [couriers, setCouriers] = useState([]);
+  const [totalCouriersInWorkspace, setTotalCouriersInWorkspace] = useState(0);
+  const [totalActiveCouriers, setTotalActiveCouriers] = useState(0);
+  const [totalActiveOrders, setTotalActiveOrders] = useState(0);
+  const [filter, setFilter] = useState(null); // null = "all", "active", "available"
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const itemsPerPage = 5;
 
-  // Mock user locations for delivery addresses
-  const getDeliveryLocation = (orderId) => {
-    const locationMap = {
-      "ORD-001": { lat: -6.2088, lng: 106.8456 }, // Jakarta Pusat
-      "ORD-002": { lat: -6.2614, lng: 106.7809 }, // Jakarta Selatan
-      "ORD-003": { lat: -6.1944, lng: 106.8229 }, // Jakarta Pusat
-      "ORD-004": { lat: -6.2467, lng: 106.8294 }, // Jakarta Selatan
+  // Fetch workspace couriers for total count
+  useEffect(() => {
+    const fetchWorkspaceCouriers = async () => {
+      try {
+        const response = await getCouriersInWorkspace();
+        setTotalCouriersInWorkspace(response.data.totalCouriers);
+      } catch (err) {
+        console.error("Error fetching workspace couriers:", err);
+        // Non-critical error, don't block the main data
+      }
     };
-    return locationMap[orderId] || { lat: -6.2088, lng: 106.8456 };
-  };
 
-  const filteredCouriers = couriers.filter((courier) => {
-    if (filter === "all") return true;
-    if (filter === "active")
-      return (
-        courier.status === "aktif" || courier.status === "dalam perjalanan"
-      );
-    if (filter === "available") return courier.activeDeliveries.length === 0;
-    if (filter === "busy") return courier.activeDeliveries.length > 0;
-    return true;
-  });
+    fetchWorkspaceCouriers();
+  }, []);
 
-  const handleTrackCourier = (courier) => {
-    setSelectedCourier(courier);
-    setShowMap(true);
-  };
+  // Fetch couriers with active deliveries
+  useEffect(() => {
+    const fetchCouriers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  const getStatusColor = (status) => {
-    const colors = {
-      aktif: "bg-green-100 text-green-800",
-      "dalam perjalanan": "bg-blue-100 text-blue-800",
-      istirahat: "bg-gray-100 text-gray-800",
-      offline: "bg-red-100 text-red-800",
+        const response = await getCouriersWithActiveDeliveries({
+          page: currentPage,
+          limit: itemsPerPage,
+          status: filter,
+        });
+
+        setCouriers(response.data.couriers);
+        setTotalActiveCouriers(response.data.totalActiveCouriers);
+        setTotalActiveOrders(response.data.totalActiveOrders);
+        setTotalPages(response.pagination.totalPages);
+      } catch (err) {
+        console.error("Error fetching couriers:", err);
+        setError("Gagal memuat data kurir. Silakan coba lagi.");
+      } finally {
+        setLoading(false);
+      }
     };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
 
-  const getCourierOrders = (courierId) => {
-    return orders.filter((order) => order.courierId === courierId);
-  };
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredCouriers.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedCouriers = filteredCouriers.slice(startIndex, endIndex);
+    fetchCouriers();
+  }, [currentPage, filter]);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+  };
+
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    setCurrentPage(1); // Reset to page 1 when filter changes
   };
 
   return (
@@ -93,20 +103,19 @@ const CourierTracking = () => {
       {/* Filter tabs */}
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
         {[
-          { key: "all", label: "All Couriers" },
-          { key: "active", label: "Active" },
-          { key: "available", label: "Available" },
-          { key: "busy", label: "On Delivery" },
+          { key: null, label: "Semua Kurir" },
+          { key: "active", label: "Aktif" },
+          { key: "available", label: "Tersedia" },
         ].map((tab) => (
           <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key)}
+            key={tab.key || "all"}
+            onClick={() => handleFilterChange(tab.key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               filter === tab.key
                 ? "bg-white text-blue-600 shadow-sm"
                 : "text-gray-600 hover:text-gray-900"
             }`}
-            data-testid={`filter-${tab.key}`}
+            data-testid={`filter-${tab.key || "all"}`}
           >
             {tab.label}
           </button>
@@ -120,8 +129,8 @@ const CourierTracking = () => {
             <div className="flex items-center">
               <Truck className="h-8 w-8 text-blue-600" />
               <div className="ml-4">
-                <p className="text-2xl font-bold">{couriers.length}</p>
-                <p className="text-sm text-gray-600">Total Couriers</p>
+                <p className="text-2xl font-bold">{totalCouriersInWorkspace}</p>
+                <p className="text-sm text-gray-600">Total Kurir</p>
               </div>
             </div>
           </CardContent>
@@ -132,15 +141,8 @@ const CourierTracking = () => {
             <div className="flex items-center">
               <Navigation className="h-8 w-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-2xl font-bold">
-                  {
-                    couriers.filter(
-                      (c) =>
-                        c.status === "aktif" || c.status === "dalam perjalanan"
-                    ).length
-                  }
-                </p>
-                <p className="text-sm text-gray-600">Active</p>
+                <p className="text-2xl font-bold">{totalActiveCouriers}</p>
+                <p className="text-sm text-gray-600">Kurir Aktif</p>
               </div>
             </div>
           </CardContent>
@@ -151,214 +153,202 @@ const CourierTracking = () => {
             <div className="flex items-center">
               <Package className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
-                <p className="text-2xl font-bold">
-                  {couriers.reduce(
-                    (sum, c) => sum + c.activeDeliveries.length,
-                    0
-                  )}
-                </p>
-                <p className="text-sm text-gray-600">Active Deliveries</p>
+                <p className="text-2xl font-bold">{totalActiveOrders}</p>
+                <p className="text-sm text-gray-600">Pengiriman Aktif</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Couriers list */}
-      <div className="space-y-4">
-        {paginatedCouriers.length === 0 ? (
-          <Card data-testid="no-couriers-message">
-            <CardContent className="p-8 text-center">
-              <Truck className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No couriers found
-              </h3>
-              <p className="text-gray-500">
-                No couriers match the selected filter criteria.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          paginatedCouriers.map((courier) => {
-            const courierOrders = getCourierOrders(courier.id);
-            return (
-              <Card
-                key={courier.id}
-                className="hover:shadow-md transition-shadow"
-                data-testid={`courier-card-${courier.id}`}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-4">
-                        {/* Courier basic info */}
-                        <div className="flex-shrink-0">
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <Truck className="w-6 h-6 text-blue-600" />
-                          </div>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-3">
-                            <h3 className="text-lg font-semibold">
-                              {courier.name}
-                            </h3>
-                            <Badge
-                              className={getStatusColor(courier.status)}
-                              data-testid={`courier-status-${courier.id}`}
-                            >
-                              {courier.status}
-                            </Badge>
-                          </div>
-
-                          <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                            <span>ID: {courier.id}</span>
-                            <div className="flex items-center">
-                              <Phone className="w-3 h-3 mr-1" />
-                              {courier.phone}
-                            </div>
-                            <div className="flex items-center">
-                              <Star className="w-3 h-3 mr-1 text-yellow-500" />
-                              {courier.rating} ({courier.totalDeliveries}{" "}
-                              deliveries)
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Current deliveries */}
-                      {courier.activeDeliveries.length > 0 && (
-                        <div
-                          className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg"
-                          data-testid={`active-deliveries-${courier.id}`}
-                        >
-                          <h4 className="font-medium text-blue-800 mb-2">
-                            Current Deliveries (
-                            {courier.activeDeliveries.length})
-                          </h4>
-                          <div className="space-y-2">
-                            {courier.activeDeliveries.map((orderId) => {
-                              const order = orders.find(
-                                (o) => o.id === orderId
-                              );
-                              if (!order) return null;
-
-                              return (
-                                <div
-                                  key={orderId}
-                                  className="flex items-center justify-between"
-                                >
-                                  <div>
-                                    <p className="font-medium">{orderId}</p>
-                                    <p className="text-sm text-gray-600">
-                                      To: {order.customerName}
-                                    </p>
-                                  </div>
-                                  <div className="text-right">
-                                    <Badge
-                                      className={`text-xs ${
-                                        order.status === "sedang dikirim"
-                                          ? "bg-green-100 text-green-800"
-                                          : "bg-blue-100 text-blue-800"
-                                      }`}
-                                    >
-                                      {order.status}
-                                    </Badge>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      ETA:{" "}
-                                      {new Date(
-                                        order.estimatedDelivery
-                                      ).toLocaleTimeString("id-ID", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex flex-col space-y-2 ml-4">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleTrackCourier(courier)}
-                        disabled={!courier.currentLocation}
-                        data-testid={`track-button-${courier.id}`}
-                      >
-                        <MapPin className="w-4 h-4 mr-2" />
-                        Track Location
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          // Refresh courier location - in real app this would call API
-                          console.log("Refreshing location for", courier.id);
-                        }}
-                        data-testid={`refresh-location-${courier.id}`}
-                      >
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                        Refresh
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <Pagination totalPages={totalPages} onPageChange={handlePageChange} />
+      {/* Loading state */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+            <p className="text-gray-600">Memuat data kurir...</p>
+          </div>
+        </div>
       )}
 
-      {/* Map modal */}
-      {showMap && selectedCourier && (
-        <MapComponent
-          courierData={selectedCourier}
-          userLocation={
-            selectedCourier.activeDeliveries.length > 0
-              ? getDeliveryLocation(selectedCourier.activeDeliveries[0])
-              : null
-          }
-          onClose={() => {
-            setShowMap(false);
-            setSelectedCourier(null);
-          }}
+      {/* Error state */}
+      {error && !loading && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-8 text-center">
+            <AlertTriangle className="mx-auto h-12 w-12 text-red-600 mb-4" />
+            <h3 className="text-lg font-medium text-red-900 mb-2">Error</h3>
+            <p className="text-red-700">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Couriers list */}
+      {!loading && !error && (
+        <div className="space-y-4">
+          {couriers.length === 0 ? (
+            <Card data-testid="no-couriers-message">
+              <CardContent className="p-8 text-center">
+                <Truck className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Tidak ada kurir ditemukan
+                </h3>
+                <p className="text-gray-500">
+                  {filter === "active"
+                    ? "Tidak ada kurir yang sedang aktif."
+                    : filter === "available"
+                    ? "Tidak ada kurir yang tersedia."
+                    : "Tidak ada kurir yang sesuai dengan kriteria filter."}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            couriers.map((courier) => {
+              return (
+                <Card
+                  key={courier.id}
+                  className="hover:shadow-md transition-shadow"
+                  data-testid={`courier-card-${courier.id}`}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-4">
+                          {/* Courier basic info */}
+                          <div className="flex-shrink-0">
+                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                              <Truck className="w-6 h-6 text-blue-600" />
+                            </div>
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-3">
+                              <h3 className="text-lg font-semibold">
+                                {courier.name}
+                              </h3>
+                              <Badge
+                                className={getCourierStatusBadgeColor(
+                                  courier.status
+                                )}
+                                data-testid={`courier-status-${courier.id}`}
+                              >
+                                {formatCourierStatus(courier.status)}
+                              </Badge>
+                            </div>
+
+                            <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
+                              <span>ID: {courier.id.slice(0, 8)}</span>
+                              {courier.phone && (
+                                <div className="flex items-center">
+                                  <Phone className="w-3 h-3 mr-1" />
+                                  {courier.phone}
+                                </div>
+                              )}
+                              <span>
+                                {courier.activeDeliveriesCount} pengiriman aktif
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Current deliveries */}
+                        {courier.activeDeliveries &&
+                          courier.activeDeliveries.length > 0 && (
+                            <div
+                              className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg"
+                              data-testid={`active-deliveries-${courier.id}`}
+                            >
+                              <h4 className="font-medium text-blue-800 mb-2">
+                                Pengiriman Aktif (
+                                {courier.activeDeliveries.length})
+                              </h4>
+                              <div className="space-y-2">
+                                {courier.activeDeliveries.map((delivery) => {
+                                  return (
+                                    <div
+                                      key={delivery.orderId}
+                                      className="flex items-center justify-between bg-white p-2 rounded"
+                                    >
+                                      <div>
+                                        <p className="font-medium">
+                                          #{delivery.orderId.slice(0, 8)}
+                                        </p>
+                                        <p className="text-sm text-gray-600">
+                                          Ke:{" "}
+                                          {
+                                            delivery.deliveryAddress
+                                              .recipientName
+                                          }
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          {delivery.orderItems
+                                            .map(
+                                              (item) =>
+                                                `${item.quantity}x ${item.productName}`
+                                            )
+                                            .join(", ")}
+                                        </p>
+                                      </div>
+                                      <div className="text-right">
+                                        <Badge
+                                          className={`text-xs ${
+                                            delivery.orderStatus ===
+                                            "OUT_FOR_DELIVERY"
+                                              ? "bg-green-100 text-green-800"
+                                              : "bg-blue-100 text-blue-800"
+                                          }`}
+                                        >
+                                          {formatOrderStatus(
+                                            delivery.orderStatus
+                                          )}
+                                        </Badge>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          {formatCurrency(
+                                            Number(delivery.subtotal) +
+                                              Number(delivery.deliveryFee)
+                                          )}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && !error && totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
         />
       )}
 
       {/* Instructions */}
       <Card className="bg-blue-50 border-blue-200" data-testid="tracking-info">
         <CardHeader>
-          <CardTitle className="text-blue-800">Tracking Information</CardTitle>
+          <CardTitle className="text-blue-800">
+            Informasi Pelacakan Kurir
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm text-blue-700">
             <p>
-              • Click "Track Location" to view real-time courier position on map
+              • Monitor status kurir dan pengiriman aktif mereka secara
+              real-time
             </p>
-            <p>
-              • Map shows courier location (blue marker) and delivery
-              destination (red marker)
-            </p>
-            <p>
-              • ETA is calculated based on current location and traffic
-              conditions
-            </p>
-            <p>
-              • For privacy, customer details are not shown to protect user
-              information
-            </p>
+            <p>• Gunakan filter untuk melihat kurir aktif atau tersedia</p>
+            <p>• Kurir "Aktif" adalah kurir yang sedang menangani pengiriman</p>
+            <p>• Kurir "Tersedia" adalah kurir yang siap menerima order baru</p>
           </div>
         </CardContent>
       </Card>

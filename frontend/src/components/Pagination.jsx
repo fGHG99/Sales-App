@@ -33,37 +33,29 @@ export default function Pagination({
   // Generate page numbers with ellipsis for better UX
   const getPageNumbers = () => {
     const pages = [];
-    const showEllipsis = totalPages > 7;
 
-    if (!showEllipsis) {
-      // Show all pages if 7 or fewer
+    if (totalPages <= 6) {
+      // Show all pages if 6 or fewer
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
       }
     } else {
-      // Show first page
-      pages.push(1);
+      // For more than 6 pages: [current] [current+1] [...] [last]
+      // Show current page
+      pages.push(currentPage);
 
-      if (currentPage > 4) {
+      // Show next page if not at end
+      if (currentPage < totalPages) {
+        pages.push(currentPage + 1);
+      }
+
+      // Show ellipsis if not near the end
+      if (currentPage + 1 < totalPages) {
         pages.push("...");
       }
 
-      // Show pages around current page
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-
-      for (let i = start; i <= end; i++) {
-        if (i !== 1 && i !== totalPages) {
-          pages.push(i);
-        }
-      }
-
-      if (currentPage < totalPages - 3) {
-        pages.push("...");
-      }
-
-      // Show last page
-      if (totalPages > 1) {
+      // Always show last page if not already shown
+      if (currentPage < totalPages && currentPage + 1 < totalPages) {
         pages.push(totalPages);
       }
     }

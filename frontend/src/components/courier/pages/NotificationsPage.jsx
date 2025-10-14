@@ -3,7 +3,7 @@ import { Package, Bell, ShoppingBag, ChevronRight } from "lucide-react";
 import api from "../../../utils/api";
 import Pagination from "../../Pagination";
 
-const NotificationsPage = () => {
+const CourierNotificationPage = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [notifications, setNotifications] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,7 +33,7 @@ const NotificationsPage = () => {
       const params = { limit: ITEMS_PER_PAGE, page };
       if (typeParam !== "all") params.type = typeParam;
 
-      console.log("📡 [USER NOTIFICATIONS] Fetching notifications...");
+      console.log("📡 [COURIER NOTIFICATIONS] Fetching notifications...");
       console.log(`   Tab: ${activeTab} (Type: ${typeParam})`);
       console.log(`   Page: ${page}`);
       console.log(`   Limit: ${ITEMS_PER_PAGE}`);
@@ -41,7 +41,7 @@ const NotificationsPage = () => {
       const res = await api.get("/users/notifications", { params });
       const { notifications: data = [], pagination = {} } = res.data || {};
 
-      console.log("✅ [USER NOTIFICATIONS] Fetch successful");
+      console.log("✅ [COURIER NOTIFICATIONS] Fetch successful");
       console.log(`   Fetched: ${data.length} notifications`);
       console.log(`   Total: ${pagination.total || 0}`);
       console.log(`   Current Page: ${pagination.page || 1}`);
@@ -54,7 +54,7 @@ const NotificationsPage = () => {
       setTotal(pagination.total || 0);
       setCurrentPage(pagination.page || 1);
     } catch (e) {
-      console.error("❌ [USER NOTIFICATIONS] Fetch failed:", e);
+      console.error("❌ [COURIER NOTIFICATIONS] Fetch failed:", e);
       console.error(
         `   Error message: ${e.response?.data?.error || e.message}`
       );
@@ -66,21 +66,27 @@ const NotificationsPage = () => {
 
   const fetchCounts = async () => {
     try {
-      console.log("📊 [USER NOTIFICATIONS] Fetching notification counts...");
-      const res = await api.get("/users/notifications/count");
-      if (res.data) {
-        console.log("✅ [USER NOTIFICATIONS] Counts fetched:");
-        console.log(`   Total: ${res.data.total || 0}`);
-        console.log(`   ORDER: ${res.data.ORDER || 0}`);
-        console.log(`   INFO: ${res.data.INFO || 0}`);
-        setCounts({
-          all: res.data.total || 0,
-          ORDER: res.data.ORDER || 0,
-          INFO: res.data.INFO || 0,
-        });
-      }
+      console.log("📊 [COURIER NOTIFICATIONS] Fetching notification counts...");
+      // Fetch all notifications to count
+      const resAll = await api.get("/notifications/courier", {
+        params: { limit: 1000, page: 1 },
+      });
+      const allNotifs = resAll.data?.notifications || [];
+
+      const counts = {
+        all: allNotifs.length,
+        ORDER: allNotifs.filter((n) => n.type === "ORDER").length,
+        INFO: allNotifs.filter((n) => n.type === "INFO").length,
+      };
+
+      console.log("✅ [COURIER NOTIFICATIONS] Counts fetched:");
+      console.log(`   Total: ${counts.all}`);
+      console.log(`   ORDER: ${counts.ORDER}`);
+      console.log(`   INFO: ${counts.INFO}`);
+
+      setCounts(counts);
     } catch (e) {
-      console.error("❌ [USER NOTIFICATIONS] Failed to fetch counts:", e);
+      console.error("❌ [COURIER NOTIFICATIONS] Failed to fetch counts:", e);
     }
   };
 
@@ -104,11 +110,11 @@ const NotificationsPage = () => {
     setSelectedNotification(notification);
     setIsModalOpen(true);
     if (notification?.type === "ORDER") {
-      const orderId = notification.metadata?.orderId;
+      const orderId = notification.metadata?.orderId || notification.orderId;
       if (orderId && !orderDetails[orderId] && !loadingOrder[orderId]) {
         try {
           setLoadingOrder((prev) => ({ ...prev, [orderId]: true }));
-          const res = await api.get(`/order/my-orders/${orderId}`);
+          const res = await api.get(`/orders/detail/${orderId}`);
           setOrderDetails((prev) => ({ ...prev, [orderId]: res.data?.order }));
         } catch (e) {
           // ignore
@@ -364,20 +370,26 @@ const NotificationsPage = () => {
                       </div>
                     )}
 
-                  {selectedNotification.metadata?.orderId && (
+                  {(selectedNotification.metadata?.orderId ||
+                    selectedNotification.orderId) && (
                     <div className="border-t pt-4">
-                      {loadingOrder[selectedNotification.metadata.orderId] ? (
+                      {loadingOrder[
+                        selectedNotification.metadata?.orderId ||
+                          selectedNotification.orderId
+                      ] ? (
                         <div className="text-sm text-gray-500">
                           Memuat detail pesanan...
                         </div>
                       ) : orderDetails[
-                          selectedNotification.metadata.orderId
+                          selectedNotification.metadata?.orderId ||
+                            selectedNotification.orderId
                         ] ? (
                         <div className="space-y-3">
                           {(() => {
                             const od =
                               orderDetails[
-                                selectedNotification.metadata.orderId
+                                selectedNotification.metadata?.orderId ||
+                                  selectedNotification.orderId
                               ];
                             return (
                               <>
@@ -481,4 +493,4 @@ const NotificationsPage = () => {
   );
 };
 
-export default NotificationsPage;
+export default CourierNotificationPage;

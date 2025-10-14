@@ -23,7 +23,7 @@ import OrderCheckout from "./components/User/user-order/OrderCheckout";
 import CourierTracking from "./components/User/user-order/CourierTracking";
 import AdminLayout from "./components/Admin/Admin-Layout";
 import { EmailVerificationSent } from "./components/EmailVerif";
-import AdminDashboard from "./components/Admin/Pages/Dashboard";
+import AdminDashboard from "./components/Admin/Pages/AdminDashboard";
 import OrderManagement from "./components/Admin/Pages/OrderManagement";
 import DisputesManagement from "./components/Admin/Pages/DisputeManagement";
 import SalesAnalytics from "./components/Admin/Pages/SalesAnalytics";
@@ -51,6 +51,7 @@ import PermissionBasedRoute from "./components/middleware/Rbac";
 import RouteRestriction from "./components/middleware/RouteRestriction";
 import AccessDeniedPage from "./components/AccessDeniedPage";
 import ResetPassword from "./components/ResetPassword";
+import CourierNotificationPage from "./components/courier/pages/NotificationsPage";
 
 // Mock category and other pages
 const CategoryPage = () => {
@@ -181,6 +182,7 @@ const router = createBrowserRouter([
           { path: "forgot-password", element: <ForgotPassword /> },
           { path: "reset-password", element: <ResetPassword /> },
           { path: "order/:orderId", element: <MapNavigation /> },
+          { path: "notifications", element: <CourierNotificationPage /> },
           {
             path: "customer-location/order/:orderId",
             element: <UserLocation />,

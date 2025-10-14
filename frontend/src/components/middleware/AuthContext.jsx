@@ -98,6 +98,7 @@ export const AuthProvider = ({ children }) => {
           setUser(JSON.parse(storedUser));
           setIsAuthenticated(true);
           console.log("✅ Token is valid");
+          console.log("✅ User data:", JSON.parse(storedUser));
 
           // ✅ Fetch permissions immediately after authentication
           await fetchPermissions();

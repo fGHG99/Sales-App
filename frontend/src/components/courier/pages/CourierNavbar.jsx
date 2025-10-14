@@ -31,7 +31,6 @@ import {
 import NotificationCard from "./NotificationCard";
 import NotificationSkeleton from "../../skeleton/NotificationSkeleton";
 import LogoutModal from "../../modal/logout-confirmation";
-import CourierNotificationDropdown from "./CourierNotificationDropdown";
 import api from "../../../utils/api";
 
 const Navigation = () => {
@@ -44,7 +43,6 @@ const Navigation = () => {
   const [showDesktopNotifications, setShowDesktopNotifications] =
     useState(false);
   const closeTimeoutRef = useRef(null);
-  const closeNotificationTimeoutRef = useRef(null);
   const notificationDropdownRef = useRef(null);
   const userDropdownRef = useRef(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -55,6 +53,7 @@ const Navigation = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
   const [onRouteCount, setOnRouteCount] = useState(0);
+  const [newOrdersCount, setNewOrdersCount] = useState(0); // ✅ New orders badge
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
 
@@ -118,11 +117,19 @@ const Navigation = () => {
         const { statusCounts } = response;
         setActiveOrdersCount(statusCounts?.active || 0);
         setOnRouteCount(statusCounts?.OUT_FOR_DELIVERY || 0);
+
+        // ✅ Count new orders (PENDING + IN_PREPARATION + READY_FOR_PICKUP)
+        const newOrders =
+          (statusCounts?.PENDING || 0) +
+          (statusCounts?.IN_PREPARATION || 0) +
+          (statusCounts?.READY_FOR_PICKUP || 0);
+        setNewOrdersCount(newOrders);
       }
     } catch (err) {
       console.error("❌ Failed to fetch active orders:", err);
       setActiveOrdersCount(0);
       setOnRouteCount(0);
+      setNewOrdersCount(0);
     } finally {
       setIsLoadingOrders(false);
     }
@@ -179,18 +186,29 @@ const Navigation = () => {
     };
   }, []);
 
+  /**
+   * Clear new orders badge when accessing /courier/orders
+   */
+  useEffect(() => {
+    if (currentPath === "/courier/orders") {
+      setNewOrdersCount(0);
+    }
+  }, [currentPath]);
+
   const navItems = [
     {
       path: "/courier",
       icon: Home,
       label: "Dashboard",
       description: "",
+      badge: 0,
     },
     {
       path: "/courier/orders",
       icon: Package,
       label: "Order history",
       description: "",
+      badge: newOrdersCount, // ✅ Show new orders count
     },
   ];
 
@@ -207,15 +225,18 @@ const Navigation = () => {
     }, 100);
   };
 
-  // Close notification dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
+      // Close mobile notifications
       if (
         notificationDropdownRef.current &&
         !notificationDropdownRef.current.contains(event.target)
       ) {
         setShowNotifications(false);
+        setShowDesktopNotifications(false);
       }
+      // Close user dropdown
       if (
         userDropdownRef.current &&
         !userDropdownRef.current.contains(event.target)
@@ -234,24 +255,11 @@ const Navigation = () => {
     setShowNotifications(!showNotifications);
   };
 
-  const openDesktopNotificationDropdown = () => {
-    if (closeNotificationTimeoutRef.current) {
-      clearTimeout(closeNotificationTimeoutRef.current);
-    }
-    setShowDesktopNotifications(true);
-  };
-
-  const closeDesktopNotificationDropdown = () => {
-    closeNotificationTimeoutRef.current = setTimeout(() => {
-      setShowDesktopNotifications(false);
-    }, 100);
-  };
-
   // Cleanup timer saat component unmount
   useEffect(() => {
     return () => {
-      if (closeNotificationTimeoutRef.current) {
-        clearTimeout(closeNotificationTimeoutRef.current);
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
       }
     };
   }, []);
@@ -324,23 +332,20 @@ const Navigation = () => {
                       </span>
                     </div>
                     {item.badge > 0 && (
-                      <Badge className="ml-2 bg-red-500 text-white text-xs">
-                        {item.badge}
-                      </Badge>
+                      <div className="ml-2 w-2 h-2 bg-red-500 rounded-full"></div>
                     )}
                   </Link>
                 );
               })}
 
               {/* Desktop Notification Dropdown */}
-              <div
-                className="relative"
-                onMouseEnter={openDesktopNotificationDropdown}
-                onMouseLeave={closeDesktopNotificationDropdown}
-              >
+              <div className="relative" ref={notificationDropdownRef}>
                 <button
                   className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
                   aria-label="Notifications"
+                  onClick={() =>
+                    setShowDesktopNotifications(!showDesktopNotifications)
+                  }
                 >
                   <Bell className="h-5 w-5" />
                   {unreadCount > 0 && (
@@ -351,10 +356,50 @@ const Navigation = () => {
                 </button>
 
                 {showDesktopNotifications && (
-                  <CourierNotificationDropdown
-                    isOpen={showDesktopNotifications}
-                    onToggle={() => setShowDesktopNotifications(false)}
-                  />
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="p-3 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-gray-900">
+                          Notifications
+                        </h3>
+                        {unreadCount > 0 && (
+                          <Badge className="h-5 px-2 bg-red-500 text-white text-xs flex items-center justify-center">
+                            {unreadCount}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {isLoadingNotifications ? (
+                        <NotificationSkeleton count={3} />
+                      ) : notifications.filter((n) => !n.hasRead).length > 0 ? (
+                        notifications
+                          .filter((n) => !n.hasRead)
+                          .slice(0, 5)
+                          .map((notification) => (
+                            <NotificationCard
+                              key={notification.id}
+                              notification={notification}
+                              onMarkRead={markAsRead}
+                              onClick={() => setShowDesktopNotifications(false)}
+                            />
+                          ))
+                      ) : (
+                        <div className="p-6 text-center text-gray-500 text-sm">
+                          No unread notifications
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 border-t border-gray-200">
+                      <Link
+                        to="/courier/notifications"
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium block text-center"
+                        onClick={() => setShowDesktopNotifications(false)}
+                      >
+                        View All Notifications
+                      </Link>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -459,7 +504,7 @@ const Navigation = () => {
             </div>
             <div className="flex items-center space-x-3">
               {/* Mobile Notifications */}
-              <div className="relative">
+              <div className="relative" ref={notificationDropdownRef}>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -507,6 +552,15 @@ const Navigation = () => {
                           No unread notifications
                         </div>
                       )}
+                    </div>
+                    <div className="p-3 border-t border-gray-200">
+                      <Link
+                        to="/courier/notifications"
+                        className="text-sm text-blue-600 hover:text-blue-700 font-medium block text-center"
+                        onClick={() => setShowNotifications(false)}
+                      >
+                        View All Notifications
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -590,17 +644,17 @@ const Navigation = () => {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex flex-col items-center py-2 px-1 relative ${
+                  className={`flex flex-col items-center py-2 px-1 ${
                     isActive ? "text-blue-600" : "text-gray-600"
                   }`}
                 >
-                  <Icon className="h-6 w-6 mb-1" />
+                  <div className="relative">
+                    <Icon className="h-6 w-6 mb-1" />
+                    {item.badge > 0 && (
+                      <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                    )}
+                  </div>
                   <span className="text-xs font-medium">{item.label}</span>
-                  {item.badge > 0 && (
-                    <Badge className="absolute top-0 right-2 h-4 w-4 bg-red-500 text-white text-xs flex items-center justify-center">
-                      {item.badge}
-                    </Badge>
-                  )}
                 </Link>
               );
             })}

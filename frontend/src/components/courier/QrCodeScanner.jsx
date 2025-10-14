@@ -26,10 +26,14 @@ const QrCodeScanner = ({ onScanSuccess, onScanError }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [error, setError] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Detect if device is mobile
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Cleanup scanner on unmount
   useEffect(() => {
@@ -161,6 +165,47 @@ const QrCodeScanner = ({ onScanSuccess, onScanError }) => {
     }
   };
 
+  // Drag and Drop handlers (Desktop only)
+  const handleDragOver = (e) => {
+    if (isMobile) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragEnter = (e) => {
+    if (isMobile) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    if (isMobile) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Only set to false if leaving the drop zone entirely
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    if (isMobile) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const fakeEvent = {
+        target: { files: [files[0]] },
+      };
+      handleFileUpload(fakeEvent);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -184,11 +229,54 @@ const QrCodeScanner = ({ onScanSuccess, onScanError }) => {
 
         {/* Placeholder when not scanning */}
         {!isScanning && !scanResult && (
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-            <QrCode className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-            <p className="text-gray-600 mb-4">
-              Scan QR code untuk pick up order
-            </p>
+          <div
+            className={`rounded-lg text-center transition-all ${
+              !isMobile && isDragging
+                ? "border-2 border-blue-500 bg-blue-100 p-10"
+                : !isMobile
+                ? "border-2 border-dashed border-gray-300 bg-white p-8 hover:border-blue-400 hover:bg-blue-50 cursor-pointer"
+                : "border-2 border-dashed border-gray-300 p-8"
+            }`}
+            onDragOver={!isMobile ? handleDragOver : undefined}
+            onDragEnter={!isMobile ? handleDragEnter : undefined}
+            onDragLeave={!isMobile ? handleDragLeave : undefined}
+            onDrop={!isMobile ? handleDrop : undefined}
+            onClick={
+              !isMobile ? () => fileInputRef.current?.click() : undefined
+            }
+          >
+            <QrCode
+              className={`mx-auto mb-4 ${
+                !isMobile && isDragging
+                  ? "h-20 w-20 text-blue-600 animate-bounce"
+                  : !isMobile
+                  ? "h-16 w-16 text-blue-500"
+                  : "h-16 w-16 text-gray-400"
+              }`}
+            />
+            {!isMobile && isDragging ? (
+              <div>
+                <p className="text-blue-700 font-semibold text-lg mb-2">
+                  Drop QR code image here
+                </p>
+                <p className="text-blue-600 text-sm">
+                  We'll scan it automatically
+                </p>
+              </div>
+            ) : !isMobile ? (
+              <div>
+                <p className="text-gray-700 font-medium mb-2">
+                  Drag & drop QR code image or click to browse
+                </p>
+                <p className="text-gray-500 text-sm">
+                  Supports: JPG, PNG, JPEG
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-600 mb-4">
+                Scan QR code untuk pick up order
+              </p>
+            )}
           </div>
         )}
 

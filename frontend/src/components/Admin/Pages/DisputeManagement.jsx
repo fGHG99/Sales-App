@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   AlertTriangle,
   MessageCircle,
@@ -8,7 +8,8 @@ import {
   User,
   Package,
   Calendar,
-  Flag,
+  Image as ImageIcon,
+  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -28,41 +29,89 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../../ui/dialog";
-import {
-  disputes as initialDisputes,
-  orders,
-  formatDate,
-  formatCurrency,
-} from "../../../utils/mockDataAdmin";
+import { formatDate, formatCurrency } from "../../../utils/mockDataAdmin";
 import Pagination from "../../Pagination";
+import {
+  getAllDisputes,
+  updateDisputeStatus as apiUpdateDisputeStatus,
+  resolveDispute as apiResolveDispute,
+  getDisputeStatusBadgeColor,
+  formatDisputeStatus,
+  formatDisputeReason,
+} from "../../../services/adminService";
 
 const DisputesManagement = () => {
-  const [disputes, setDisputes] = useState(initialDisputes);
+  const [disputes, setDisputes] = useState([]);
+  const [counts, setCounts] = useState({ total: 0, openCases: 0, resolved: 0 });
   const [selectedDispute, setSelectedDispute] = useState(null);
-  const [adminNotes, setAdminNotes] = useState("");
+  const [adminResponse, setAdminResponse] = useState("");
   const [filter, setFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [updating, setUpdating] = useState(false);
   const itemsPerPage = 5;
 
-  const updateDisputeStatus = (disputeId, newStatus, notes = "") => {
-    setDisputes((prevDisputes) =>
-      prevDisputes.map((dispute) => {
-        if (dispute.id === disputeId) {
-          const updatedDispute = {
-            ...dispute,
-            status: newStatus,
-            adminNotes: notes || dispute.adminNotes,
-          };
+  // Fetch disputes from API
+  const fetchDisputes = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-          if (newStatus === "selesai") {
-            updatedDispute.resolvedAt = new Date();
-          }
+      // Determine status filter based on tab
+      let statusParam = null;
+      if (filter === "open") {
+        statusParam = "IN_PROGRESS"; // Show IN_PROGRESS disputes for open tab
+      } else if (filter === "resolved") {
+        statusParam = "RESOLVED";
+      }
+      // filter === "all" → no status param
 
-          return updatedDispute;
-        }
-        return dispute;
-      })
-    );
+      const response = await getAllDisputes({
+        page: currentPage,
+        limit: itemsPerPage,
+        status: statusParam,
+      });
+
+      if (response.success) {
+        setDisputes(response.data.disputes);
+        setCounts(response.data.counts);
+        setTotalPages(response.pagination.totalPages);
+      }
+    } catch (err) {
+      console.error("Error fetching disputes:", err);
+      setError("Gagal mengambil data disputes. Silakan coba lagi.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch disputes when filter or page changes
+  useEffect(() => {
+    fetchDisputes();
+  }, [filter, currentPage]);
+
+  const updateDisputeStatus = async (disputeId, newStatus, response = "") => {
+    try {
+      setUpdating(true);
+
+      if (newStatus === "RESOLVED" && response) {
+        // Use resolve endpoint for resolved status with response
+        await apiResolveDispute(disputeId, response);
+      } else {
+        // Use update status endpoint for other status changes
+        await apiUpdateDisputeStatus(disputeId, newStatus);
+      }
+
+      // Refresh disputes after update
+      await fetchDisputes();
+    } catch (err) {
+      console.error("Error updating dispute status:", err);
+      alert("Gagal mengupdate status dispute. Silakan coba lagi.");
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleWhatsAppContact = (customerName, orderId, issue) => {
@@ -73,79 +122,53 @@ const DisputesManagement = () => {
     window.open(whatsappUrl, "_blank");
   };
 
-  const filteredDisputes = disputes.filter((dispute) => {
-    if (filter === "all") return true;
-    if (filter === "open") return dispute.status === "dalam proses";
-    if (filter === "resolved") return dispute.status === "selesai";
-    if (filter === "high-priority") return dispute.priority === "tinggi";
-    return true;
-  });
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredDisputes.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedDisputes = filteredDisputes.slice(startIndex, endIndex);
-
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      "dalam proses": "bg-yellow-100 text-yellow-800",
-      selesai: "bg-green-100 text-green-800",
-      ditutup: "bg-gray-100 text-gray-800",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const getPriorityColor = (priority) => {
-    const colors = {
-      tinggi: "bg-red-100 text-red-800",
-      sedang: "bg-yellow-100 text-yellow-800",
-      rendah: "bg-green-100 text-green-800",
-    };
-    return colors[priority] || "bg-gray-100 text-gray-800";
-  };
-
-  const getDisputeOrder = (orderId) => {
-    return orders.find((order) => order.id === orderId);
-  };
-
   const DisputeDetailsModal = ({ dispute, onClose }) => {
-    const order = getDisputeOrder(dispute.orderId);
-    const [localNotes, setLocalNotes] = useState(dispute.adminNotes || "");
+    const [localResponse, setLocalResponse] = useState(dispute.response || "");
 
-    const handleSaveNotes = () => {
-      updateDisputeStatus(dispute.id, dispute.status, localNotes);
-      setAdminNotes("");
+    const handleSaveResponse = async () => {
+      await updateDisputeStatus(dispute.id, "RESOLVED", localResponse);
+      setAdminResponse("");
       onClose();
     };
 
+    const calculateTotal = (subtotal, deliveryFee) => {
+      return parseInt(subtotal) + parseInt(deliveryFee);
+    };
+
     return (
-      <DialogContent className="max-w-3xl" data-testid="dispute-details-modal">
+      <DialogContent
+        className="max-w-3xl max-h-[90vh]"
+        data-testid="dispute-details-modal"
+      >
         <DialogHeader>
-          <DialogTitle>Dispute Details - {dispute.id}</DialogTitle>
+          <DialogTitle>
+            Dispute Details - {dispute.id.substring(0, 8)}
+          </DialogTitle>
           <DialogDescription>
             Complete information about this customer dispute
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+        <div
+          className="space-y-6 pr-2 overflow-y-auto"
+          style={{ 
+            maxHeight: "calc(95vh - 120px)",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none"
+          }}
+        >
           {/* Dispute Info */}
           <div className="grid grid-cols-2 gap-6">
             <div>
               <h3 className="font-semibold mb-3">Dispute Information</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center">
-                  <Flag className="w-4 h-4 mr-2 text-gray-500" />
-                  <span className="font-medium">Priority:</span>
-                  <Badge
-                    className={`ml-2 ${getPriorityColor(dispute.priority)}`}
-                  >
-                    {dispute.priority}
-                  </Badge>
+                  <AlertTriangle className="w-4 h-4 mr-2 text-orange-500" />
+                  <span>Reason: {formatDisputeReason(dispute.reason)}</span>
                 </div>
                 <div className="flex items-center">
                   <Clock className="w-4 h-4 mr-2 text-gray-500" />
@@ -165,11 +188,11 @@ const DisputesManagement = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center">
                   <User className="w-4 h-4 mr-2 text-gray-500" />
-                  <span>{dispute.customerName}</span>
+                  <span>{dispute.user.name}</span>
                 </div>
                 <div className="flex items-center">
                   <Package className="w-4 h-4 mr-2 text-gray-500" />
-                  <span>Order: {dispute.orderId}</span>
+                  <span>Order: {dispute.order.id.substring(0, 8)}</span>
                 </div>
               </div>
             </div>
@@ -179,78 +202,121 @@ const DisputesManagement = () => {
           <div>
             <h3 className="font-semibold mb-3">Issue Description</h3>
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-800">{dispute.issue}</p>
+              <p className="text-red-800">{dispute.description}</p>
             </div>
           </div>
 
-          {/* Order Details */}
-          {order && (
+          {/* Dispute Evidence */}
+          {dispute.imageUrl && dispute.imageUrl.length > 0 && (
             <div>
-              <h3 className="font-semibold mb-3">Related Order Details</h3>
-              <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-medium">Order Total:</span>
-                  <span>{formatCurrency(order.totalAmount)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Order Date:</span>
-                  <span>{formatDate(order.createdAt)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Items:</span>
-                  <span>{order.items.length} items</span>
-                </div>
-                <div className="mt-3 pt-3 border-t">
-                  <p className="font-medium mb-2">Order Items:</p>
-                  {order.items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-sm">
-                      <span>
-                        {item.quantity}x {item.name}
-                      </span>
-                      <span>{formatCurrency(item.price * item.quantity)}</span>
-                    </div>
-                  ))}
-                </div>
+              <h3 className="font-semibold mb-3 flex items-center">
+                <ImageIcon className="w-4 h-4 mr-2" />
+                Bukti Dispute
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {dispute.imageUrl.map((url, index) => (
+                  <div
+                    key={index}
+                    className="border border-gray-200 rounded-lg overflow-hidden"
+                  >
+                    <img
+                      src={url}
+                      alt={`Dispute evidence ${index + 1}`}
+                      className="w-full h-40 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => window.open(url, "_blank")}
+                    />
+                  </div>
+                ))}
               </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Klik gambar untuk melihat ukuran penuh
+              </p>
             </div>
           )}
 
-          {/* Admin Notes */}
+          {/* Order Details */}
           <div>
-            <h3 className="font-semibold mb-3">Admin Notes & Actions</h3>
+            <h3 className="font-semibold mb-3">Related Order Details</h3>
+            <div className="p-4 bg-gray-50 rounded-lg space-y-2">
+              <div className="flex justify-between">
+                <span className="font-medium">Order Total:</span>
+                <span>
+                  {formatCurrency(
+                    calculateTotal(
+                      dispute.order.subtotal,
+                      dispute.order.deliveryFee
+                    )
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Subtotal:</span>
+                <span>{formatCurrency(parseInt(dispute.order.subtotal))}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Delivery Fee:</span>
+                <span>
+                  {formatCurrency(parseInt(dispute.order.deliveryFee))}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Items:</span>
+                <span>{dispute.order.orderItems.length} items</span>
+              </div>
+              <div className="mt-3 pt-3 border-t">
+                <p className="font-medium mb-2">Order Items:</p>
+                {dispute.order.orderItems.map((item, index) => (
+                  <div key={index} className="flex justify-between text-sm">
+                    <span>
+                      {item.quantity}x {item.productName}
+                    </span>
+                    <span>{formatCurrency(item.total)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Admin Response */}
+          <div>
+            <h3 className="font-semibold mb-3">Admin Response</h3>
             <div className="space-y-4">
               <Textarea
-                value={localNotes}
-                onChange={(e) => setLocalNotes(e.target.value)}
-                placeholder="Add notes about this dispute, actions taken, or follow-up required..."
+                value={localResponse}
+                onChange={(e) => setLocalResponse(e.target.value)}
+                placeholder={
+                  dispute.status === "RESOLVED"
+                    ? "Response telah disimpan dan tidak dapat diubah"
+                    : "Masukkan response admin terhadap dispute ini..."
+                }
                 rows={4}
-                data-testid="admin-notes-textarea"
+                disabled={dispute.status === "RESOLVED"}
+                readOnly={dispute.status === "RESOLVED"}
+                className={
+                  dispute.status === "RESOLVED"
+                    ? "bg-gray-100 cursor-not-allowed"
+                    : ""
+                }
+                data-testid="admin-response-textarea"
               />
 
               <div className="flex items-center space-x-3">
                 <Button
                   onClick={() =>
                     handleWhatsAppContact(
-                      dispute.customerName,
-                      dispute.orderId,
-                      dispute.issue
+                      dispute.user.name,
+                      dispute.order.id,
+                      dispute.description
                     )
                   }
                   variant="outline"
                   size="sm"
+                  disabled={dispute.status === "RESOLVED"}
                   data-testid="whatsapp-contact-button"
                 >
                   <MessageCircle className="w-4 h-4 mr-2" />
                   Contact via WhatsApp
                   <ExternalLink className="w-3 h-3 ml-2" />
-                </Button>
-
-                <Button
-                  onClick={handleSaveNotes}
-                  size="sm"
-                  data-testid="save-notes-button"
-                >
-                  Save Notes
                 </Button>
               </div>
             </div>
@@ -260,23 +326,48 @@ const DisputesManagement = () => {
           <div className="flex items-center justify-between pt-4 border-t">
             <div>
               <Badge
-                className={getStatusColor(dispute.status)}
+                className={getDisputeStatusBadgeColor(dispute.status)}
                 data-testid={`dispute-status-${dispute.id}`}
               >
-                {dispute.status}
+                {formatDisputeStatus(dispute.status)}
               </Badge>
             </div>
 
             <div className="space-x-2">
-              {dispute.status === "dalam proses" && (
+              {dispute.status === "PENDING" && (
                 <Button
-                  onClick={() => {
-                    updateDisputeStatus(dispute.id, "selesai", localNotes);
+                  onClick={async () => {
+                    await updateDisputeStatus(dispute.id, "IN_PROGRESS");
                     onClose();
                   }}
                   size="sm"
+                  disabled={updating}
+                  data-testid="start-progress-button"
+                >
+                  {updating && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  <Clock className="w-4 h-4 mr-2" />
+                  Start Processing
+                </Button>
+              )}
+              {dispute.status === "IN_PROGRESS" && (
+                <Button
+                  onClick={async () => {
+                    await updateDisputeStatus(
+                      dispute.id,
+                      "RESOLVED",
+                      localResponse
+                    );
+                    onClose();
+                  }}
+                  size="sm"
+                  disabled={updating}
                   data-testid="resolve-dispute-button"
                 >
+                  {updating && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Mark as Resolved
                 </Button>
@@ -305,7 +396,6 @@ const DisputesManagement = () => {
         {[
           { key: "all", label: "All Disputes" },
           { key: "open", label: "Open Cases" },
-          { key: "high-priority", label: "High Priority" },
           { key: "resolved", label: "Resolved" },
         ].map((tab) => (
           <button
@@ -324,13 +414,15 @@ const DisputesManagement = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card data-testid="total-disputes-stat">
           <CardContent className="p-4">
             <div className="flex items-center">
               <AlertTriangle className="h-8 w-8 text-red-600" />
               <div className="ml-4">
-                <p className="text-2xl font-bold">{disputes.length}</p>
+                <p className="text-2xl font-bold">
+                  {loading ? "..." : counts.total}
+                </p>
                 <p className="text-sm text-gray-600">Total Disputes</p>
               </div>
             </div>
@@ -343,28 +435,9 @@ const DisputesManagement = () => {
               <Clock className="h-8 w-8 text-yellow-600" />
               <div className="ml-4">
                 <p className="text-2xl font-bold">
-                  {disputes.filter((d) => d.status === "dalam proses").length}
+                  {loading ? "..." : counts.openCases}
                 </p>
                 <p className="text-sm text-gray-600">Open Cases</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="high-priority-stat">
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <Flag className="h-8 w-8 text-orange-600" />
-              <div className="ml-4">
-                <p className="text-2xl font-bold">
-                  {
-                    disputes.filter(
-                      (d) =>
-                        d.priority === "tinggi" && d.status === "dalam proses"
-                    ).length
-                  }
-                </p>
-                <p className="text-sm text-gray-600">High Priority</p>
               </div>
             </div>
           </CardContent>
@@ -376,7 +449,7 @@ const DisputesManagement = () => {
               <CheckCircle className="h-8 w-8 text-green-600" />
               <div className="ml-4">
                 <p className="text-2xl font-bold">
-                  {disputes.filter((d) => d.status === "selesai").length}
+                  {loading ? "..." : counts.resolved}
                 </p>
                 <p className="text-sm text-gray-600">Resolved</p>
               </div>
@@ -385,34 +458,36 @@ const DisputesManagement = () => {
         </Card>
       </div>
 
-      {/* High priority alerts */}
-      {disputes.filter(
-        (d) => d.priority === "tinggi" && d.status === "dalam proses"
-      ).length > 0 && (
-        <Card
-          className="border-red-200 bg-red-50"
-          data-testid="high-priority-alert"
-        >
-          <CardHeader>
-            <CardTitle className="flex items-center text-red-800">
-              <AlertTriangle className="mr-2 h-5 w-5" />
-              High Priority Disputes Require Attention
-            </CardTitle>
-            <CardDescription className="text-red-700">
-              {
-                disputes.filter(
-                  (d) => d.priority === "tinggi" && d.status === "dalam proses"
-                ).length
-              }{" "}
-              high-priority cases need immediate resolution
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
       {/* Disputes list */}
       <div className="space-y-4">
-        {paginatedDisputes.length === 0 ? (
+        {/* Loading State */}
+        {loading && (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Loader2 className="mx-auto h-12 w-12 text-gray-400 mb-4 animate-spin" />
+              <p className="text-gray-500">Loading disputes...</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <AlertTriangle className="mx-auto h-12 w-12 text-red-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Error Loading Disputes
+              </h3>
+              <p className="text-gray-500 mb-4">{error}</p>
+              <Button onClick={fetchDisputes} variant="outline">
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && disputes.length === 0 && (
           <Card data-testid="no-disputes-message">
             <CardContent className="p-8 text-center">
               <CheckCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -426,9 +501,16 @@ const DisputesManagement = () => {
               </p>
             </CardContent>
           </Card>
-        ) : (
-          paginatedDisputes.map((dispute) => {
-            const order = getDisputeOrder(dispute.orderId);
+        )}
+
+        {/* Disputes List */}
+        {!loading &&
+          !error &&
+          disputes.length > 0 &&
+          disputes.map((dispute) => {
+            const orderTotal =
+              parseInt(dispute.order.subtotal) +
+              parseInt(dispute.order.deliveryFee);
             return (
               <Card
                 key={dispute.id}
@@ -439,46 +521,32 @@ const DisputesManagement = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                          <div
-                            className={`w-3 h-3 rounded-full ${
-                              dispute.priority === "tinggi"
-                                ? "bg-red-500"
-                                : dispute.priority === "sedang"
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
-                            }`}
-                          ></div>
-                        </div>
-
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
                             <h3 className="font-semibold text-lg">
-                              {dispute.id}
+                              #{dispute.id.substring(0, 8)}
                             </h3>
                             <Badge
-                              className={getPriorityColor(dispute.priority)}
-                              data-testid={`priority-badge-${dispute.id}`}
-                            >
-                              {dispute.priority} priority
-                            </Badge>
-                            <Badge
-                              className={getStatusColor(dispute.status)}
+                              className={getDisputeStatusBadgeColor(
+                                dispute.status
+                              )}
                               data-testid={`status-badge-${dispute.id}`}
                             >
-                              {dispute.status}
+                              {formatDisputeStatus(dispute.status)}
                             </Badge>
                           </div>
 
                           <p className="text-gray-600 mt-1">
-                            Customer: {dispute.customerName} • Order:{" "}
-                            {dispute.orderId}
+                            Customer: {dispute.user.name} • Order: #
+                            {dispute.order.id.substring(0, 8)}
                           </p>
 
                           <div className="mt-2">
-                            <p className="font-medium text-red-700">Issue:</p>
+                            <p className="font-medium text-red-700">
+                              {formatDisputeReason(dispute.reason)}:
+                            </p>
                             <p className="text-sm text-gray-700">
-                              {dispute.issue}
+                              {dispute.description}
                             </p>
                           </div>
 
@@ -486,11 +554,9 @@ const DisputesManagement = () => {
                             <span>
                               Created: {formatDate(dispute.createdAt)}
                             </span>
-                            {order && (
-                              <span>
-                                Order Value: {formatCurrency(order.totalAmount)}
-                              </span>
-                            )}
+                            <span>
+                              Order Value: {formatCurrency(orderTotal)}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -502,11 +568,12 @@ const DisputesManagement = () => {
                         size="sm"
                         onClick={() =>
                           handleWhatsAppContact(
-                            dispute.customerName,
-                            dispute.orderId,
-                            dispute.issue
+                            dispute.user.name,
+                            dispute.order.id,
+                            dispute.description
                           )
                         }
+                        disabled={dispute.status === "RESOLVED"}
                         data-testid={`whatsapp-${dispute.id}`}
                       >
                         <MessageCircle className="w-4 h-4 mr-2" />
@@ -532,8 +599,7 @@ const DisputesManagement = () => {
                 </CardContent>
               </Card>
             );
-          })
-        )}
+          })}
       </div>
 
       {/* Pagination */}
@@ -554,20 +620,20 @@ const DisputesManagement = () => {
         <CardContent>
           <div className="space-y-2 text-sm text-blue-700">
             <p>
-              • <strong>High Priority:</strong> Customer complaints about
-              damaged/missing items, refund requests
-            </p>
-            <p>
-              • <strong>WhatsApp Contact:</strong> Click to open pre-filled
-              message for direct customer communication
+              • <strong>WhatsApp Contact:</strong> Klik untuk membuka pre-filled
+              message untuk komunikasi langsung dengan customer
             </p>
             <p>
               • <strong>Resolution Process:</strong> 1) Contact customer 2)
               Investigate issue 3) Provide solution 4) Mark as resolved
             </p>
             <p>
-              • <strong>Admin Notes:</strong> Document all actions taken and
-              customer communications for future reference
+              • <strong>Admin Response:</strong> Berikan response terhadap
+              dispute dan dokumentasikan semua aksi yang diambil untuk referensi
+            </p>
+            <p>
+              • <strong>Bukti Dispute:</strong> Review bukti gambar yang dikirim
+              customer untuk memvalidasi komplain mereka
             </p>
           </div>
         </CardContent>

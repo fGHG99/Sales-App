@@ -210,7 +210,7 @@ export const getNotifications = async (
   unreadOnly = false
 ) => {
   try {
-    const response = await api.get("/notifications/courier", {
+    const response = await api.get("/notifications/get-all-notifications", {
       params: { page, limit, unreadOnly },
     });
     return response.data;

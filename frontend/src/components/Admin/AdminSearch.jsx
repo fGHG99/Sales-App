@@ -1,58 +1,95 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
-import { orders, couriers } from "../../utils/mockDataAdmin";
+import { Search, Package, Truck, AlertCircle } from "lucide-react";
+import { searchOrders } from "../../services/adminService";
 
-// Debounce + Throttle Hook
-const useDebouncedThrottle = (value, delay = 400, throttleDelay = 800) => {
+// Debounce Hook
+const useDebounce = (value, delay = 400) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
-  const lastRan = useRef(Date.now());
 
   useEffect(() => {
     const handler = setTimeout(() => {
-      const now = Date.now();
-      if (now - lastRan.current >= throttleDelay) {
-        setDebouncedValue(value);
-        lastRan.current = now;
-      }
+      setDebouncedValue(value);
     }, delay);
 
     return () => clearTimeout(handler);
-  }, [value, delay, throttleDelay]);
+  }, [value, delay]);
 
   return debouncedValue;
 };
 
 export default function AdminSearch({ searchQuery, setSearchQuery, onSelect }) {
-  const [results, setResults] = useState({ orders: [], couriers: [] });
+  const [results, setResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchHistory, setSearchHistory] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const searchRef = useRef(null);
   const navigate = useNavigate();
 
-  const debouncedQuery = useDebouncedThrottle(searchQuery);
+  const debouncedQuery = useDebounce(searchQuery, 400);
 
+  // Fetch search results from API
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setResults({ orders: [], couriers: [] });
-      return;
-    }
+    const fetchSearchResults = async () => {
+      if (!debouncedQuery.trim() || debouncedQuery.trim().length < 2) {
+        setResults([]);
+        return;
+      }
 
-    // Search for orders by ID or customer name
-    const filteredOrders = orders.filter(
-      (order) =>
-        order.id.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-        order.customerName.toLowerCase().includes(debouncedQuery.toLowerCase())
-    );
+      try {
+        setIsLoading(true);
+        const response = await searchOrders(debouncedQuery);
 
-    // Search for couriers by ID or name
-    const filteredCouriers = couriers.filter(
-      (courier) =>
-        courier.id.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-        courier.name.toLowerCase().includes(debouncedQuery.toLowerCase())
-    );
+        if (response.success && response.data) {
+          const allResults = [];
 
-    setResults({ orders: filteredOrders, couriers: filteredCouriers });
+          // Add orders to results
+          if (response.data.orders && response.data.orders.length > 0) {
+            response.data.orders.forEach((order) => {
+              allResults.push({
+                id: order.id,
+                type: "order",
+                status: order.orderStatus,
+              });
+            });
+          }
+
+          // Add couriers to results
+          if (response.data.couriers && response.data.couriers.length > 0) {
+            response.data.couriers.forEach((courier) => {
+              allResults.push({
+                id: courier.id,
+                type: "courier",
+                name: courier.name,
+              });
+            });
+          }
+
+          // Add disputes to results
+          if (response.data.disputes && response.data.disputes.length > 0) {
+            response.data.disputes.forEach((dispute) => {
+              allResults.push({
+                id: dispute.id,
+                type: "dispute",
+                status: dispute.status,
+                orderId: dispute.orderId,
+              });
+            });
+          }
+
+          setResults(allResults);
+        } else {
+          setResults([]);
+        }
+      } catch (error) {
+        console.error("Search error:", error);
+        setResults([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSearchResults();
   }, [debouncedQuery]);
 
   // Click outside handler
@@ -77,35 +114,78 @@ export default function AdminSearch({ searchQuery, setSearchQuery, onSelect }) {
     });
   };
 
-  const handleSelect = (item, type) => {
-    setSearchQuery(type === "order" ? item.id : item.id);
+  const handleSelect = (item) => {
+    setSearchQuery(item.id);
     setShowDropdown(false);
-    addToHistory(type === "order" ? item.id : item.id);
-    if (onSelect) onSelect(item, type);
+    addToHistory(item.id);
+
+    // Navigate based on type
+    if (item.type === "order") {
+      navigate(`/admin/orders?search=${encodeURIComponent(item.id)}`);
+    } else if (item.type === "courier") {
+      navigate(`/admin/couriers?search=${encodeURIComponent(item.id)}`);
+    } else if (item.type === "dispute") {
+      // Navigate to disputes with the dispute ID, or to order with orderId
+      navigate(`/admin/disputes?search=${encodeURIComponent(item.id)}`);
+    }
+
+    if (onSelect) onSelect(item, item.type);
   };
 
   const handleSearch = (query) => {
     const searchTerm = (query && query.trim()) || debouncedQuery.trim();
     if (searchTerm) {
       addToHistory(searchTerm);
-      // Navigate to appropriate admin page based on search results
-      const hasOrders = results.orders.length > 0;
-      const hasCouriers = results.couriers.length > 0;
-
-      if (hasOrders && !hasCouriers) {
-        navigate(`/admin/orders?search=${encodeURIComponent(searchTerm)}`);
-      } else if (hasCouriers && !hasOrders) {
-        navigate(`/admin/couriers?search=${encodeURIComponent(searchTerm)}`);
-      } else {
-        // If both or neither, let the user choose or navigate to general admin dashboard
-        navigate(`/admin?search=${encodeURIComponent(searchTerm)}`);
-      }
+      navigate(`/admin/orders?search=${encodeURIComponent(searchTerm)}`);
       setSearchQuery(searchTerm);
       setShowDropdown(false);
     }
   };
 
-  const hasResults = results.orders.length > 0 || results.couriers.length > 0;
+  // Get icon and badge color based on type
+  const getTypeIcon = (type) => {
+    switch (type) {
+      case "order":
+        return <Package className="w-4 h-4" />;
+      case "courier":
+        return <Truck className="w-4 h-4" />;
+      case "dispute":
+        return <AlertCircle className="w-4 h-4" />;
+      default:
+        return <Package className="w-4 h-4" />;
+    }
+  };
+
+  const getTypeBadge = (type) => {
+    switch (type) {
+      case "order":
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+            Order
+          </span>
+        );
+      case "courier":
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded">
+            Courier
+          </span>
+        );
+      case "dispute":
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 rounded">
+            Dispute
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+            Unknown
+          </span>
+        );
+    }
+  };
+
+  const hasResults = results.length > 0;
 
   return (
     <div className="relative flex-1 max-w-2xl" ref={searchRef}>
@@ -130,18 +210,15 @@ export default function AdminSearch({ searchQuery, setSearchQuery, onSelect }) {
               handleSearch();
             }
           }}
-          placeholder="Search orders or couriers by ID..."
+          placeholder="Search by Order ID, Courier ID, or Dispute ID..."
           className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 font-inter text-sm"
         />
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <button
-          type="button"
-          onClick={handleSearch}
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-blue-600 transition-colors duration-200"
-          aria-label="Search"
-        >
-          <Search className="w-4 h-4" />
-        </button>
+        {isLoading && (
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          </div>
+        )}
       </div>
 
       {/* Dropdown */}
@@ -160,7 +237,7 @@ export default function AdminSearch({ searchQuery, setSearchQuery, onSelect }) {
                   className="px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 cursor-pointer flex items-center space-x-2"
                 >
                   <Search className="w-3 h-3 text-gray-400" />
-                  <span>{item}</span>
+                  <span className="truncate">{item}</span>
                 </div>
               ))}
             </div>
@@ -169,83 +246,54 @@ export default function AdminSearch({ searchQuery, setSearchQuery, onSelect }) {
           {/* Search Results (only show when there's a query) */}
           {debouncedQuery.trim() && (
             <>
-              {/* Orders Section */}
-              {results.orders.length > 0 && (
-                <div className="border-b border-gray-200">
-                  <p className="px-4 py-2 text-xs text-gray-400 font-medium">
-                    Orders ({results.orders.length})
-                  </p>
-                  {results.orders.slice(0, 5).map((order) => (
-                    <div
-                      key={order.id}
-                      onClick={() => handleSelect(order, "order")}
-                      className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {order.id}
-                          </div>
-                          <div className="text-gray-500 text-xs">
-                            Customer: {order.customerName}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span
-                            className={`inline-flex px-2 py-1 text-xs rounded-full font-medium ${
-                              order.status === "completed"
-                                ? "bg-green-100 text-green-800"
-                                : order.status === "sedang dikirim"
-                                ? "bg-blue-100 text-blue-800"
-                                : order.status === "menunggu persiapan"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {order.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+              {/* Loading State */}
+              {isLoading && (
+                <div className="px-4 py-6 text-center">
+                  <div className="text-sm text-gray-500">Searching...</div>
                 </div>
               )}
 
-              {/* Couriers Section */}
-              {results.couriers.length > 0 && (
+              {/* Results */}
+              {!isLoading && hasResults && (
                 <div>
                   <p className="px-4 py-2 text-xs text-gray-400 font-medium">
-                    Couriers ({results.couriers.length})
+                    Found {results.length} result{results.length > 1 ? "s" : ""}
                   </p>
-                  {results.couriers.slice(0, 5).map((courier) => (
+                  {results.slice(0, 10).map((item, idx) => (
                     <div
-                      key={courier.id}
-                      onClick={() => handleSelect(courier, "courier")}
-                      className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
+                      key={`${item.id}-${idx}`}
+                      onClick={() => handleSelect(item)}
+                      className="px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors duration-150"
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {courier.id}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className="flex-shrink-0 text-gray-400">
+                            {getTypeIcon(item.type)}
                           </div>
-                          <div className="text-gray-500 text-xs">
-                            {courier.name} • ⭐ {courier.rating}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-mono text-xs text-gray-900 truncate">
+                              {item.id}
+                            </div>
+                            {/* Show additional info based on type */}
+                            {item.type === "order" && item.status && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                Status: {item.status}
+                              </div>
+                            )}
+                            {item.type === "courier" && item.name && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                {item.name}
+                              </div>
+                            )}
+                            {item.type === "dispute" && item.status && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                Status: {item.status}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="text-right">
-                          <span
-                            className={`inline-flex px-2 py-1 text-xs rounded-full font-medium ${
-                              courier.status === "aktif"
-                                ? "bg-green-100 text-green-800"
-                                : courier.status === "dalam perjalanan"
-                                ? "bg-blue-100 text-blue-800"
-                                : courier.status === "istirahat"
-                                ? "bg-gray-100 text-gray-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {courier.status}
-                          </span>
+                        <div className="flex-shrink-0">
+                          {getTypeBadge(item.type)}
                         </div>
                       </div>
                     </div>
@@ -254,14 +302,13 @@ export default function AdminSearch({ searchQuery, setSearchQuery, onSelect }) {
               )}
 
               {/* No Results */}
-              {!hasResults && (
+              {!isLoading && !hasResults && (
                 <div className="px-4 py-6 text-center">
                   <div className="text-sm text-gray-500">
-                    No orders or couriers found for "{debouncedQuery}"
+                    No results found for "{debouncedQuery}"
                   </div>
                   <div className="text-xs text-gray-400 mt-1">
-                    Try searching by Order ID, Courier ID, customer name, or
-                    courier name
+                    Try searching by Order ID, Courier ID, or Dispute ID
                   </div>
                 </div>
               )}
