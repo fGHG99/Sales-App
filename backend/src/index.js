@@ -17,6 +17,8 @@ import notificationRoutes from "./Controllers/notificationController.js";
 import inventoryRoutes from "./Controllers/InventoryCont.js";
 import storeRoute from "./Controllers/storeController.js";
 import supportRoute from "./Controllers/supportController.js";
+import adminStoreRoute from "./Controllers/adminStoreController.js";
+import disputeManagementRoute from "./Controllers/disputeManagementController.js";
 import { PORT, HOST } from "../utils/serverConf.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -114,6 +116,8 @@ app.use("/order", orderRoutes);
 app.use("/orders", courierOrderRoutes); // Courier order management
 app.use("/notifications", notificationRoutes); // Notification management
 app.use("/support", supportRoute);
+app.use("/admin", adminStoreRoute); // Admin store management
+app.use("/disputes", disputeManagementRoute); // Admin dispute management
 app.use("/address", addressRoute);
 
 // Start the server

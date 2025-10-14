@@ -454,11 +454,11 @@ router.post(
       }
 
       // Only allow upload when status is DELIVERED
-      if (order.orderStatus !== "DELIVERED") {
+      if (order.orderStatus !== "OUT_FOR_DELIVERY") {
         // Delete uploaded file
         fs.unlinkSync(req.file.path);
         return res.status(400).json({
-          message: `Cannot upload delivery proof. Order status must be DELIVERED (current: ${order.orderStatus})`,
+          message: `Cannot upload delivery proof. Order status must be OUT_FOR_DELIVERY (current: ${order.orderStatus})`,
         });
       }
 
@@ -477,6 +477,7 @@ router.post(
         where: { id: orderId },
         data: {
           deliveryProof: filePath,
+          orderStatus: "DELIVERED",
         },
         include: {
           courier: {

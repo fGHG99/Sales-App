@@ -22,8 +22,10 @@ enum PaymentStatus {
 enum OrderStatus {
   PENDING
   IN_PREPARATION
+  PREPARED
   READY_FOR_PICKUP
   OUT_FOR_DELIVERY
+  ARRIVED_AT_DESTINATION
   DELIVERED
   COMPLETED
   DISPUTED
@@ -77,6 +79,8 @@ enum NotificationType {
   INFO
   ORDER
 }
+
+//menambahkan enum courier status 
 
 model User {
   id       String  @id @default(uuid()) @db.Uuid

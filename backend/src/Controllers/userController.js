@@ -88,24 +88,23 @@ router.post("/create", async (req, res) => {
   }
 });
 
-// Get notifications for the authenticated user
+// Get notifications for the authenticated user (page-based pagination)
 router.get("/notifications", authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { type, limit, cursor } = req.query;
+    const { type, limit = 4, page = 1 } = req.query;
 
-    const maxLimit = 50;
-    const defaultLimit = 20;
-    const parsedLimit = Number.parseInt(limit, 10);
-    const take = Number.isFinite(parsedLimit)
-      ? Math.min(Math.max(parsedLimit, 1), maxLimit)
-      : defaultLimit;
+    // Parse and validate pagination params
+    const itemsPerPage = Math.min(Math.max(parseInt(limit), 1), 50);
+    const currentPage = Math.max(parseInt(page), 1);
+    const skip = (currentPage - 1) * itemsPerPage;
 
     const whereClause = {
       userId,
-      ...(type ? { type: type } : {}),
+      ...(type && type !== "all" ? { type: type } : {}),
     };
 
+    // Fetch notifications with pagination
     const notifications = await prisma.notification.findMany({
       where: whereClause,
       select: {
@@ -118,19 +117,39 @@ router.get("/notifications", authenticate, async (req, res) => {
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
-      take,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: itemsPerPage,
+      skip: skip,
     });
 
-    const nextCursor =
-      notifications.length === take
-        ? notifications[notifications.length - 1].id
-        : null;
+    // Get total count for this filter
+    const total = await prisma.notification.count({
+      where: whereClause,
+    });
+
+    // Get unread count
+    const unreadCount = await prisma.notification.count({
+      where: {
+        userId,
+        hasRead: false,
+      },
+    });
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / itemsPerPage);
+    const hasNextPage = currentPage < totalPages;
+    const hasPreviousPage = currentPage > 1;
 
     return res.json({
       notifications,
-      nextCursor,
-      count: notifications.length,
+      pagination: {
+        total,
+        unreadCount,
+        page: currentPage,
+        limit: itemsPerPage,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+      },
     });
   } catch (error) {
     console.error("Get notifications error:", error);
@@ -287,7 +306,6 @@ router.get("/courier/me", authenticate, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 
 // Get access permissions owned by the authenticated user's role
 router.get("/permissions", authenticate, async (req, res) => {

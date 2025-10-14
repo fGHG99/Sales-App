@@ -14,10 +14,16 @@ import { authenticate } from "../Middlewares/accessControl.js";
  * Returns all notifications for the authenticated courier user
  * Sorted by newest first with page-based pagination
  */
-router.get("/courier", authenticate, async (req, res) => {
+router.get("/get-all-notifications", authenticate, async (req, res) => {
   try {
-    const courierId = req.user.id;
-    const { limit = 20, page = 1, unreadOnly = false } = req.query;
+    const userId = req.user.id;
+    const { limit = 20, page = 1, unreadOnly = false, type } = req.query;
+
+    console.log("📡 [BACKEND] Courier notifications request:");
+    console.log(`   Courier ID: ${userId}`);
+    console.log(`   Type filter: ${type || "all"}`);
+    console.log(`   Page: ${page}`);
+    console.log(`   Limit: ${limit}`);
 
     // Parse and validate pagination params
     const itemsPerPage = parseInt(limit);
@@ -25,14 +31,16 @@ router.get("/courier", authenticate, async (req, res) => {
     const skip = (currentPage - 1) * itemsPerPage;
 
     const whereClause = {
-      userId: courierId,
-      //   isDeleted: false,
+      userId: userId,
+      ...(type && type !== "all" ? { type: type } : {}),
     };
 
     // Filter only unread if requested
     if (unreadOnly === "true") {
       whereClause.hasRead = false;
     }
+
+    console.log("   Where clause:", whereClause);
 
     const notifications = await prisma.notification.findMany({
       where: whereClause,
@@ -43,21 +51,23 @@ router.get("/courier", authenticate, async (req, res) => {
       skip: skip,
     });
 
-    // Count total and unread
+    // Count total for current filter
     const total = await prisma.notification.count({
-      where: {
-        userId: courierId,
-        // isDeleted: false,
-      },
+      where: whereClause,
     });
 
+    // Count all unread (regardless of type filter)
     const unreadCount = await prisma.notification.count({
       where: {
-        userId: courierId,
-        // isDeleted: false,
+        userId: userId,
         hasRead: false,
       },
     });
+
+    console.log("✅ [BACKEND] User notifications fetched:");
+    console.log(`   Found: ${notifications.length} notifications`);
+    console.log(`   Total (with filter): ${total}`);
+    console.log(`   Unread count: ${unreadCount}`);
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(total / itemsPerPage);
@@ -87,7 +97,7 @@ router.get("/courier", authenticate, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Error fetching courier notifications:", error);
+    console.error("❌ [BACKEND] Error fetching user notifications:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,
