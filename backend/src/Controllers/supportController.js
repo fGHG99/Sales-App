@@ -288,15 +288,78 @@ router.delete(
 // ACCESS PERMISSION MANAGEMENT
 // ========================================
 
-// GET all permissions
+// GET all permissions with pagination
 router.get(
   "/permissions",
   authenticate,
   authorize("support.permission.view"),
   async (req, res) => {
     try {
-      const permissions = await prisma.accessPermission.findMany({
-        where: { isDeleted: false },
+      const { page = 1, limit = 10 } = req.query;
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+
+      const where = { isDeleted: false };
+
+      const [permissions, total] = await Promise.all([
+        prisma.accessPermission.findMany({
+          where,
+          include: {
+            role: {
+              where: { isDeleted: false },
+              select: {
+                id: true,
+                name: true,
+                roleType: true,
+              },
+            },
+          },
+          orderBy: { accessKey: "asc" },
+          skip,
+          take: parseInt(limit),
+        }),
+        prisma.accessPermission.count({ where }),
+      ]);
+
+      res.json({
+        success: true,
+        permissions,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages: Math.ceil(total / parseInt(limit)),
+        },
+      });
+    } catch (err) {
+      console.error("Error fetching permissions:", err);
+      res.status(500).json({ error: "Failed to fetch permissions" });
+    }
+  }
+);
+
+// GET search permissions by accessKey - returns multiple permissions with pagination
+router.get("/permissions/search", authenticate, async (req, res) => {
+  try {
+    const { accessKey, page = 1, limit = 10} = req.query;
+
+    // Validation: ensure accessKey parameter exists and has minimum length
+    if (!accessKey || accessKey.trim().length < 2) {
+      return res.status(400).json({
+        error: "AccessKey query parameter is required (minimum 2 characters)",
+      });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = {
+      accessKey: { contains: accessKey.trim(), mode: "insensitive" },
+      isDeleted: false,
+    };
+
+    // Parallel queries for permissions and total count (efficient)
+    const [permissions, total] = await Promise.all([
+      prisma.accessPermission.findMany({
+        where,
         include: {
           role: {
             where: { isDeleted: false },
@@ -307,19 +370,28 @@ router.get(
             },
           },
         },
+        skip,
+        take: parseInt(limit),
         orderBy: { accessKey: "asc" },
-      });
+      }),
+      prisma.accessPermission.count({ where }),
+    ]);
 
-      res.json({
-        success: true,
-        permissions,
-      });
-    } catch (err) {
-      console.error("Error fetching permissions:", err);
-      res.status(500).json({ error: "Failed to fetch permissions" });
-    }
+    res.json({
+      success: true,
+      permissions, // Array of permissions
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (err) {
+    console.error("Error searching permissions:", err);
+    res.status(500).json({ error: "Failed to search permissions" });
   }
-);
+});
 
 // POST create new permission
 router.post(
@@ -490,7 +562,7 @@ router.put(
   }
 );
 
-// DELETE permission (soft delete)
+// DELETE permission (soft delete with role disconnection)
 router.delete(
   "/permissions/:id",
   authenticate,
@@ -501,21 +573,43 @@ router.delete(
 
       const permission = await prisma.accessPermission.findUnique({
         where: { id },
+        include: {
+          role: {
+            select: { id: true, name: true },
+          },
+        },
       });
 
       if (!permission || permission.isDeleted) {
         return res.status(404).json({ error: "Permission not found" });
       }
 
-      // Soft delete
-      await prisma.accessPermission.update({
-        where: { id },
-        data: { isDeleted: true },
+      // Use transaction to ensure atomicity:
+      // 1. Disconnect permission from all roles
+      // 2. Soft delete the permission
+      await prisma.$transaction(async (tx) => {
+        // Step 1: Disconnect from all roles (prevent ambiguous data)
+        await tx.accessPermission.update({
+          where: { id },
+          data: {
+            role: {
+              set: [], // Disconnect all roles
+            },
+          },
+        });
+
+        // Step 2: Soft delete the permission
+        await tx.accessPermission.update({
+          where: { id },
+          data: { isDeleted: true },
+        });
       });
 
       res.json({
         success: true,
-        message: "Permission deleted successfully",
+        message:
+          "Permission deleted successfully and disconnected from all roles",
+        affectedRoles: permission.role.length,
       });
     } catch (err) {
       console.error("Error deleting permission:", err);
@@ -535,11 +629,18 @@ router.get(
   authorize("support.user.view"),
   async (req, res) => {
     try {
-      const { page = 1, limit = 10, search, roleId } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search,
+        roleId,
+        includeDeleted,
+      } = req.query;
       const skip = (parseInt(page) - 1) * parseInt(limit);
 
       const where = {
-        isDeleted: false,
+        // Only filter isDeleted if includeDeleted is not 'true'
+        ...(includeDeleted !== "true" && { isDeleted: false }),
         ...(search && {
           OR: [
             { name: { contains: search, mode: "insensitive" } },
@@ -560,6 +661,7 @@ router.get(
             sex: true,
             dob: true,
             isVerified: true,
+            isDeleted: true,
             createdAt: true,
             role: {
               select: {
@@ -654,6 +756,71 @@ router.get(
     }
   }
 );
+
+// GET search users by name - returns multiple users with pagination
+router.get("/get-user/search", authenticate, async (req, res) => {
+  try {
+    const { name, page = 1, limit = 10, includeDeleted } = req.query;
+
+    // Validation: ensure name parameter exists and has minimum length
+    if (!name || name.trim().length < 2) {
+      return res.status(400).json({
+        error: "Name query parameter is required (minimum 2 characters)",
+      });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = {
+      name: { contains: name.trim(), mode: "insensitive" },
+      // Only filter isDeleted if includeDeleted is not 'true'
+      ...(includeDeleted !== "true" && { isDeleted: false }),
+    };
+
+    // Parallel queries for users and total count (efficient)
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          sex: true,
+          dob: true,
+          isVerified: true,
+          isDeleted: true, // Include isDeleted field in response
+          createdAt: true,
+          role: {
+            select: {
+              id: true,
+              name: true,
+              roleType: true,
+            },
+          },
+        },
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      users, // Array of users
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (err) {
+    console.error("Error searching users:", err);
+    res.status(500).json({ error: "Failed to search users" });
+  }
+});
 
 // POST create new user
 router.post("/users", authenticate, async (req, res) => {
