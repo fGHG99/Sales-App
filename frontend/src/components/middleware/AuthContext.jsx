@@ -17,14 +17,15 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     console.log("🚪 Logging out user");
+    await api.post("/auth/logout");
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");
     setUser(null);
     setIsAuthenticated(false);
     setPermissions([]);
-    navigate("/auth/signin");
+    navigate("/auth/signin", { replace: true });
   }, [navigate]);
 
   // Role-based redirect function

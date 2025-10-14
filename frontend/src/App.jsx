@@ -4,6 +4,7 @@ import {
   useParams,
   useNavigate,
   useSearchParams,
+  Navigate,
 } from "react-router-dom";
 import RootLayout from "./components/RootLayout";
 import Layout from "./components/Layout";
@@ -44,6 +45,9 @@ import Navigation from "./components/courier/pages/CourierNavbar";
 import UserLocation from "./components/courier/pages/UserLocation";
 import StoreLocation from "./components/courier/pages/StoreLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
+import AccountManagement from "./components/it-support/pages/AccountManagement";
+import RoleManagement from "./components/it-support/pages/RoleManagement";
+import AuditLog from "./components/it-support/pages/AuditLog";
 import NotificationsPage from "./components/User/pages/NotificationsPage";
 import api from "./utils/api";
 import ProtectedRoute from "./components/middleware/ProtecedRoute";
@@ -237,6 +241,12 @@ const router = createBrowserRouter([
             </PermissionBasedRoute>
           </ProtectedRoute>
         ),
+        children: [
+          { index: true, element: <Navigate to="/support/accounts" replace /> },
+          { path: "accounts", element: <AccountManagement /> },
+          { path: "roles", element: <RoleManagement /> },
+          { path: "audit", element: <AuditLog /> },
+        ],
       },
       {
         path: "/access-denied",
