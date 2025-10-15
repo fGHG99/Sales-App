@@ -30,10 +30,8 @@ import DisputesManagement from "./components/Admin/Pages/DisputeManagement";
 import SalesAnalytics from "./components/Admin/Pages/SalesAnalytics";
 import AdminCourierTracking from "./components/Admin/Pages/CourierTracking";
 import SuperAdminLayout from "./components/superAdmin/layout/SuperAdminLayout";
-import SuperAdminDashboard from "./components/superAdmin/page/Dashboard";
+import SuperAdminDashboard from "./components/superAdmin/page/SuperAdminDashboard";
 import StoreManagement from "./components/superAdmin/page/StoreManagement";
-import SuperAdminOrderManagement from "./components/superAdmin/page/OrderManagement";
-import ProductManagement from "./components/superAdmin/page/ProductManagement";
 import FeeSetup from "./components/superAdmin/page/FeeSetup";
 import GlobalReports from "./components/superAdmin/page/GlobalReports";
 import CourierDashboard from "./components/courier/pages/DashboardCourier";
@@ -226,8 +224,6 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <SuperAdminDashboard /> },
           { path: "stores", element: <StoreManagement /> },
-          { path: "orders", element: <SuperAdminOrderManagement /> },
-          { path: "products", element: <ProductManagement /> },
           { path: "fees", element: <FeeSetup /> },
           { path: "reports", element: <GlobalReports /> },
         ],

@@ -9,6 +9,8 @@ export default function DeliverySection({
   stores,
   isLoadingStores,
   userLocation,
+  currentDeliveryFee,
+  isLoadingDeliveryFee,
 }) {
   const getDeliveryDisplayText = () => {
     // Check if no delivery option is selected
@@ -66,7 +68,13 @@ export default function DeliverySection({
                 </p>
                 {deliveryOption?.type ? (
                   <p className="text-sm text-muted-foreground truncate">
-                    {deliveryOption.cost === 0
+                    {deliveryOption.type === "courier"
+                      ? isLoadingDeliveryFee
+                        ? "Loading delivery fee..."
+                        : currentDeliveryFee === 0
+                        ? "Free"
+                        : formatIDR(currentDeliveryFee)
+                      : deliveryOption.cost === 0
                       ? "Free"
                       : formatIDR(deliveryOption.cost)}
                   </p>

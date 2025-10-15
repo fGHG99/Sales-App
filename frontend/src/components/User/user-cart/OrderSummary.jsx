@@ -74,6 +74,7 @@ import {
 } from "@/components/ui/dialog";
 import { AlertCircle, XCircle, Loader2 } from "lucide-react";
 import api from "../../../utils/api";
+import CourierSearchModal from "../../modal/CourierSearchModal";
 
 export default function OrderSummary({
   deliveryOption,
@@ -94,6 +95,11 @@ export default function OrderSummary({
   const [showClosedModal, setShowClosedModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Courier search modal states
+  const [showCourierSearchModal, setShowCourierSearchModal] = useState(false);
+  const [courierSearchData, setCourierSearchData] = useState(null);
+  const [checkoutData, setCheckoutData] = useState(null);
 
   // Clear errors when delivery option or payment changes
   useEffect(() => {
@@ -254,7 +260,7 @@ export default function OrderSummary({
       }
 
       // Prepare checkout data
-      const checkoutData = {
+      const preparedCheckoutData = {
         userId,
         deliveryAddressId: selectedAddress,
         cartItemIds,
@@ -267,18 +273,61 @@ export default function OrderSummary({
 
       // Add pickup time only for PICKUP_TO_STORE
       if (deliveryOption.type === "pickup") {
-        checkoutData.pickupTime = deliveryOption.pickupTime;
+        preparedCheckoutData.pickupTime = deliveryOption.pickupTime;
       }
 
-      console.log("📦 Sending checkout request:", checkoutData);
+      console.log("📦 Sending checkout request:", preparedCheckoutData);
+
+      // Store checkout data for courier search modal
+      setCheckoutData(preparedCheckoutData);
+
+      // If delivery type is courier, show courier search modal first
+      if (deliveryOption.type === "courier") {
+        // Get address data for courier search modal
+        const addressResponse = await api.get(
+          `/address/get-address/${selectedAddress}`
+        );
+        const addressData = addressResponse.data;
+        console.log("📍 Address data:", addressData);
+
+        setCourierSearchData({
+          postalCode: addressData.postalCode,
+          city: addressData.city,
+          province: addressData.province,
+        });
+
+        // Close confirmation modal and show courier search modal
+        setShowConfirmModal(false);
+        setShowCourierSearchModal(true);
+        setIsProcessing(false);
+        return;
+      }
+
+      // For pickup orders, proceed directly with checkout
+      await processCheckout(preparedCheckoutData);
+    } catch (error) {
+      console.error("❌ Checkout preparation failed:", error);
+      setShowConfirmModal(false);
+      setIsProcessing(false);
+
+      const errorMessage =
+        error.response?.data?.message || "Checkout gagal. Silakan coba lagi.";
+      setValidationErrors([errorMessage]);
+    }
+  };
+
+  const processCheckout = async (data) => {
+    try {
+      setIsProcessing(true);
 
       // Call checkout API
-      const response = await api.post("/order/checkout", checkoutData);
+      const response = await api.post("/order/checkout", data);
 
       console.log("✅ Checkout successful:", response.data);
 
-      // Close modal
+      // Close modals
       setShowConfirmModal(false);
+      setShowCourierSearchModal(false);
 
       // Notify parent component to refresh cart
       if (onCheckoutSuccess) {
@@ -289,22 +338,26 @@ export default function OrderSummary({
       window.dispatchEvent(new CustomEvent("cartUpdated"));
 
       // Navigate to order success/detail page
-      // const orderId = response.data.order.id;
-      navigate("/user/orders", {
-        // state: { orderData: response.data.order },
-      });
+      navigate("/user/orders");
     } catch (error) {
-      console.error("❌ Checkout failed:", error);  
+      console.error("❌ Checkout failed:", error);
 
+      // Close modals
       setShowConfirmModal(false);
+      setShowCourierSearchModal(false);
 
-      // Show error message
-      const errorMessage =
-        error.response?.data?.message || "Checkout gagal. Silakan coba lagi.";
-      setValidationErrors([errorMessage]);
-
-      // If insufficient cash, show specific error
-      if (error.response?.data?.shortage) {
+      // Handle different error types
+      if (
+        error.response?.status === 503 &&
+        error.response?.data?.error === "NO_COURIER_AVAILABLE"
+      ) {
+        // No courier available - show specific error
+        setValidationErrors([
+          error.response.data.message ||
+            "Tidak ada kurir yang tersedia untuk area pengiriman ini.",
+        ]);
+      } else if (error.response?.data?.shortage) {
+        // Insufficient cash
         const shortage = error.response.data.shortage;
         setValidationErrors([
           `Uang yang dibayarkan kurang ${formatIDR(
@@ -313,10 +366,34 @@ export default function OrderSummary({
             error.response.data.required
           )}`,
         ]);
+      } else {
+        // General error
+        const errorMessage =
+          error.response?.data?.message || "Checkout gagal. Silakan coba lagi.";
+        setValidationErrors([errorMessage]);
       }
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleCourierSearchSuccess = (courierData) => {
+    console.log("✅ Courier found:", courierData);
+    // Proceed with checkout after courier is found
+    if (checkoutData) {
+      processCheckout(checkoutData);
+    }
+  };
+
+  const handleCourierSearchError = (error) => {
+    console.error("❌ Courier search failed:", error);
+    setShowCourierSearchModal(false);
+
+    // Show error message
+    const errorMessage =
+      error.message ||
+      "Tidak ada kurir yang tersedia untuk area pengiriman ini.";
+    setValidationErrors([errorMessage]);
   };
 
   return (
@@ -475,6 +552,18 @@ export default function OrderSummary({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Courier Search Modal */}
+      <CourierSearchModal
+        isOpen={showCourierSearchModal}
+        onClose={() => setShowCourierSearchModal(false)}
+        onSuccess={handleCourierSearchSuccess}
+        onError={handleCourierSearchError}
+        postalCode={courierSearchData?.postalCode}
+        city={courierSearchData?.city}
+        province={courierSearchData?.province}
+        checkoutData={checkoutData}
+      />
     </Card>
   );
 }

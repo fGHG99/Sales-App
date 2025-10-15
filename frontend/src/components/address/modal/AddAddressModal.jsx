@@ -101,13 +101,13 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
       if (editingAddress) {
         // Update existing address
         response = await api.put(
-          `/address/${editingAddress.id}`,
+          `/address/addresses/${editingAddress.id}`,
           addressPayload
         );
         console.log("Address updated:", response.data);
       } else {
         // Create new address
-        response = await api.post("/address", addressPayload);
+        response = await api.post("/address/addresses", addressPayload);
         console.log("Address created:", response.data);
       }
 

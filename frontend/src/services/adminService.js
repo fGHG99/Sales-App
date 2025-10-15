@@ -525,3 +525,20 @@ export const getSalesExportData = async (
     throw error;
   }
 };
+
+// ==================== QR CODE GENERATION ====================
+
+/**
+ * Generate QR code for courier pickup confirmation
+ * @param {string} orderId - Order ID to generate QR code for
+ * @returns {Promise} QR code data with expiration info
+ */
+export const generateQrCode = async (orderId) => {
+  try {
+    const response = await api.post(`/orders/generate-qr/${orderId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error generating QR code:", error);
+    throw error;
+  }
+};

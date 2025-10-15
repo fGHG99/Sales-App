@@ -9,6 +9,7 @@ import {
   MapPin,
   Calendar,
   Loader2,
+  QrCode,
 } from "lucide-react";
 import {
   Card,
@@ -34,8 +35,10 @@ import {
   getStatusBadgeColor,
   formatOrderStatus,
   getStatusButtonConfig,
+  generateQrCode,
 } from "../../../services/adminService";
 import Pagination from "../../Pagination";
+import QrCodeGenerator from "../QrCodeGenerator";
 
 const OrderManagement = () => {
   const [orders, setOrders] = useState([]);
@@ -46,6 +49,8 @@ const OrderManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
+  const [qrCodeModalOpen, setQrCodeModalOpen] = useState(false);
+  const [selectedOrderForQr, setSelectedOrderForQr] = useState(null);
 
   const itemsPerPage = 5;
 
@@ -120,6 +125,16 @@ const OrderManagement = () => {
     } finally {
       setUpdatingOrderId(null);
     }
+  };
+
+  const handleGenerateQrCode = (order) => {
+    setSelectedOrderForQr(order);
+    setQrCodeModalOpen(true);
+  };
+
+  const handleQrCodeError = (error) => {
+    console.error("QR Code generation error:", error);
+    // You can add toast notification here if needed
   };
 
   const getActionButton = (order) => {
@@ -482,6 +497,20 @@ const OrderManagement = () => {
                         <OrderDetailsModal order={order} />
                       </Dialog>
 
+                      {/* Generate QR Code Button - Only visible for READY_FOR_PICKUP orders */}
+                      {order.orderStatus === "READY_FOR_PICKUP" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleGenerateQrCode(order)}
+                          className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                          data-testid={`generate-qr-${order.id}`}
+                        >
+                          <QrCode className="w-4 h-4 mr-2" />
+                          Generate QR
+                        </Button>
+                      )}
+
                       {getActionButton(order)}
                     </div>
                   </div>
@@ -548,6 +577,54 @@ const OrderManagement = () => {
           </p>
         </CardContent>
       </Card>
+
+      {/* QR Code Generator Modal */}
+      <Dialog open={qrCodeModalOpen} onOpenChange={setQrCodeModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5 text-purple-600" />
+              Generate QR Code for Pickup
+            </DialogTitle>
+            <DialogDescription>
+              Generate QR code untuk konfirmasi pickup order oleh kurir
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedOrderForQr && (
+            <div className="space-y-4">
+              {/* Order Info */}
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <Package className="h-8 w-8 text-gray-400" />
+                  <div>
+                    <p className="font-medium">
+                      Order #{selectedOrderForQr.id.slice(0, 8)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Customer:{" "}
+                      {selectedOrderForQr.deliveryAddress.recipientName}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Status:{" "}
+                      <span className="font-medium text-purple-600">
+                        READY_FOR_PICKUP
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code Generator Component */}
+              <QrCodeGenerator
+                orderId={selectedOrderForQr.id}
+                onGenerate={generateQrCode}
+                onError={handleQrCodeError}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

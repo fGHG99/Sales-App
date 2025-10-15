@@ -2,6 +2,10 @@
 import { useState, useEffect } from "react";
 import { AlertOctagon, AlertCircle } from "lucide-react"; // ⬅️ Import the icon
 import api from "../../../utils/api";
+import {
+  getCurrentDeliveryFee,
+  formatDeliveryFee,
+} from "../../../services/deliveryFeeService";
 import DeliveryOptionsModal from "../../modal/delivery-option";
 import { PaymentOptionsModal } from "../../modal/payment-option";
 import DeleteConfirmationModal from "../../modal/delete-confirmation-cart";
@@ -55,10 +59,15 @@ export default function Cart() {
   const [isLoadingStores, setIsLoadingStores] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
 
+  // Delivery fee state from API
+  const [currentDeliveryFee, setCurrentDeliveryFee] = useState(0);
+  const [isLoadingDeliveryFee, setIsLoadingDeliveryFee] = useState(true);
+
   // Fetch cart data and addresses on component mount
   useEffect(() => {
     fetchCartData();
     fetchUserAddresses();
+    fetchCurrentDeliveryFee();
     // Removed fetchNearbyStores() - now called from delivery modal
   }, []);
 
@@ -246,6 +255,29 @@ export default function Cart() {
     }
   };
 
+  // Fetch current delivery fee from API
+  const fetchCurrentDeliveryFee = async () => {
+    try {
+      setIsLoadingDeliveryFee(true);
+      console.log("💰 Fetching current delivery fee...");
+
+      const response = await getCurrentDeliveryFee();
+      console.log("✅ Delivery fee fetched:", response);
+
+      if (response.success && response.data) {
+        setCurrentDeliveryFee(response.data.feeAmount || 0);
+      } else {
+        setCurrentDeliveryFee(0);
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch delivery fee:", err);
+      // Set default delivery fee if API fails
+      setCurrentDeliveryFee(0);
+    } finally {
+      setIsLoadingDeliveryFee(false);
+    }
+  };
+
   // Handle when a new address is added
   const handleAddressAdded = (newAddress) => {
     console.log("🏠 New address added, refreshing list...");
@@ -326,52 +358,7 @@ export default function Cart() {
     );
   };
 
-  const store = {
-    id: "1",
-    name: "TechStore Manhattan",
-    address: "100 Tech Plaza, Manhattan, NY 10003",
-    distance: "2.3 miles",
-  };
-
-  const mockStores = [
-    {
-      id: "1",
-      name: "TechStore Manhattan",
-      address: "100 Tech Plaza, Manhattan, NY 10003",
-      openHour: "09:00",
-      closeHour: "21:00",
-      distance: "2.3 miles",
-      distanceValue: 2.3,
-      coordinates: { lat: 40.7589, lng: -73.9851 },
-    },
-    {
-      id: "2",
-      name: "TechStore Brooklyn",
-      address: "456 Brooklyn Ave, Brooklyn, NY 11201",
-      openHour: "08:00",
-      closeHour: "22:00",
-      distance: "4.7 miles",
-      distanceValue: 4.7,
-      coordinates: { lat: 40.6892, lng: -73.9442 },
-    },
-    {
-      id: "3",
-      name: "TechStore Queens",
-      address: "789 Queens Blvd, Queens, NY 11373",
-      openHour: "10:00",
-      closeHour: "20:00",
-      distance: "8.1 miles",
-      distanceValue: 8.1,
-      coordinates: { lat: 40.7282, lng: -73.7949 },
-    },
-  ];
-
-  const formatIDR = (amount) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
+  const formatIDR = (amount) => formatDeliveryFee(amount);
 
   const selectedCartItems = cartItems.filter((item) =>
     selectedItems.has(item.id)
@@ -380,7 +367,12 @@ export default function Cart() {
     (sum, item) => sum + item.price * item.quantity,
     0
   );
-  const deliveryCost = deliveryOption.cost;
+
+  // Use current delivery fee from API for courier delivery
+  const deliveryCost =
+    deliveryOption.type === "courier"
+      ? currentDeliveryFee
+      : deliveryOption.cost || 0;
   const total = subtotal + deliveryCost;
 
   // Show loading state with skeleton UI
@@ -441,6 +433,8 @@ export default function Cart() {
                   stores={nearbyStores}
                   isLoadingStores={isLoadingStores}
                   userLocation={userLocation}
+                  currentDeliveryFee={currentDeliveryFee}
+                  isLoadingDeliveryFee={isLoadingDeliveryFee}
                 />
 
                 <PaymentSection
@@ -541,6 +535,8 @@ export default function Cart() {
         nearbyStores={nearbyStores}
         isLoadingStores={isLoadingStores}
         onFetchStores={fetchNearbyStores}
+        currentDeliveryFee={currentDeliveryFee}
+        isLoadingDeliveryFee={isLoadingDeliveryFee}
       />
 
       <PaymentOptionsModal

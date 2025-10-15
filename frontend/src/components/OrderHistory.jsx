@@ -29,11 +29,16 @@ import {
   Clock,
   MapPin,
   Truck,
+  AlertTriangle,
+  CheckCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "../lib/utils";
 import { useDebounce } from "../hooks/useDebounce";
 import Pagination from "./Pagination";
+import SubmitDisputeModal from "./modal/SubmitDisputeModal";
+import CompleteOrderModal from "./modal/CompleteOrderModal";
+import { useOrderManagement } from "../hooks/useOrderManagement";
 import api from "../utils/api";
 
 const OrderHistory = () => {
@@ -44,7 +49,6 @@ const OrderHistory = () => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [orders, setOrders] = useState([]);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     total: 0,
@@ -53,6 +57,16 @@ const OrderHistory = () => {
     showing: 0,
   });
   const ordersPerPage = 6;
+
+  // Initialize order management hook
+  const {
+    orders,
+    refreshOrders,
+    isUpdating,
+    updateError,
+    getOrderById,
+    isOrderUpdating,
+  } = useOrderManagement([]);
 
   // Debounce status and date changes (500ms delay)
   const debouncedStatus = useDebounce(selectedStatus, 500);
@@ -105,7 +119,8 @@ const OrderHistory = () => {
           });
         });
 
-        setOrders(response.data.orders || []);
+        // Update orders using hook
+        refreshOrders(response.data.orders || []);
         setPagination(
           response.data.pagination || {
             total: 0,
@@ -117,7 +132,7 @@ const OrderHistory = () => {
       } catch (err) {
         console.error("Error fetching orders:", err);
         setError(err.response?.data?.message || "Failed to fetch orders");
-        setOrders([]);
+        refreshOrders([]);
         setPagination({
           total: 0,
           totalPages: 0,
@@ -138,6 +153,7 @@ const OrderHistory = () => {
     { value: "IN_PREPARATION", label: "In Preparation" },
     { value: "READY_FOR_PICKUP", label: "Ready for Pickup" },
     { value: "OUT_FOR_DELIVERY", label: "Out for Delivery" },
+    { value: "ARRIVED_AT_DESTINATION", label: "Arrived at Destination" },
     { value: "DELIVERED", label: "Delivered" },
     { value: "COMPLETED", label: "Completed" },
     { value: "DISPUTED", label: "Disputed" },
@@ -150,6 +166,7 @@ const OrderHistory = () => {
       IN_PREPARATION: "bg-blue-100 text-blue-800 border-blue-200",
       READY_FOR_PICKUP: "bg-purple-100 text-purple-800 border-purple-200",
       OUT_FOR_DELIVERY: "bg-orange-100 text-orange-800 border-orange-200",
+      ARRIVED_AT_DESTINATION: "bg-indigo-100 text-indigo-800 border-indigo-200",
       DELIVERED: "bg-green-100 text-green-800 border-green-200",
       COMPLETED: "bg-gray-100 text-gray-800 border-gray-200",
       DISPUTED: "bg-red-100 text-red-800 border-red-200",
@@ -167,6 +184,12 @@ const OrderHistory = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, selectedStatus, selectedDate]);
+
+  // Handle order completion callback
+  const handleOrderComplete = (orderId, newStatus) => {
+    // Order state sudah di-update oleh optimistic update di hook
+    console.log(`Order ${orderId} completed with status: ${newStatus}`);
+  };
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -524,6 +547,45 @@ const OrderHistory = () => {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* Complete Order Button */}
+                        {order.orderStatus === "DELIVERED" && (
+                          <CompleteOrderModal
+                            order={order}
+                            onOrderComplete={handleOrderComplete}
+                          >
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isOrderUpdating(order.id)}
+                              className="flex items-center gap-2 text-green-600 border-green-200 hover:bg-green-50"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              <span className="hidden sm:inline">
+                                {isOrderUpdating(order.id)
+                                  ? "Menyelesaikan..."
+                                  : "Selesaikan Pesanan"}
+                              </span>
+                            </Button>
+                          </CompleteOrderModal>
+                        )}
+
+                        {/* Submit Dispute Button */}
+                        {(order.orderStatus === "ARRIVED_AT_DESTINATION" ||
+                          order.orderStatus === "DELIVERED") && (
+                          <SubmitDisputeModal order={order}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-2 text-orange-600 border-orange-200 hover:bg-orange-50"
+                            >
+                              <AlertTriangle className="h-4 w-4" />
+                              <span className="hidden sm:inline">
+                                Submit Dispute
+                              </span>
+                            </Button>
+                          </SubmitDisputeModal>
+                        )}
+
                         {/* Track Courier Button - Navigate to tracking page */}
                         {order.courier &&
                           order.deliveryAddress?.latitude &&

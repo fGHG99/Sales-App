@@ -21,7 +21,6 @@ import useCourierDashboard from "../../../hooks/useCourierDashboard";
 import { useAuth } from "../../middleware/AuthContext";
 import { formatCurrency } from "../../../utils/formatters";
 import QrCodeScanner from "../QrCodeScanner";
-import QrCodeGenerator from "../QrCodeGenerator";
 import UploadDeliveryProofModal from "../modal/UploadDeliveryProofModal";
 import {
   generateQrCode,

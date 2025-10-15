@@ -37,18 +37,6 @@ const SuperAdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
     //   icon: Shield,
     //   href: "/s-admin/roles",
     // },
-    {
-      id: "orders",
-      label: "Order Management",
-      icon: ClipboardList,
-      href: "/s-admin/orders",
-    },
-    {
-      id: "products",
-      label: "Product Management",
-      icon: Package,
-      href: "/s-admin/products",
-    },
     { id: "fees", label: "Fee Setup", icon: DollarSign, href: "/s-admin/fees" },
     // {
     //   id: "system",

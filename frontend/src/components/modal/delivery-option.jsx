@@ -20,6 +20,8 @@ export default function DeliveryOptionsModal({
   nearbyStores = [],
   isLoadingStores = false,
   onFetchStores,
+  currentDeliveryFee = 0,
+  isLoadingDeliveryFee = false,
 }) {
   const [selectedOption, setSelectedOption] = useState("courier");
   const [selectedStore, setSelectedStore] = useState("");
@@ -82,7 +84,10 @@ export default function DeliveryOptionsModal({
 
   const handleConfirm = () => {
     if (selectedOption === "courier") {
-      onDeliverySelect({ type: "courier", cost: 12000 });
+      onDeliverySelect({
+        type: "courier",
+        cost: isLoadingDeliveryFee ? 0 : currentDeliveryFee,
+      });
     } else if (selectedOption === "pickup" && selectedStore && selectedTime) {
       onDeliverySelect({
         type: "pickup",
@@ -182,7 +187,13 @@ export default function DeliveryOptionsModal({
                     <span className="text-sm text-muted-foreground">
                       1-2 business days
                     </span>
-                    <Badge variant="secondary">Rp 12.000</Badge>
+                    <Badge variant="secondary">
+                      {isLoadingDeliveryFee
+                        ? "Loading..."
+                        : currentDeliveryFee === 0
+                        ? "Free"
+                        : `Rp ${currentDeliveryFee.toLocaleString("id-ID")}`}
+                    </Badge>
                   </div>
                 </CardContent>
               </Card>
