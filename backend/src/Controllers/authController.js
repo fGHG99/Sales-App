@@ -6,7 +6,13 @@ import prisma from "../../utils/prisma.js";
 import { authenticate } from "../Middlewares/accessControl.js";
 import { format } from "date-fns-tz";
 import { id as localeId } from "date-fns/locale";
-
+import {
+  logCreate,
+  logUpdate,
+  logLogin,
+  logLogout,
+  logOther,
+} from "../../utils/auditlog.js";
 /**
  * !IMPORTANT PAKE ADD ERROR HANDLING UNTUK VALIDATOR EMAIL, PASSWORD DLL
  */
@@ -83,6 +89,9 @@ router.post("/register", async (req, res) => {
                <a href="${verifyUrl}">${verifyUrl}</a>`,
       });
 
+      // log action
+      await logCreate("User", user.id, user, user.id);
+
       // kalau semua berhasil, return user
       return user;
     });
@@ -131,6 +140,8 @@ router.post("/resend-verification", async (req, res) => {
              <a href="${verifyUrl}">${verifyUrl}</a>`,
     });
 
+    logOther("User", user.id, "Resend verification email", user.id);
+
     res.json({ message: "Verification email resent" });
   } catch (error) {
     console.error("Resend failed:", error);
@@ -148,6 +159,14 @@ router.get("/verify/:token", async (req, res) => {
       where: { id: decoded.userId },
       data: { isVerified: true },
     });
+
+    logUpdate(
+      "User",
+      decoded.userId,
+      { isVerified: false },
+      { isVerified: true, verifiedAt: new Date() },
+      decoded.userId
+    );
 
     res.status(200).json({ message: "Email verified successfully!" });
   } catch (error) {
@@ -226,6 +245,13 @@ router.post("/login", async (req, res) => {
 
     // 6. kirim access token + user info
     const { password: _, verifyToken, ...userWithoutPassword } = user;
+
+    logLogin(user.id, {
+      email: user.email,
+      roleType: user.role?.roleType,
+      rememberMe,
+    });
+
     res.json({
       message: "Login successful",
       accessToken,
@@ -290,46 +316,46 @@ router.post("/change-password", authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const { oldPassword, newPassword, confirmPassword } = req.body;
-    
+
     if (!oldPassword || !newPassword || !confirmPassword) {
       return res.status(400).json({ error: "Semua field wajib diisi." });
     }
-    
+
     if (newPassword !== confirmPassword) {
       return res
         .status(400)
         .json({ error: "Konfirmasi password tidak cocok." });
     }
-    
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
-    
+
     if (!user) {
       return res.status(404).json({ error: "User tidak ditemukan." });
     }
-    
+
     const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ error: "Password lama salah." });
     }
-    
+
     // Validasi: password baru tidak boleh sama dengan password lama
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      return res.status(400).json({ 
-        error: "Password baru tidak boleh sama dengan password lama." 
+      return res.status(400).json({
+        error: "Password baru tidak boleh sama dengan password lama.",
       });
     }
-    
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
+
     // Gunakan format waktu WIB (Asia/Jakarta)
     const nowWIB = format(new Date(), "dd MMMM yyyy HH:mm:ss", {
       timeZone: "Asia/Jakarta",
       locale: localeId,
     });
-    
+
     // Kirim email konfirmasi password change SEBELUM update
     try {
       await transporter.sendMail({
@@ -350,17 +376,25 @@ router.post("/change-password", authenticate, async (req, res) => {
       });
     } catch (emailError) {
       console.error("❌ Error sending email:", emailError);
-      return res.status(500).json({ 
-        error: "Gagal mengirim email konfirmasi. Password tidak diubah." 
+      return res.status(500).json({
+        error: "Gagal mengirim email konfirmasi. Password tidak diubah.",
       });
     }
-    
+
     // Update password HANYA jika email berhasil dikirim
     await prisma.user.update({
       where: { id: userId },
       data: { password: hashedPassword },
     });
-    
+
+    logUpdate(
+      "User",
+      userId,
+      { action: "password_change" },
+      { action: "password_changed", timestamp: nowWIB },
+      userId
+    );
+
     return res.json({
       message: "Password berhasil diubah. Email konfirmasi telah dikirim.",
     });
@@ -372,7 +406,11 @@ router.post("/change-password", authenticate, async (req, res) => {
 
 // === LOGOUT ===
 // hapus refreshToken dari cookie
-router.post("/logout", (req, res) => {
+router.post("/logout", authenticate, (req, res) => {
+  if (req.user?.id) {
+    logLogout(req.user.id, { email: req.user.email });
+  }
+
   res.clearCookie("refreshToken", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

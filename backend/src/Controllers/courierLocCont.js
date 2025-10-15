@@ -29,13 +29,6 @@ router.post("/location", authenticate, async (req, res) => {
     const { latitude, longitude } = req.body;
     const courierId = req.user.id;
 
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("📍 [COURIER LOCATION UPLOAD]");
-    console.log(`   Courier ID: ${courierId}`);
-    console.log(`   Timestamp: ${new Date().toISOString()}`);
-    console.log(`   Coordinates: ${latitude}, ${longitude}`);
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
     if (!latitude || !longitude) {
       console.error(`❌ [COURIER LOCATION] Invalid data - missing coordinates`);
       return res.status(400).json({
@@ -235,19 +228,10 @@ router.get("/location/:courierId", async (req, res) => {
   const startTime = Date.now();
   try {
     const { courierId } = req.params;
-    const requesterId = req.user?.id || "anonymous";
-
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("🗺️ [COURIER LOCATION FETCH]");
-    console.log(`   Requester: ${requesterId}`);
-    console.log(`   Courier ID: ${courierId}`);
-    console.log(`   Timestamp: ${new Date().toISOString()}`);
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     const redis = getRedisClient();
 
-    if (!redis) {
-      console.error(`❌ [COURIER LOCATION FETCH] Redis unavailable`);
+    if (!redis) { 
       return res.status(503).json({
         success: false,
         message: "Redis tidak tersedia",
@@ -255,37 +239,16 @@ router.get("/location/:courierId", async (req, res) => {
     }
 
     const redisKey = `courier:location:${courierId}`;
-    console.log(`🔍 [COURIER LOCATION FETCH] Fetching from Redis: ${redisKey}`);
 
     // Upstash auto-deserializes, get returns object directly
     const location = await redis.get(redisKey);
 
     if (!location) {
-      console.warn(`⚠️ [COURIER LOCATION FETCH] Location not found in cache`);
       return res.status(404).json({
         success: false,
         message: "Lokasi kurir tidak ditemukan atau belum diupdate",
       });
     }
-
-    console.log(`✅ [COURIER LOCATION FETCH] Location found:`, {
-      lat: location.latitude,
-      lng: location.longitude,
-      timestamp: location.timestamp,
-      age: location.timestamp
-        ? `${Math.floor(
-            (Date.now() - new Date(location.timestamp)) / 1000
-          )}s ago`
-        : "unknown",
-    });
-
-    // location is already an object, no need to JSON.parse
-    const processingTime = Date.now() - startTime;
-    console.log(
-      `⏱️ [COURIER LOCATION FETCH] Processing time: ${processingTime}ms`
-    );
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("");
 
     res.json({
       success: true,
@@ -295,13 +258,6 @@ router.get("/location/:courierId", async (req, res) => {
       },
     });
   } catch (error) {
-    const processingTime = Date.now() - startTime;
-    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.error("❌ [COURIER LOCATION FETCH] FAILED");
-    console.error(`   Error: ${error.message}`);
-    console.error(`   Processing time: ${processingTime}ms`);
-    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.error("");
     res.status(500).json({
       success: false,
       message: "Gagal mengambil lokasi kurir",
@@ -310,166 +266,93 @@ router.get("/location/:courierId", async (req, res) => {
   }
 });
 
-/**
- * Simulate courier movement for testing
- * POST /courier/location/simulate/:courierId
- *
- * Body: {
- *   startLat, startLng,
- *   endLat, endLng,
- *   steps (optional, default 10)
- * }
- */
-router.post("/location/simulate/:courierId", async (req, res) => {
-  try {
-    const { courierId } = req.params;
-    const { startLat, startLng, endLat, endLng, steps = 10 } = req.body;
+// router.post("/location/simulate/:courierId", async (req, res) => {
+//   try {
+//     const { courierId } = req.params;
+//     const { startLat, startLng, endLat, endLng, steps = 10 } = req.body;
 
-    if (!startLat || !startLng || !endLat || !endLng) {
-      return res.status(400).json({
-        success: false,
-        message: "startLat, startLng, endLat, endLng wajib diisi",
-      });
-    }
+//     if (!startLat || !startLng || !endLat || !endLng) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "startLat, startLng, endLat, endLng wajib diisi",
+//       });
+//     }
 
-    const redis = getRedisClient();
+//     const redis = getRedisClient();
 
-    if (!redis) {
-      return res.status(503).json({
-        success: false,
-        message: "Redis tidak tersedia",
-      });
-    }
+//     if (!redis) {
+//       return res.status(503).json({
+//         success: false,
+//         message: "Redis tidak tersedia",
+//       });
+//     }
 
-    // Set initial position
-    const initialLocation = {
-      latitude: parseFloat(startLat),
-      longitude: parseFloat(startLng),
-      timestamp: new Date().toISOString(),
-    };
+//     // Set initial position
+//     const initialLocation = {
+//       latitude: parseFloat(startLat),
+//       longitude: parseFloat(startLng),
+//       timestamp: new Date().toISOString(),
+//     };
 
-    // Upstash auto-serializes, pass object directly
-    await redis.set(`courier:location:${courierId}`, initialLocation, {
-      ex: 3600,
-    });
+//     // Upstash auto-serializes, pass object directly
+//     await redis.set(`courier:location:${courierId}`, initialLocation, {
+//       ex: 3600,
+//     });
 
-    // Calculate step increments
-    const latStep = (parseFloat(endLat) - parseFloat(startLat)) / steps;
-    const lngStep = (parseFloat(endLng) - parseFloat(startLng)) / steps;
+//     // Calculate step increments
+//     const latStep = (parseFloat(endLat) - parseFloat(startLat)) / steps;
+//     const lngStep = (parseFloat(endLng) - parseFloat(startLng)) / steps;
 
-    // Simulate movement asynchronously
-    let currentStep = 0;
-    const interval = setInterval(async () => {
-      currentStep++;
+//     // Simulate movement asynchronously
+//     let currentStep = 0;
+//     const interval = setInterval(async () => {
+//       currentStep++;
 
-      if (currentStep > steps) {
-        clearInterval(interval);
-        console.log(`✅ Simulation completed for courier ${courierId}`);
-        return;
-      }
+//       if (currentStep > steps) {
+//         clearInterval(interval);
+//         console.log(`✅ Simulation completed for courier ${courierId}`);
+//         return;
+//       }
 
-      const newLocation = {
-        latitude: parseFloat(startLat) + latStep * currentStep,
-        longitude: parseFloat(startLng) + lngStep * currentStep,
-        timestamp: new Date().toISOString(),
-      };
+//       const newLocation = {
+//         latitude: parseFloat(startLat) + latStep * currentStep,
+//         longitude: parseFloat(startLng) + lngStep * currentStep,
+//         timestamp: new Date().toISOString(),
+//       };
 
-      try {
-        // Upstash auto-serializes, pass object directly
-        await redis.set(`courier:location:${courierId}`, newLocation, {
-          ex: 3600,
-        });
-        console.log(
-          `🚚 Step ${currentStep}/${steps}: Courier ${courierId} moved to`,
-          newLocation
-        );
-      } catch (err) {
-        console.error("Error in simulation step:", err);
-        clearInterval(interval);
-      }
-    }, 3000); // Update every 3 seconds
+//       try {
+//         // Upstash auto-serializes, pass object directly
+//         await redis.set(`courier:location:${courierId}`, newLocation, {
+//           ex: 3600,
+//         });
+//         console.log(
+//           `🚚 Step ${currentStep}/${steps}: Courier ${courierId} moved to`,
+//           newLocation
+//         );
+//       } catch (err) {
+//         console.error("Error in simulation step:", err);
+//         clearInterval(interval);
+//       }
+//     }, 3000); // Update every 3 seconds
 
-    res.json({
-      success: true,
-      message: `Simulation started for courier ${courierId}`,
-      details: {
-        from: { lat: startLat, lng: startLng },
-        to: { lat: endLat, lng: endLng },
-        steps,
-        updateInterval: "3 seconds",
-      },
-    });
-  } catch (error) {
-    console.error("Error simulating courier movement:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal simulate movement",
-      error: error.message,
-    });
-  }
-});
-
-/**
- * Quick set courier location for testing (NO AUTH REQUIRED)
- * POST /courier/location/quick-set/:courierId
- *
- * Body: {
- *   latitude: -6.2088,
- *   longitude: 106.8456
- * }
- */
-router.post("/location/quick-set/:courierId", async (req, res) => {
-  try {
-    const { courierId } = req.params;
-    const { latitude, longitude } = req.body;
-
-    if (!latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        message: "latitude dan longitude wajib diisi",
-      });
-    }
-
-    const redis = getRedisClient();
-
-    if (!redis) {
-      return res.status(503).json({
-        success: false,
-        message: "Redis tidak tersedia",
-      });
-    }
-
-    const locationData = {
-      latitude: parseFloat(latitude),
-      longitude: parseFloat(longitude),
-      timestamp: new Date().toISOString(),
-    };
-
-    // Upstash auto-serializes, pass object directly
-    await redis.set(
-      `courier:location:${courierId}`,
-      locationData,
-      { ex: 3600 } // Expire in 1 hour
-    );
-
-    console.log(
-      `📍 [QUICK-SET] Courier ${courierId} location set:`,
-      locationData
-    );
-
-    res.json({
-      success: true,
-      message: "Lokasi kurir berhasil di-set untuk testing",
-      location: locationData,
-    });
-  } catch (error) {
-    console.error("Error quick-setting courier location:", error);
-    res.status(500).json({
-      success: false,
-      message: "Gagal set lokasi kurir",
-      error: error.message,
-    });
-  }
-});
+//     res.json({
+//       success: true,
+//       message: `Simulation started for courier ${courierId}`,
+//       details: {
+//         from: { lat: startLat, lng: startLng },
+//         to: { lat: endLat, lng: endLng },
+//         steps,
+//         updateInterval: "3 seconds",
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error simulating courier movement:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Gagal simulate movement",
+//       error: error.message,
+//     });
+//   }
+// });
 
 export default router;

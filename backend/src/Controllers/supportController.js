@@ -2,6 +2,7 @@ import express from "express";
 import prisma from "../../utils/prisma.js";
 import bcrypt from "bcrypt";
 import { authenticate, authorize } from "../Middlewares/accessControl.js";
+import { logCreate, logUpdate, logDelete } from "../../utils/auditlog.js";
 
 const router = express.Router();
 
@@ -142,6 +143,20 @@ router.post(
         },
       });
 
+      // Audit log untuk create role
+      logCreate(
+        "Role",
+        role.id,
+        {
+          name: role.name,
+          roleType: role.roleType,
+          isDefault: role.isDefault,
+          isSystem: role.isSystem,
+          permissionCount: role.permissions.length,
+        },
+        req.user.id
+      );
+
       res.status(201).json({
         success: true,
         message: "Role created successfully",
@@ -213,6 +228,29 @@ router.put(
         },
       });
 
+      // Audit log untuk update role
+      const oldValues = {};
+      const newValues = {};
+
+      if (name) {
+        oldValues.name = existingRole.name;
+        newValues.name = name;
+      }
+      if (roleType) {
+        oldValues.roleType = existingRole.roleType;
+        newValues.roleType = roleType;
+      }
+      if (typeof isDefault === "boolean") {
+        oldValues.isDefault = existingRole.isDefault;
+        newValues.isDefault = isDefault;
+      }
+      if (permissionIds) {
+        oldValues.permissionCount = existingRole.permissions.length;
+        newValues.permissionCount = role.permissions.length;
+      }
+
+      logUpdate("Role", id, oldValues, newValues, req.user.id);
+
       res.json({
         success: true,
         message: "Role updated successfully",
@@ -272,6 +310,18 @@ router.delete(
         where: { id },
         data: { isDeleted: true },
       });
+
+      // Audit log untuk delete role
+      logDelete(
+        "Role",
+        id,
+        {
+          name: role.name,
+          roleType: role.roleType,
+          isSystem: role.isSystem,
+        },
+        req.user.id
+      );
 
       res.json({
         success: true,
@@ -340,7 +390,7 @@ router.get(
 // GET search permissions by accessKey - returns multiple permissions with pagination
 router.get("/permissions/search", authenticate, async (req, res) => {
   try {
-    const { accessKey, page = 1, limit = 10} = req.query;
+    const { accessKey, page = 1, limit = 10 } = req.query;
 
     // Validation: ensure accessKey parameter exists and has minimum length
     if (!accessKey || accessKey.trim().length < 2) {
@@ -456,6 +506,17 @@ router.post(
         },
       });
 
+      // Audit log untuk create permission
+      logCreate(
+        "AccessPermission",
+        permission.id,
+        {
+          accessKey: permission.accessKey,
+          roleCount: permission.role.length,
+        },
+        req.user.id
+      );
+
       res.status(201).json({
         success: true,
         message: "Permission created successfully",
@@ -550,6 +611,21 @@ router.put(
         },
       });
 
+      // Audit log untuk update permission
+      const oldValues = {};
+      const newValues = {};
+
+      if (accessKey !== existing.accessKey) {
+        oldValues.accessKey = existing.accessKey;
+        newValues.accessKey = accessKey;
+      }
+      if (roleIds !== undefined) {
+        oldValues.roleCount = existing.role.length;
+        newValues.roleCount = permission.role.length;
+      }
+
+      logUpdate("AccessPermission", id, oldValues, newValues, req.user.id);
+
       res.json({
         success: true,
         message: "Permission updated successfully",
@@ -604,6 +680,17 @@ router.delete(
           data: { isDeleted: true },
         });
       });
+
+      // Audit log untuk delete permission
+      logDelete(
+        "AccessPermission",
+        id,
+        {
+          accessKey: permission.accessKey,
+          roleCount: permission.role.length,
+        },
+        req.user.id
+      );
 
       res.json({
         success: true,
@@ -902,6 +989,19 @@ router.post("/users", authenticate, async (req, res) => {
       },
     });
 
+    // Audit log untuk create user
+    logCreate(
+      "User",
+      user.id,
+      {
+        name: user.name,
+        email: user.email,
+        roleType: user.role.roleType,
+        createdBy: req.user.id,
+      },
+      req.user.id
+    );
+
     res.status(201).json({
       success: true,
       message: "User created successfully",
@@ -997,6 +1097,33 @@ router.put(
         },
       });
 
+      // Audit log untuk update user
+      const oldValues = {};
+      const newValues = {};
+
+      if (name) {
+        oldValues.name = existingUser.name;
+        newValues.name = name;
+      }
+      if (email) {
+        oldValues.email = existingUser.email;
+        newValues.email = email;
+      }
+      if (phone !== undefined) {
+        oldValues.phone = existingUser.phone;
+        newValues.phone = phone;
+      }
+      if (roleId) {
+        oldValues.roleId = existingUser.roleId;
+        newValues.roleId = roleId;
+      }
+      if (typeof isVerified === "boolean") {
+        oldValues.isVerified = existingUser.isVerified;
+        newValues.isVerified = isVerified;
+      }
+
+      logUpdate("User", id, oldValues, newValues, req.user.id);
+
       res.json({
         success: true,
         message: "User updated successfully",
@@ -1039,6 +1166,17 @@ router.delete(
         where: { id },
         data: { isDeleted: true },
       });
+
+      // Audit log untuk delete user
+      logDelete(
+        "User",
+        id,
+        {
+          name: user.name,
+          email: user.email,
+        },
+        req.user.id
+      );
 
       res.json({
         success: true,
@@ -1084,6 +1222,15 @@ router.put(
         where: { id },
         data: { password: hashedPassword },
       });
+
+      // Audit log untuk reset password
+      logUpdate(
+        "User",
+        id,
+        { passwordReset: false },
+        { passwordReset: true, resetBy: req.user.id },
+        req.user.id
+      );
 
       res.json({
         success: true,

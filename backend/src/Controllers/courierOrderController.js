@@ -2,6 +2,7 @@ import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate, authorize } from "../Middlewares/accessControl.js";
 import { getIO } from "../../utils/socket.js";
+import { logCreate, logUpdate } from "../../utils/auditlog.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -154,6 +155,15 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
         deliveryAddress: true,
       },
     });
+
+    // Audit log untuk perubahan status order
+    logUpdate(
+      "Order",
+      orderId,
+      { orderStatus: currentStatus },
+      { orderStatus: newStatus },
+      courierId
+    );
 
     // Create notification for customer
     const statusMessages = {
@@ -491,6 +501,18 @@ router.post(
         },
       });
 
+      // Audit log untuk upload delivery proof
+      logUpdate(
+        "Order",
+        orderId,
+        { orderStatus: "OUT_FOR_DELIVERY" },
+        {
+          deliveryProof: filePath,
+          orderStatus: "DELIVERED",
+        },
+        courierId
+      );
+
       // Create notification for customer
       const notification = await prisma.notification.create({
         data: {
@@ -729,9 +751,10 @@ router.get("/courier", authenticate, async (req, res) => {
  * Can only be generated when order status is READY_FOR_PICKUP
  * Order details will be fetched from database during verification
  */
-router.post("/:orderId/generate-qr", async (req, res) => {
+router.post("/generate-qr/:orderId", authenticate, async (req, res) => {
   try {
     const { orderId } = req.params;
+    const courierId = req.user.id;
 
     // Find order to validate
     const order = await prisma.order.findUnique({
@@ -791,6 +814,18 @@ router.post("/:orderId/generate-qr", async (req, res) => {
         qrCode: qrCodeString,
       },
     });
+
+    // Audit log untuk generate QR code
+    logCreate(
+      "OrderQRCode",
+      orderId,
+      {
+        qrCodeGenerated: true,
+        generatedAt: generatedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+      },
+      courierId
+    );
 
     return res.status(200).json({
       success: true,
@@ -959,6 +994,19 @@ router.post("/verify-qr", authenticate, async (req, res) => {
         deliveryAddress: true,
       },
     });
+
+    // Audit log untuk verify QR code dan pickup order
+    logUpdate(
+      "Order",
+      qrCodeData.orderId,
+      { orderStatus: "READY_FOR_PICKUP" },
+      {
+        orderStatus: "OUT_FOR_DELIVERY",
+        qrVerified: true,
+        pickedUpAt: new Date().toISOString(),
+      },
+      courierId
+    );
 
     // Create notification for customer
     const notification = await prisma.notification.create({

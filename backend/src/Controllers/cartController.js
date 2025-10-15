@@ -1,6 +1,7 @@
 import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate } from "../Middlewares/accessControl.js";
+import { logUpdate } from "../../utils/auditlog.js";
 
 /**
  * Helper untuk konversi BigInt dan Decimal -> Number
@@ -133,6 +134,7 @@ router.post("/add", authenticate, async (req, res) => {
       where: { userId },
     });
 
+    let isNewCart = false;
     if (!cart) {
       cart = await prisma.cart.create({
         data: {
@@ -140,10 +142,12 @@ router.post("/add", authenticate, async (req, res) => {
           cartItems: [],
         },
       });
+      isNewCart = true;
     }
 
     // Get current cart items (parse from JSON)
     let cartItems = Array.isArray(cart.cartItems) ? cart.cartItems : [];
+    const oldCartItems = [...cartItems]; // Store old state for audit
 
     // Check if product already exists in cart
     const existingItemIndex = cartItems.findIndex(
@@ -235,7 +239,7 @@ router.patch("/remove-item", authenticate, async (req, res) => {
 
     // Support both single productId and array of productIds
     let idsToRemove = [];
-    
+
     if (productId) {
       // Single product deletion
       idsToRemove = [productId];
@@ -243,14 +247,14 @@ router.patch("/remove-item", authenticate, async (req, res) => {
       // Bulk deletion
       idsToRemove = productIds;
     } else {
-      return res.status(400).json({ 
-        message: "Either productId or productIds array is required" 
+      return res.status(400).json({
+        message: "Either productId or productIds array is required",
       });
     }
 
     if (idsToRemove.length === 0) {
-      return res.status(400).json({ 
-        message: "At least one product ID is required" 
+      return res.status(400).json({
+        message: "At least one product ID is required",
       });
     }
 
@@ -265,6 +269,7 @@ router.patch("/remove-item", authenticate, async (req, res) => {
 
     // Get current cart items
     let cartItems = Array.isArray(cart.cartItems) ? cart.cartItems : [];
+    const oldCartItems = [...cartItems]; // Store old state for audit
 
     // Filter out the items to remove
     const filteredItems = cartItems.filter(
@@ -274,8 +279,8 @@ router.patch("/remove-item", authenticate, async (req, res) => {
     const removedCount = cartItems.length - filteredItems.length;
 
     if (removedCount === 0) {
-      return res.status(404).json({ 
-        message: "None of the specified items were found in cart" 
+      return res.status(404).json({
+        message: "None of the specified items were found in cart",
       });
     }
 
@@ -349,6 +354,13 @@ router.delete("/clear", authenticate, async (req, res) => {
       return res.status(404).json({ message: "Cart not found" });
     }
 
+    // Store old cart items for audit
+    const oldCartItems = Array.isArray(cart.cartItems) ? cart.cartItems : [];
+    const oldTotalItems = oldCartItems.reduce(
+      (sum, item) => sum + (item.quantity || 0),
+      0
+    );
+
     // Clear all items
     const updatedCart = await prisma.cart.update({
       where: { id: cart.id },
@@ -377,6 +389,24 @@ router.delete("/clear", authenticate, async (req, res) => {
       totalPrice: 0,
       user: updatedCart.user,
     });
+
+    // Log cart clear
+    logUpdate(
+      "Cart",
+      updatedCart.id,
+      {
+        cartItems: oldCartItems,
+        totalItems: oldTotalItems,
+        itemsCount: oldCartItems.length,
+      },
+      {
+        cartItems: [],
+        totalItems: 0,
+        itemsCount: 0,
+        action: "cleared",
+      },
+      userId
+    );
 
     return res.status(200).json({
       message: "Cart cleared successfully",

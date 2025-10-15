@@ -1,15 +1,8 @@
 import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate } from "../Middlewares/accessControl.js";
+import { logCreate, logUpdate, logDelete } from "../../utils/auditlog.js";
 
-/**
- * Helper function to calculate distance between two coordinates using Haversine formula
- * @param {number} lat1 - Latitude of first point
- * @param {number} lon1 - Longitude of first point
- * @param {number} lat2 - Latitude of second point
- * @param {number} lon2 - Longitude of second point
- * @returns {number} Distance in kilometers
- */
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371; // Radius of the Earth in kilometers
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -28,29 +21,92 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return distance;
 }
 
-/**
- * Helper function to generate pickup time slots
- * @param {Date} openHour - Store opening time
- * @param {Date} closeHour - Store closing time
- * @returns {Array} Array of time slots in "HH:MM" format
- */
 function generatePickupTimeSlots(openHour, closeHour) {
   const slots = [];
   const open = new Date(openHour);
   const close = new Date(closeHour);
 
+  // Extract time components (hours and minutes only)
+  const openTime = open.getHours() * 60 + open.getMinutes();
+  const closeTime = close.getHours() * 60 + close.getMinutes();
+
   let current = new Date(open);
 
-  while (current < close) {
-    const hours = current.getHours().toString().padStart(2, "0");
-    const minutes = current.getMinutes().toString().padStart(2, "0");
-    slots.push(`${hours}:${minutes}`);
+  // Handle next day scenario (close time is before open time)
+  if (closeTime < openTime) {
+    // Generate slots from open time to midnight (23:59)
+    while (current.getHours() < 24) {
+      const hours = current.getHours().toString().padStart(2, "0");
+      const minutes = current.getMinutes().toString().padStart(2, "0");
+      slots.push(`${hours}:${minutes}`);
 
-    // Add 1 hour
-    current.setHours(current.getHours() + 1);
+      // Add 1 hour
+      current.setHours(current.getHours() + 1);
+    }
+
+    // Reset to start of day and generate slots from 00:00 to close time
+    current = new Date();
+    current.setHours(0, 0, 0, 0);
+
+    while (current.getHours() * 60 + current.getMinutes() < closeTime) {
+      const hours = current.getHours().toString().padStart(2, "0");
+      const minutes = current.getMinutes().toString().padStart(2, "0");
+      slots.push(`${hours}:${minutes}`);
+
+      // Add 1 hour
+      current.setHours(current.getHours() + 1);
+    }
+  } else {
+    // Normal scenario (close time is after open time)
+    while (current < close) {
+      const hours = current.getHours().toString().padStart(2, "0");
+      const minutes = current.getMinutes().toString().padStart(2, "0");
+      slots.push(`${hours}:${minutes}`);
+
+      // Add 1 hour
+      current.setHours(current.getHours() + 1);
+    }
   }
 
   return slots;
+}
+
+/**
+ * Validate store operating hours
+ * Allows closing hour to be before open hour (for stores open until next day)
+ * @param {Date} openHour - Store opening hour
+ * @param {Date} closeHour - Store closing hour
+ * @returns {Object} - Validation result with isValid and error message
+ */
+function validateOperatingHours(openHour, closeHour) {
+  // Check if dates are valid
+  if (isNaN(openHour.getTime()) || isNaN(closeHour.getTime())) {
+    return {
+      isValid: false,
+      error:
+        "Invalid date format for openHour or closeHour. Use ISO 8601 (e.g., 2025-10-07T09:00:00Z)",
+    };
+  }
+
+  // Extract time components (hours and minutes only)
+  const openTime = openHour.getHours() * 60 + openHour.getMinutes();
+  const closeTime = closeHour.getHours() * 60 + closeHour.getMinutes();
+
+  // Check if times are the same (not allowed)
+  if (openTime === closeTime) {
+    return {
+      isValid: false,
+      error: "Opening hour and closing hour cannot be the same",
+    };
+  }
+
+  // Allow closing hour to be before open hour (next day scenario)
+  // This handles cases like: open 16:00, close 03:00 (next day)
+  // The validation passes as long as they are not exactly the same time
+  return {
+    isValid: true,
+    error: null,
+  };
 }
 
 /**
@@ -105,16 +161,11 @@ router.post("/store/create", authenticate, async (req, res) => {
     const openDateTime = new Date(openHour);
     const closeDateTime = new Date(closeHour);
 
-    if (isNaN(openDateTime.getTime()) || isNaN(closeDateTime.getTime())) {
+    // Validate operating hours using new validation function
+    const timeValidation = validateOperatingHours(openDateTime, closeDateTime);
+    if (!timeValidation.isValid) {
       return res.status(400).json({
-        error:
-          "Invalid date format for openHour or closeHour. Use ISO 8601 (e.g., 2025-10-07T09:00:00Z)",
-      });
-    }
-
-    if (openDateTime >= closeDateTime) {
-      return res.status(400).json({
-        error: "Opening hour must be before closing hour",
+        error: timeValidation.error,
       });
     }
 
@@ -149,6 +200,26 @@ router.post("/store/create", authenticate, async (req, res) => {
         },
       },
     });
+
+    // Audit log untuk create store
+    logCreate(
+      "Store",
+      store.id,
+      {
+        name: store.name,
+        phoneNumber: store.phoneNumber,
+        openHour: store.openHour.toISOString(),
+        closeHour: store.closeHour.toISOString(),
+        adminId: store.adminId,
+        address: {
+          fullAddress: address.fullAddress,
+          city: address.city,
+          province: address.province,
+          postalCode: address.postalCode,
+        },
+      },
+      req.user.id
+    );
 
     res.status(201).json({
       message: "Store created successfully",
@@ -335,9 +406,14 @@ router.put("/update-store/:id", authenticate, async (req, res) => {
     const finalOpenHour = updateData.openHour || existingStore.openHour;
     const finalCloseHour = updateData.closeHour || existingStore.closeHour;
 
-    if (finalOpenHour >= finalCloseHour) {
+    // Validate operating hours using new validation function
+    const timeValidation = validateOperatingHours(
+      finalOpenHour,
+      finalCloseHour
+    );
+    if (!timeValidation.isValid) {
       return res.status(400).json({
-        error: "Opening hour must be before closing hour",
+        error: timeValidation.error,
       });
     }
 
@@ -374,6 +450,33 @@ router.put("/update-store/:id", authenticate, async (req, res) => {
         },
       },
     });
+
+    // Audit log untuk update store
+    const oldValues = {};
+    const newValues = {};
+
+    if (name !== undefined) {
+      oldValues.name = existingStore.name;
+      newValues.name = name;
+    }
+    if (phoneNumber !== undefined) {
+      oldValues.phoneNumber = existingStore.phoneNumber;
+      newValues.phoneNumber = phoneNumber;
+    }
+    if (updateData.openHour) {
+      oldValues.openHour = existingStore.openHour.toISOString();
+      newValues.openHour = updateData.openHour.toISOString();
+    }
+    if (updateData.closeHour) {
+      oldValues.closeHour = existingStore.closeHour.toISOString();
+      newValues.closeHour = updateData.closeHour.toISOString();
+    }
+    if (adminId !== undefined) {
+      oldValues.adminId = existingStore.adminId;
+      newValues.adminId = adminId;
+    }
+
+    logUpdate("Store", id, oldValues, newValues, req.user.id);
 
     res.json({
       message: "Store updated successfully",
@@ -438,6 +541,15 @@ router.patch("/assign-admin/:id", authenticate, async (req, res) => {
       },
     });
 
+    // Audit log untuk assign admin
+    logUpdate(
+      "Store",
+      id,
+      { adminId: store.adminId },
+      { adminId: adminId, adminName: admin.name },
+      req.user.id
+    );
+
     res.json({
       message: "Admin assigned successfully",
       store: updatedStore,
@@ -474,6 +586,15 @@ router.patch("/unassign-admin/:id", authenticate, async (req, res) => {
         address: true,
       },
     });
+
+    // Audit log untuk unassign admin
+    logUpdate(
+      "Store",
+      id,
+      { adminId: store.adminId },
+      { adminId: null },
+      req.user.id
+    );
 
     res.json({
       message: "Admin unassigned successfully",
@@ -526,6 +647,15 @@ router.patch("/toggle-active/:id", authenticate, async (req, res) => {
       },
     });
 
+    // Audit log untuk toggle active status
+    logUpdate(
+      "Store",
+      id,
+      { isActive: store.isActive },
+      { isActive: isActive },
+      req.user.id
+    );
+
     res.json({
       message: `Store ${isActive ? "activated" : "deactivated"} successfully`,
       store: updatedStore,
@@ -566,6 +696,19 @@ router.patch("/soft-delete/:id", authenticate, async (req, res) => {
         address: true,
       },
     });
+
+    // Audit log untuk soft delete store
+    logDelete(
+      "Store",
+      id,
+      {
+        name: store.name,
+        phoneNumber: store.phoneNumber,
+        adminId: store.adminId,
+        isDeleted: false,
+      },
+      req.user.id
+    );
 
     res.json({
       message: "Store deleted successfully",
@@ -615,6 +758,15 @@ router.patch("/restore/:id", authenticate, async (req, res) => {
       },
     });
 
+    // Audit log untuk restore store
+    logUpdate(
+      "Store",
+      id,
+      { isDeleted: true },
+      { isDeleted: false },
+      req.user.id
+    );
+
     res.json({
       message: "Store restored successfully",
       store: updatedStore,
@@ -638,11 +790,35 @@ router.delete("/permanent/:id", authenticate, async (req, res) => {
 
     const store = await prisma.store.findUnique({
       where: { id },
+      include: {
+        address: true,
+      },
     });
 
     if (!store) {
       return res.status(404).json({ error: "Store not found" });
     }
+
+    // Audit log untuk permanent delete store (log sebelum delete)
+    logDelete(
+      "Store",
+      id,
+      {
+        name: store.name,
+        phoneNumber: store.phoneNumber,
+        adminId: store.adminId,
+        isDeleted: store.isDeleted,
+        address: store.address
+          ? {
+              fullAddress: store.address.fullAddress,
+              city: store.address.city,
+              province: store.address.province,
+            }
+          : null,
+        permanentDelete: true,
+      },
+      req.user.id
+    );
 
     // Delete store (cascade will delete address)
     await prisma.store.delete({

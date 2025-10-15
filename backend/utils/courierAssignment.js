@@ -1,17 +1,5 @@
-import prisma from "../../utils/prisma.js";
+import prisma from "./prisma.js";
 
-/**
- * Find the best available courier for a delivery based on postal code and workload
- *
- * Algorithm:
- * 1. Find all couriers whose workAreaPostalCodes includes the target postal code
- * 2. Filter only verified, active couriers with role "courier"
- * 3. Count active orders for each courier (workload)
- * 4. Return courier with lowest workload
- *
- * @param {string} postalCode - Delivery address postal code
- * @returns {Promise<Object|null>} - Best courier object or null if none available
- */
 export const findBestCourier = async (postalCode) => {
   try {
     // Find all couriers who can serve this postal code area
@@ -75,20 +63,12 @@ export const findBestCourier = async (postalCode) => {
   }
 };
 
-/**
- * Assign a courier to an order
- *
- * @param {string} orderId - Order ID to assign
- * @param {string} courierId - Courier user ID
- * @returns {Promise<Object>} - Updated order object
- */
 export const assignCourierToOrder = async (orderId, courierId) => {
   try {
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: {
         courierId,
-        orderStatus: "IN_PREPARATION", // Update status when courier assigned
       },
       include: {
         courier: {
@@ -121,12 +101,6 @@ export const assignCourierToOrder = async (orderId, courierId) => {
   }
 };
 
-/**
- * Get courier's active deliveries count
- *
- * @param {string} courierId - Courier user ID
- * @returns {Promise<number>} - Number of active orders
- */
 export const getCourierWorkload = async (courierId) => {
   try {
     const count = await prisma.order.count({

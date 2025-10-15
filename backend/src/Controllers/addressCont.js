@@ -2,52 +2,9 @@
 import router from "../../utils/express.js";
 import axios from "axios";
 import prisma from "../../utils/prisma.js";
+import { logCreate, logUpdate, logDelete } from "../../utils/auditlog.js";
 
-const LOCATIONIQ_KEY = process.env.LOCATIONIQ_KEY;
 const BASE_URL = process.env.BASE_URL;
-
-/**
- * get alamat user dengan menggunakan reverse geocoding untuk menambahkan alamat ke dalam form
- *
- */
-// router.get("/", async (req, res) => {
-//   try {
-//     const { lat, lon } = req.query;
-
-//     if (!lat || !lon) {
-//       return res.status(400).json({ error: "lat and lon are required" });
-//     }
-
-//     const response = await axios.get("https://us1.locationiq.com/v1/reverse", {
-//       params: {
-//         key: LOCATIONIQ_KEY,
-//         lat,
-//         lon,
-//         format: "json",
-//         addressdetails: 1,
-//       },
-//     });
-
-//     const address = response.data.address;
-
-//     // Mapping agar sesuai dengan kebutuhan
-//     const result = {
-//       sub_district: address.suburb || address.village || address.hamlet || null,
-//       district: address.city_district || address.county || null,
-//       city: address.city || address.town || address.municipality || null,
-//       province: address.state || null,
-//       country: address.country || null,
-//       postal_code: address.postcode || null,
-//       latitude: lat,
-//       longitude: lon,
-//     };
-
-//     res.json(result);
-//   } catch (error) {
-//     console.error(error.response?.data || error.message);
-//     res.status(500).json({ error: "Failed to fetch reverse geocode" });
-//   }
-// });
 
 // 1. Ambil semua provinsi
 router.get("/provinces", async (req, res) => {
@@ -260,7 +217,7 @@ router.get(
  * registrasi alamat user secara manual setelah user mendapatkan detail alamat dari reverse geocode
  * atau router get diataas
  */
-router.post("/", async (req, res) => {
+router.post("/addresses", async (req, res) => {
   try {
     const {
       userId,
@@ -321,6 +278,22 @@ router.post("/", async (req, res) => {
       },
     });
 
+    // Log address creation
+    logCreate(
+      "Address",
+      newAddress.id,
+      {
+        recipientName: newAddress.recipientName,
+        recipientPhone: newAddress.recipientPhone,
+        label: newAddress.label,
+        fullAddress: newAddress.fullAddress,
+        city: newAddress.city,
+        province: newAddress.province,
+        postalCode: newAddress.postalCode,
+      },
+      userId
+    );
+
     res.json({ success: true, data: newAddress });
   } catch (error) {
     console.error("Error membuat alamat:", error.message);
@@ -344,19 +317,21 @@ router.get("/user/:userId", async (req, res) => {
   }
 });
 
-// GET /addresses/:id => detail alamat
-// router.get("/:id", async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const address = await prisma.address.findUnique({ where: { id } });
-//     if (!address)
-//       return res.status(404).json({ error: "Alamat tidak ditemukan" });
-//     return res.json(address);
-//   } catch (err) {
-//     console.error("GET /addresses/:id error:", err);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// });
+// GET /addresses/user/:userId  => ambil semua alamat user
+router.get("/get-address/:addressId", async (req, res) => {
+  try {
+    const { addressId } = req.params;
+    const addresses = await prisma.address.findUnique({
+      where: { id: addressId },
+    });
+    return res.json(addresses);
+  } catch (err) {
+    console.error("GET /addresses/get-address/:addressId error:", err);
+    return res
+      .status(500)
+      .json({ error: "Server error saat mengambil alamat" });
+  }
+});
 
 // // PUT /addresses/:id => update alamat manual (label atau fields)
 router.put("/addresses/:id", async (req, res) => {
@@ -367,10 +342,42 @@ router.put("/addresses/:id", async (req, res) => {
     // pastikan tidak mengubah userId via endpoint ini (opsional)
     if (payload.userId) delete payload.userId;
 
+    // Fetch old data untuk audit log
+    const oldAddress = await prisma.address.findUnique({
+      where: { id },
+    });
+
+    if (!oldAddress) {
+      return res.status(404).json({ error: "Address not found" });
+    }
+
     const updated = await prisma.address.update({
       where: { id },
       data: payload,
     });
+
+    // Log address update
+    logUpdate(
+      "Address",
+      id,
+      {
+        recipientName: oldAddress.recipientName,
+        recipientPhone: oldAddress.recipientPhone,
+        label: oldAddress.label,
+        fullAddress: oldAddress.fullAddress,
+        city: oldAddress.city,
+        province: oldAddress.province,
+      },
+      {
+        recipientName: updated.recipientName,
+        recipientPhone: updated.recipientPhone,
+        label: updated.label,
+        fullAddress: updated.fullAddress,
+        city: updated.city,
+        province: updated.province,
+      },
+      oldAddress.userId
+    );
 
     return res.json(updated);
   } catch (err) {
@@ -383,7 +390,34 @@ router.put("/addresses/:id", async (req, res) => {
 router.delete("/addresses/:id", async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Fetch data sebelum delete untuk audit log
+    const addressToDelete = await prisma.address.findUnique({
+      where: { id },
+    });
+
+    if (!addressToDelete) {
+      return res.status(404).json({ error: "Address not found" });
+    }
+
     await prisma.address.delete({ where: { id } });
+
+    // Log address deletion
+    logDelete(
+      "Address",
+      id,
+      {
+        recipientName: addressToDelete.recipientName,
+        recipientPhone: addressToDelete.recipientPhone,
+        label: addressToDelete.label,
+        fullAddress: addressToDelete.fullAddress,
+        city: addressToDelete.city,
+        province: addressToDelete.province,
+        postalCode: addressToDelete.postalCode,
+      },
+      addressToDelete.userId
+    );
+
     return res.json({ message: "Alamat berhasil dihapus" });
   } catch (err) {
     console.error("DELETE /addresses/:id error:", err);

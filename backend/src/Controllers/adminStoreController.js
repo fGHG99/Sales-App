@@ -1,16 +1,10 @@
 import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate, authorize } from "../Middlewares/accessControl.js";
+import { logUpdate } from "../../utils/auditlog.js";
 
 // ==================== HELPER FUNCTIONS ====================
 
-/**
- * Calculate date range based on filter type
- * @param {string} range - "week" | "month" | "custom"
- * @param {string} customStart - ISO date string for custom range
- * @param {string} customEnd - ISO date string for custom range
- * @returns {Object} { start: Date, end: Date }
- */
 const calculateDateRange = (range, customStart, customEnd) => {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
@@ -651,6 +645,15 @@ router.patch(
           updatedAt: new Date(),
         },
       });
+
+      // Log order status update
+      logUpdate(
+        "Order",
+        orderId,
+        { orderStatus: currentStatus },
+        { orderStatus: newStatus },
+        userId
+      );
 
       res.status(200).json({
         success: true,

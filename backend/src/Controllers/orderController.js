@@ -2,10 +2,9 @@ import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate } from "../Middlewares/accessControl.js";
 import { getIO } from "../../utils/socket.js";
-import {
-  findBestCourier,
-  assignCourierToOrder,
-} from "../utils/courierAssignment.js";
+import { logCreate, logUpdate } from "../../utils/auditlog.js";
+import { findBestCourier } from "../../utils/courierAssignment.js";
+import { getCurrentDeliveryFee } from "../../utils/deliveryFeeHelper.js";
 
 // ==================== GET ORDER ROUTES ====================
 
@@ -558,11 +557,16 @@ router.post("/checkout", async (req, res) => {
       });
     }
 
-    // Validasi delivery fee
-    if (deliveryFee === undefined || deliveryFee < 0) {
+    // Get current delivery fee from settings
+    const currentDeliveryFee = await getCurrentDeliveryFee();
+
+    // Use current delivery fee if not provided or validate provided fee
+    const finalDeliveryFee =
+      deliveryFee !== undefined ? Number(deliveryFee) : currentDeliveryFee;
+
+    if (finalDeliveryFee < 0) {
       return res.status(400).json({
-        message:
-          "Delivery fee is required and must be greater than or equal to 0",
+        message: "Delivery fee must be greater than or equal to 0",
       });
     }
 
@@ -691,83 +695,278 @@ router.post("/checkout", async (req, res) => {
       };
     });
 
-    // Buat order baru (langsung dengan delivery info dan orderItems)
-    const order = await prisma.order.create({
-      data: {
-        userId,
-        deliveryAddressId,
-        subtotal,
-        cashAmount: Number(cashAmount),
-        changeAmount,
-        deliveryType,
-        deliveryFee: Number(deliveryFee),
-        orderItems: orderItems, // Store items as JSON (field name: orderItems)
-        pickupStoreId: pickupStoreId, // ✅ Always set for both DELIVERY and PICKUP_TO_STORE
-        pickupTime:
-          deliveryType === "PICKUP_TO_STORE" && pickupTime
-            ? new Date(pickupTime)
-            : null,
-        paymentStatus: "PENDING",
-        orderStatus: "PENDING",
-      },
-      include: {
-        deliveryAddress: true,
-        pickupStore: {
-          // ✅ Always include pickup store for both delivery types
-          include: {
-            address: true,
+    // ==================== PRISMA TRANSACTION ====================
+    // Use transaction to ensure all operations succeed or fail together
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        // 1. Create order
+        const order = await tx.order.create({
+          data: {
+            userId,
+            deliveryAddressId,
+            subtotal,
+            cashAmount: Number(cashAmount),
+            changeAmount,
+            deliveryType,
+            deliveryFee: finalDeliveryFee,
+            orderItems: orderItems, // Store items as JSON (field name: orderItems)
+            pickupStoreId: pickupStoreId, // ✅ Always set for both DELIVERY and PICKUP_TO_STORE
+            pickupTime:
+              deliveryType === "PICKUP_TO_STORE" && pickupTime
+                ? new Date(pickupTime)
+                : null,
+            paymentStatus: "PENDING",
+            orderStatus: "PENDING",
           },
-        },
-      },
-    });
+          include: {
+            deliveryAddress: true,
+            pickupStore: {
+              // ✅ Always include pickup store for both delivery types
+              include: {
+                address: true,
+              },
+            },
+          },
+        });
 
-    // Update cart: hapus items yang sudah di-checkout
-    const remainingCartItems = allCartItems.filter(
-      (item) => !cartItemIds.includes(item.productId)
+        // 2. Update cart: remove items that have been checked out
+        const remainingCartItems = allCartItems.filter(
+          (item) => !cartItemIds.includes(item.productId)
+        );
+
+        await tx.cart.update({
+          where: { userId },
+          data: {
+            cartItems: remainingCartItems,
+          },
+        });
+
+        // 3. Create notification for user
+        const notificationItems = cartItemsWithProducts.map((item) => ({
+          productId: item.productId,
+          productName: item.product.name,
+          quantity: item.quantity,
+          pricePerItem: Number(item.product.sellingPrice),
+          total: Number(item.product.sellingPrice) * item.quantity,
+          imageUrl: item.product.image,
+          thumbnailUrl: item.product.thumbnailUrl,
+          altText: item.product.altText,
+        }));
+
+        const notification = await tx.notification.create({
+          data: {
+            userId,
+            type: "ORDER",
+            title: "Pesanan dibuat",
+            message: `Pesanan ${order.id} berhasil dibuat`,
+            metadata: {
+              orderId: order.id,
+              total,
+              deliveryType,
+              itemCount: orderItems.length,
+              items: notificationItems,
+            },
+          },
+          select: {
+            id: true,
+            type: true,
+            title: true,
+            message: true,
+            metadata: true,
+            createdAt: true,
+          },
+        });
+
+        // 4. Handle courier assignment for DELIVERY orders
+        let assignedCourier = null;
+        if (deliveryType === "DELIVERY") {
+          // Get postal code from delivery address
+          const deliveryAddress = await tx.address.findUnique({
+            where: { id: deliveryAddressId },
+            select: {
+              postalCode: true,
+              fullAddress: true,
+              city: true,
+              province: true,
+            },
+          });
+
+          if (!deliveryAddress?.postalCode) {
+            throw new Error("MISSING_POSTAL_CODE");
+          }
+
+          // Get customer data for courier notification
+          const customerData = await tx.user.findUnique({
+            where: { id: userId },
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+            },
+          });
+
+          console.log(
+            `🔍 Searching for courier for postal code: ${deliveryAddress.postalCode}`
+          );
+
+          // Wait up to 1 minute for courier assignment
+          const maxWaitTime = 60000; // 1 minute in milliseconds
+          const checkInterval = 5000; // Check every 5 seconds
+          const startTime = Date.now();
+
+          let bestCourier = null;
+
+          while (Date.now() - startTime < maxWaitTime) {
+            bestCourier = await findBestCourier(deliveryAddress.postalCode);
+
+            if (bestCourier) {
+              console.log(
+                `✅ Courier found: ${bestCourier.name} (ID: ${bestCourier.id})`
+              );
+              break;
+            }
+
+            console.log(
+              `⏳ No courier available yet, waiting... (${Math.round(
+                (Date.now() - startTime) / 1000
+              )}s elapsed)`
+            );
+
+            // Wait before next check
+            await new Promise((resolve) => setTimeout(resolve, checkInterval));
+          }
+
+          if (!bestCourier) {
+            throw new Error("NO_COURIER_AVAILABLE");
+          }
+
+          // Assign courier to order using transaction
+          const updatedOrder = await tx.order.update({
+            where: { id: order.id },
+            data: {
+              courierId: bestCourier.id,
+              updatedAt: new Date(),
+            },
+            include: {
+              courier: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                  image: {
+                    select: {
+                      id: true,
+                      url: true,
+                      altText: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+          assignedCourier = updatedOrder.courier;
+
+          // Create notification for courier
+          const courierNotification = await tx.notification.create({
+            data: {
+              userId: bestCourier.id,
+              type: "ORDER",
+              title: "Pengantaran Baru",
+              message: `Anda ditugaskan untuk mengantarkan pesanan #${order.id.substring(
+                0,
+                8
+              )} ke ${deliveryAddress.city || deliveryAddress.postalCode}`,
+              metadata: {
+                orderId: order.id,
+                deliveryAddressId: deliveryAddressId,
+                postalCode: deliveryAddress.postalCode,
+                pickupTime: order.pickupTime,
+                itemCount: orderItems.length,
+                deliveryFee: Number(order.deliveryFee),
+              },
+            },
+          });
+
+          // Store courier notification for Socket.IO emission after transaction
+          return {
+            order,
+            notification,
+            assignedCourier,
+            courierNotification,
+            deliveryAddress,
+            customerData,
+          };
+        }
+
+        return {
+          order,
+          notification,
+          assignedCourier: null,
+          courierNotification: null,
+          deliveryAddress: null,
+          customerData: null,
+        };
+      });
+    } catch (transactionError) {
+      console.error("❌ Transaction failed:", transactionError);
+
+      // Handle specific transaction errors
+      if (transactionError.message === "MISSING_POSTAL_CODE") {
+        return res.status(400).json({
+          message:
+            "Delivery address must have postal code for courier assignment",
+          error: "MISSING_POSTAL_CODE",
+        });
+      }
+
+      if (transactionError.message === "NO_COURIER_AVAILABLE") {
+        return res.status(503).json({
+          message:
+            "Tidak ada kurir yang tersedia untuk area pengiriman ini. Silakan coba lagi nanti atau pilih metode pickup to store.",
+          error: "NO_COURIER_AVAILABLE",
+          suggestion: "Gunakan metode 'Pickup to Store' sebagai alternatif",
+        });
+      }
+
+      // Generic transaction error
+      return res.status(500).json({
+        message: "Gagal memproses checkout. Silakan coba lagi.",
+        error: "TRANSACTION_FAILED",
+        details: transactionError.message,
+      });
+    }
+
+    // Extract results from transaction
+    const {
+      order,
+      notification,
+      assignedCourier,
+      courierNotification,
+      deliveryAddress,
+      customerData,
+    } = result;
+
+    // Audit log untuk create order (after successful transaction)
+    logCreate(
+      "Order",
+      order.id,
+      {
+        userId: userId,
+        deliveryType: deliveryType,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        subtotal: Number(order.subtotal),
+        deliveryFee: Number(order.deliveryFee),
+        total: total,
+        itemCount: orderItems.length,
+        pickupStoreId: pickupStoreId,
+        courierId: assignedCourier?.id || null,
+      },
+      userId
     );
-
-    await prisma.cart.update({
-      where: { userId },
-      data: {
-        cartItems: remainingCartItems,
-      },
-    });
-
-    // Buat notifikasi untuk user
-    const notificationItems = cartItemsWithProducts.map((item) => ({
-      productId: item.productId,
-      productName: item.product.name,
-      quantity: item.quantity,
-      pricePerItem: Number(item.product.sellingPrice),
-      total: Number(item.product.sellingPrice) * item.quantity,
-      imageUrl: item.product.image,
-      thumbnailUrl: item.product.thumbnailUrl,
-      altText: item.product.altText,
-    }));
-
-    const notification = await prisma.notification.create({
-      data: {
-        userId,
-        type: "ORDER",
-        title: "Pesanan dibuat",
-        message: `Pesanan ${order.id} berhasil dibuat`,
-        metadata: {
-          orderId: order.id,
-          total,
-          deliveryType,
-          itemCount: orderItems.length,
-          items: notificationItems,
-        },
-      },
-      select: {
-        id: true,
-        type: true,
-        title: true,
-        message: true,
-        metadata: true,
-        createdAt: true,
-      },
-    });
 
     // Emit realtime notification via Socket.IO ke room user
     try {
@@ -779,130 +978,52 @@ router.post("/checkout", async (req, res) => {
       console.warn("Socket emit failed:", emitErr?.message);
     }
 
-    // ==================== AUTO-ASSIGN COURIER ====================
-    // Only auto-assign for DELIVERY type orders
-    let assignedCourier = null;
-    if (deliveryType === "DELIVERY") {
-      try {
-        // Get postal code from delivery address
-        const deliveryAddress = await prisma.address.findUnique({
-          where: { id: deliveryAddressId },
-          select: {
-            postalCode: true,
-            fullAddress: true,
-            city: true,
-            province: true,
-          },
-        });
+    // Send notification to courier via Socket.IO (if courier was assigned)
+    if (assignedCourier && courierNotification) {
+      const io = getIO();
+      if (io) {
+        try {
+          // Emit to courier with complete order data
+          io.to(`user:${assignedCourier.id}`).emit("new-delivery-assignment", {
+            orderId: order.id,
+            message: courierNotification.message,
+            notification: {
+              id: courierNotification.id,
+              title: courierNotification.title,
+              message: courierNotification.message,
+              type: courierNotification.type,
+              createdAt: courierNotification.createdAt,
+              metadata: courierNotification.metadata,
+            },
+            order: {
+              id: order.id,
+              orderStatus: order.orderStatus,
+              subtotal: Number(order.subtotal),
+              deliveryFee: Number(order.deliveryFee),
+              deliveryAddress: {
+                id: deliveryAddressId,
+                fullAddress:
+                  deliveryAddress.fullAddress || deliveryAddress.street,
+                city: deliveryAddress.city,
+                province: deliveryAddress.province,
+                postalCode: deliveryAddress.postalCode,
+              },
+              itemCount: orderItems.length,
+              customer: {
+                id: customerData?.id,
+                name: customerData?.name || "Customer",
+                phone: customerData?.phone || "-",
+                email: customerData?.email,
+              },
+            },
+          });
 
-        // Get customer data for courier notification
-        const customerData = await prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-          },
-        });
-
-        if (deliveryAddress?.postalCode) {
-          // Find best courier for this postal code
-          const bestCourier = await findBestCourier(deliveryAddress.postalCode);
-
-          if (bestCourier) {
-            // Assign courier to order
-            const updatedOrder = await assignCourierToOrder(
-              order.id,
-              bestCourier.id
-            );
-
-            assignedCourier = updatedOrder.courier;
-
-            // Send notification to courier via Socket.IO
-            const io = getIO();
-            if (io) {
-              try {
-                const courierNotification = await prisma.notification.create({
-                  data: {
-                    userId: bestCourier.id,
-                    type: "ORDER",
-                    title: "Pengantaran Baru",
-                    message: `Anda ditugaskan untuk mengantarkan pesanan #${order.id.substring(
-                      0,
-                      8
-                    )} ke ${
-                      deliveryAddress.city || deliveryAddress.postalCode
-                    }`,
-                    metadata: {
-                      orderId: order.id,
-                      deliveryAddressId: deliveryAddressId,
-                      postalCode: deliveryAddress.postalCode,
-                      pickupTime: order.pickupTime,
-                      itemCount: orderItems.length,
-                      deliveryFee: Number(order.deliveryFee),
-                    },
-                  },
-                });
-
-                // Emit to courier with complete order data
-                io.to(`user:${bestCourier.id}`).emit(
-                  "new-delivery-assignment",
-                  {
-                    orderId: order.id,
-                    message: courierNotification.message,
-                    notification: {
-                      id: courierNotification.id,
-                      title: courierNotification.title,
-                      message: courierNotification.message,
-                      type: courierNotification.type,
-                      createdAt: courierNotification.createdAt,
-                      metadata: courierNotification.metadata,
-                    },
-                    order: {
-                      id: order.id,
-                      orderStatus: order.orderStatus,
-                      subtotal: Number(order.subtotal),
-                      deliveryFee: Number(order.deliveryFee),
-                      deliveryAddress: {
-                        id: deliveryAddressId,
-                        fullAddress:
-                          deliveryAddress.fullAddress || deliveryAddress.street,
-                        city: deliveryAddress.city,
-                        province: deliveryAddress.province,
-                        postalCode: deliveryAddress.postalCode,
-                      },
-                      itemCount: orderItems.length,
-                      customer: {
-                        id: customerData?.id,
-                        name: customerData?.name || "Customer",
-                        phone: customerData?.phone || "-",
-                        email: customerData?.email,
-                      },
-                    },
-                  }
-                );
-
-                console.log(
-                  `📱 Delivery assignment notification sent to courier ${bestCourier.name} (${bestCourier.id})`
-                );
-              } catch (notifErr) {
-                console.error(
-                  "❌ Error creating courier notification:",
-                  notifErr
-                );
-              }
-            }
-          } else {
-            console.warn(
-              `⚠️ No courier available for postal code: ${deliveryAddress.postalCode}`
-            );
-            // Order tetap dibuat, tapi belum ada courier assigned
-          }
+          console.log(
+            `📱 Delivery assignment notification sent to courier ${assignedCourier.name} (${assignedCourier.id})`
+          );
+        } catch (notifErr) {
+          console.error("❌ Error creating courier notification:", notifErr);
         }
-      } catch (courierErr) {
-        console.error("❌ Error assigning courier:", courierErr);
-        // Don't fail order creation if courier assignment fails
       }
     }
 
@@ -952,6 +1073,135 @@ router.post("/checkout", async (req, res) => {
   } catch (error) {
     console.error("Error creating order:", error);
     return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// ==================== UPDATE ORDER STATUS ====================
+
+/**
+ * PATCH /:orderId/complete
+ * Update order status to COMPLETED (User endpoint)
+ * Only users with "user" role can complete their own orders
+ */
+router.patch("/complete-order/:orderId", authenticate, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.id;
+
+    // Validasi format UUID
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID format. Must be a valid UUID.",
+      });
+    }
+
+    // Cek user dan role dari database
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: {
+          select: {
+            roleType: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Cek apakah user memiliki role "user"
+    if (user.role?.roleType !== "user") {
+      return res.status(403).json({
+        success: false,
+        message: "Anda bukan user",
+      });
+    }
+
+    // Cek apakah order exists dan belongs to user
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId: userId,
+      },
+      select: {
+        id: true,
+        orderStatus: true,
+        userId: true,
+      },
+    });
+
+    if (!order) {
+      return res.status(403).json({
+        success: false,
+        message: "Anda tidak memiliki hak untuk mengupdate data order ini",
+      });
+    }
+
+    // Cek apakah order sudah dalam status yang bisa di-complete
+    const allowedStatuses = ["DELIVERED"];
+    if (!allowedStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order dengan status ${order.orderStatus} tidak dapat di-complete. Order harus dalam status DELIVERED terlebih dahulu.`,
+        currentStatus: order.orderStatus,
+        allowedStatuses: allowedStatuses,
+      });
+    }
+
+    // Update order status ke COMPLETED
+    const updatedOrder = await prisma.order.update({
+      where: {
+        id: orderId,
+      },
+      data: {
+        orderStatus: "COMPLETED",
+        updatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        orderStatus: true,
+        updatedAt: true,
+      },
+    });
+
+    // Audit log untuk update order status
+    logUpdate(
+      "Order",
+      orderId,
+      { orderStatus: order.orderStatus },
+      {
+        orderStatus: "COMPLETED",
+        completedBy: userId,
+        completedAt: updatedOrder.updatedAt.toISOString(),
+      },
+      userId
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Order berhasil di-complete",
+      data: {
+        orderId: updatedOrder.id,
+        orderStatus: updatedOrder.orderStatus,
+        completedAt: updatedOrder.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error completing order:", error);
+    return res.status(500).json({
+      success: false,
       message: "Internal server error",
       error: error.message,
     });

@@ -19,6 +19,9 @@ import storeRoute from "./Controllers/storeController.js";
 import supportRoute from "./Controllers/supportController.js";
 import adminStoreRoute from "./Controllers/adminStoreController.js";
 import disputeManagementRoute from "./Controllers/disputeManagementController.js";
+import superAdminAnalyticsRoute from "./Controllers/superAdminAnalyticsController.js";
+import feeRoute from "./Controllers/deliveryFeeRouter.js";
+import auditLogRoute from "./Controllers/auditlogController.js";
 import { PORT, HOST } from "../utils/serverConf.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -99,12 +102,6 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-app.use((req, res, next) => {
-  console.log(`🔍 Incoming request: ${req.method} ${req.originalUrl}`);
-  console.log(`🎯 Base URL: ${req.baseUrl}`);
-  console.log(`📝 Path: ${req.path}`);
-  next();
-});
 // Routes
 app.use("/users", userRoute);
 app.use("/store", storeRoute);
@@ -118,6 +115,9 @@ app.use("/notifications", notificationRoutes); // Notification management
 app.use("/support", supportRoute);
 app.use("/admin", adminStoreRoute); // Admin store management
 app.use("/disputes", disputeManagementRoute); // Admin dispute management
+app.use("/super-admin", superAdminAnalyticsRoute); // Super admin analytics
+app.use("/fee", feeRoute);
+app.use("/audit", auditLogRoute); // Audit log management
 app.use("/address", addressRoute);
 
 // Start the server

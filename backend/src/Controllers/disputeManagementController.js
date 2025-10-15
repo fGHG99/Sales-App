@@ -1,6 +1,7 @@
 import router from "../../utils/express.js";
 import prisma from "../../utils/prisma.js";
 import { authenticate } from "../Middlewares/accessControl.js";
+import { logCreate, logUpdate } from "../../utils/auditlog.js";
 
 // ==================== DISPUTE MANAGEMENT ====================
 
@@ -168,6 +169,28 @@ router.post("/submit-dispute", authenticate, async (req, res) => {
 
       return newDispute;
     });
+
+    // Audit log untuk create dispute
+    logCreate(
+      "Dispute",
+      result.id,
+      {
+        reason: result.reason,
+        status: result.status,
+        description: result.description,
+        orderId: orderId,
+      },
+      userId
+    );
+
+    // Audit log untuk update order status ke DISPUTED
+    logUpdate(
+      "Order",
+      orderId,
+      { orderStatus: order.orderStatus },
+      { orderStatus: "DISPUTED" },
+      userId
+    );
 
     // Parse orderItems
     const parsedDispute = {
@@ -520,6 +543,15 @@ router.patch("/update-status/:disputeId", authenticate, async (req, res) => {
       },
     });
 
+    // Audit log untuk update dispute status
+    logUpdate(
+      "Dispute",
+      disputeId,
+      { status: currentStatus },
+      { status: newStatus },
+      userId
+    );
+
     res.status(200).json({
       success: true,
       message: `Dispute status successfully updated from ${currentStatus} to ${newStatus}`,
@@ -634,6 +666,19 @@ router.patch("/resolve-dispute/:disputeId", authenticate, async (req, res) => {
         updatedAt: true,
       },
     });
+
+    // Audit log untuk resolve dispute
+    logUpdate(
+      "Dispute",
+      disputeId,
+      { status: dispute.status },
+      {
+        status: "RESOLVED",
+        response: response.trim(),
+        resolvedAt: updatedDispute.resolvedAt.toISOString(),
+      },
+      userId
+    );
 
     res.status(200).json({
       success: true,

@@ -3,6 +3,7 @@ import prisma from "../../utils/prisma.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { authorize, authenticate } from "../Middlewares/accessControl.js";
+import { logCreate, logUpdate } from "../../utils/auditlog.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -396,6 +397,12 @@ router.put("/profile", authenticate, async (req, res) => {
       updateData.dob = dobDate;
     }
 
+    // Fetch existing user data for audit log
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, phone: true, sex: true, dob: true },
+    });
+
     // Update user
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -415,6 +422,29 @@ router.put("/profile", authenticate, async (req, res) => {
         },
       },
     });
+
+    // Audit log untuk update profile
+    const oldValues = {};
+    const newValues = {};
+
+    if (name) {
+      oldValues.name = existingUser.name;
+      newValues.name = updateData.name;
+    }
+    if (phone) {
+      oldValues.phone = existingUser.phone;
+      newValues.phone = updateData.phone;
+    }
+    if (sex) {
+      oldValues.sex = existingUser.sex;
+      newValues.sex = updateData.sex;
+    }
+    if (dob) {
+      oldValues.dob = existingUser.dob?.toISOString();
+      newValues.dob = updateData.dob?.toISOString();
+    }
+
+    logUpdate("User", userId, oldValues, newValues, userId);
 
     res.json({
       message: "Profile updated successfully",
@@ -481,6 +511,17 @@ router.post(
         });
       }
 
+      // Audit log untuk upload profile picture
+      logCreate(
+        "UserProfilePicture",
+        userId,
+        {
+          imageUrl: imageUrl,
+          action: existingUser.image ? "updated" : "created",
+        },
+        userId
+      );
+
       res.json({
         message: "Profile picture uploaded successfully",
         imageUrl: imageUrl,
@@ -539,6 +580,59 @@ router.delete("/profile/picture", authenticate, async (req, res) => {
   } catch (error) {
     console.error("Profile picture deletion error:", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /users/admin
+ * Get all users with roleType "ADMIN"
+ * Returns: List of admin users
+ */
+router.get("/admin", authenticate, async (req, res) => {
+  try {
+    // Find admin role
+    const adminRole = await prisma.role.findUnique({
+      where: { roleType: "admin" },
+    });
+
+    if (!adminRole) {
+      return res.status(404).json({
+        success: false,
+        error: "Admin role not found in system",
+      });
+    }
+
+    // Get all users with admin role
+    const adminUsers = await prisma.user.findMany({
+      where: {
+        roleId: adminRole.id,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        isVerified: true,
+        createdAt: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    res.json({
+      success: true,
+      users: adminUsers,
+      count: adminUsers.length,
+    });
+  } catch (error) {
+    console.error("Error fetching admin users:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch admin users",
+      details: error.message,
+    });
   }
 });
 

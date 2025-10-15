@@ -93,22 +93,20 @@ export const authorize = (accessKey) => {
  * Usage:
  * router.get("/endpoint", authenticate, handler);
  */
-export const authenticate = (req, res, next) => {
+// be/backend/src/Middlewares/accessControl.js
+export const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers["authorization"];
     const accessToken = authHeader && authHeader.split(" ")[1];
     const refreshToken = req.cookies?.refreshToken;
 
+    let userId = null;
+
     // Step 1: Try to verify Access Token
     if (accessToken) {
       try {
         const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
-        // Set user properties from decoded token
-        req.user = {
-          id: decoded.userId || decoded.id,
-          ...(decoded.email && { email: decoded.email }),
-        };
-        return next();
+        userId = decoded.userId || decoded.id;
       } catch (err) {
         console.warn(
           "Access token invalid/expired, attempting refresh token fallback..."
@@ -117,24 +115,64 @@ export const authenticate = (req, res, next) => {
     }
 
     // Step 2: If access token fails → try Refresh Token
-    if (refreshToken) {
+    if (!userId && refreshToken) {
       try {
         const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
-        // Set user properties from decoded token
-        req.user = {
-          id: decoded.userId || decoded.id,
-          ...(decoded.email && { email: decoded.email }),
-        };
-        return next();
+        userId = decoded.userId || decoded.id;
       } catch (err) {
         console.warn("Refresh token invalid/expired:", err.message);
       }
     }
 
     // Step 3: Both tokens failed
-    return res.status(401).json({
-      error: "Unauthorized: Session expired, please login again",
-    });
+    if (!userId) {
+      return res.status(401).json({
+        error: "Unauthorized: Session expired, please login again",
+      });
+    }
+
+    // Step 4: Fetch user data with role
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          role: {
+            select: {
+              id: true,
+              name: true,
+              roleType: true,
+              isDeleted: true,
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        return res.status(401).json({
+          error: "Unauthorized: User not found",
+        });
+      }
+
+      if (user.isDeleted) {
+        return res.status(403).json({
+          error: "Forbidden: User account is disabled",
+        });
+      }
+
+      // Set user properties
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      };
+
+      next();
+    } catch (dbError) {
+      console.error("Database error during authentication:", dbError);
+      return res.status(500).json({
+        error: "Internal server error during authentication",
+      });
+    }
   } catch (err) {
     console.error("Authentication error:", err);
     return res.status(500).json({
