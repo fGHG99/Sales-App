@@ -5,7 +5,7 @@ import { setIO, initializeSocketHandlers } from "../utils/socket.js";
 import { connectRedis } from "../utils/redis.js";
 import { startLocationCleanup } from "../utils/cronJobs.js";
 import cookieParser from "cookie-parser";
-import cors from "cors"; // ✅ import cors
+import cors from "cors";
 import userRoute from "./Controllers/userController.js";
 import authRoute from "./Controllers/authController.js";
 import addressRoute from "./Controllers/addressCont.js";
@@ -30,10 +30,40 @@ import { fileURLToPath } from "url";
 const app = express();
 const server = http.createServer(app);
 
+// ✅ CORS Configuration
 const allowedOrigins = [
-  "https://chic-bravery-production.up.railway.app"
+  "https://chic-bravery-production.up.railway.app",
+  "http://localhost:5173", // jika pakai Vite
 ];
 
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log("❌ CORS blocked origin:", origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  exposedHeaders: ['set-cookie'],
+  maxAge: 86400, // 24 hours
+  optionsSuccessStatus: 200
+};
+
+// ✅ Apply CORS middleware BEFORE other middlewares
+app.use(cors(corsOptions));
 // Initialize Socket.IO with WebSocket-first configuration
 const io = new SocketIOServer(server, {
   cors: { 
@@ -41,28 +71,26 @@ const io = new SocketIOServer(server, {
     credentials: true,
     methods: ["GET", "POST"],
   },
-  // ✅ WebSocket optimization
-  transports: ["websocket", "polling"], // Prefer WebSocket
-  allowUpgrades: true, // Allow upgrade from polling to WebSocket
-  pingTimeout: 60000, // How long to wait for ping response
-  pingInterval: 25000, // How often to send ping
-  upgradeTimeout: 10000, // How long to wait for upgrade
-  maxHttpBufferSize: 1e6, // 1MB max message size
+  transports: ["websocket", "polling"],
+  allowUpgrades: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  upgradeTimeout: 10000,
+  maxHttpBufferSize: 1e6,
   perMessageDeflate: {
-    threshold: 1024, // Compress messages > 1KB
+    threshold: 1024,
   },
 });
 
 setIO(io);
 
-// Initialize Socket.IO event handlers (includes courier location tracking)
+// Initialize Socket.IO event handlers
 initializeSocketHandlers(io);
 
 // Initialize Redis connection
 connectRedis()
   .then(() => {
     console.log("✅ Redis initialized successfully");
-    // Start location cleanup cron job after Redis connected
     startLocationCleanup();
   })
   .catch((err) => {
@@ -71,14 +99,6 @@ connectRedis()
       "⚠️ Server will continue without Redis (location tracking disabled)"
     );
   });
-
-// ✅ Tambahkan konfigurasi CORS
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true, // agar bisa kirim cookie/token antar origin
-  })
-);
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -91,13 +111,13 @@ app.use("/public", express.static(path.join(__dirname, "../public")));
 // STATIC FILE ROUTES
 // ========================================
 
-// Profile pictures - Publicly accessible (standard for profile images)
+// Profile pictures - Publicly accessible
 app.use(
   "/uploads/profile-pictures",
   express.static(path.join(__dirname, "../uploads/profile-pictures"))
 );
 
-// Delivery proofs - Publicly accessible for customer verification
+// Delivery proofs - Publicly accessible
 app.use(
   "/uploads/delivery-proofs",
   express.static(path.join(__dirname, "../uploads/delivery-proofs"))
@@ -109,8 +129,16 @@ app.use(
   express.static(path.join(__dirname, "../uploads/promotionals"))
 );
 
+// ✅ Body parser middleware (AFTER CORS)
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// ✅ Request logging middleware (helpful for debugging)
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - Origin: ${req.get('origin')}`);
+  next();
+});
 
 // Routes
 app.use("/users", userRoute);
@@ -120,19 +148,40 @@ app.use("/courier", courierLoc);
 app.use("/inventory", inventoryRoutes);
 app.use("/cart", cartRoutes);
 app.use("/order", orderRoutes);
-app.use("/orders", courierOrderRoutes); // Courier order management
-app.use("/notifications", notificationRoutes); // Notification management
+app.use("/orders", courierOrderRoutes);
+app.use("/notifications", notificationRoutes);
 app.use("/support", supportRoute);
-app.use("/admin", adminStoreRoute); // Admin store management
-app.use("/disputes", disputeManagementRoute); // Admin dispute management
-app.use("/super-admin", superAdminAnalyticsRoute); // Super admin analytics
+app.use("/admin", adminStoreRoute);
+app.use("/disputes", disputeManagementRoute);
+app.use("/super-admin", superAdminAnalyticsRoute);
 app.use("/fee", feeRoute);
-app.use("/audit", auditLogRoute); // Audit log management
+app.use("/audit", auditLogRoute);
 app.use("/address", addressRoute);
-app.use("/promotionals", promotionalRoute); // Promotional management
+app.use("/promotionals", promotionalRoute);
+
+// ✅ Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ✅ 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+// ✅ Error handler
+app.use((err, req, res, next) => {
+  console.error("Error:", err.message);
+  res.status(500).json({ 
+    error: process.env.NODE_ENV === 'production' 
+      ? "Internal server error" 
+      : err.message 
+  });
+});
 
 // Start the server
 server.listen(PORT, HOST, () => {
   console.log(`Server is running on http://${HOST}:${PORT}`);
   console.log(`Your IP address is: ${HOST}`);
+  console.log(`Allowed origins:`, allowedOrigins);
 });
