@@ -31,7 +31,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = [
-  "*"
+  "https://chic-bravery-production.up.railway.app"
 ];
 
 // Initialize Socket.IO with WebSocket-first configuration
