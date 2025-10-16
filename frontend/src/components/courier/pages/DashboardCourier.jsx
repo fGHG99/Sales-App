@@ -48,9 +48,6 @@ const CourierDashboard = () => {
   const [isUploadProofModalOpen, setIsUploadProofModalOpen] = useState(false);
   const [selectedOrderForProof, setSelectedOrderForProof] = useState(null);
 
-  // ✅ ADD: Memoized awaiting proof map
-  const [awaitingProofMap, setAwaitingProofMap] = useState(new Set());
-
   // Use custom hook for cross-component synchronization
   const {
     awaitingProofOrders,
@@ -58,11 +55,6 @@ const CourierDashboard = () => {
     removeAwaitingProofOrder,
     isAwaitingProof,
   } = useAwaitingProofOrders();
-
-  // ✅ ADD: Update map when awaitingProofOrders changes
-  useEffect(() => {
-    setAwaitingProofMap(new Set(awaitingProofOrders));
-  }, [awaitingProofOrders]);
 
   // Listen for delivery proof upload completion
   // Refresh data AFTER modal has fully closed to prevent race conditions
@@ -137,22 +129,29 @@ const CourierDashboard = () => {
   };
 
   /**
-   * Mark order as ready for delivery proof upload
-   * This does NOT change the status to DELIVERED yet
+   * Mark order as arrived at destination
+   * This changes status to ARRIVED_AT_DESTINATION
    */
-  const markAsDelivered = async (orderId) => {
+  const markAsArrived = async (orderId) => {
     try {
-      // Add order to awaiting proof set (synced across components)
+      // ✅ FIX: First update backend status via API
+      await updateOrderStatus(
+        orderId,
+        "ARRIVED_AT_DESTINATION",
+        "Order arrived at destination"
+      );
+
+      // ✅ Only update frontend state after successful API call
       addAwaitingProofOrder(orderId);
 
       toast.success(
-        "Order marked as delivered. Please upload delivery proof to complete."
+        "Order marked as arrived. Please upload delivery proof to complete."
       );
 
       return { success: true };
     } catch (err) {
-      console.error("Error marking as delivered:", err);
-      toast.error("Failed to mark order as delivered");
+      console.error("Error marking as arrived:", err);
+      toast.error("Failed to mark order as arrived");
       throw err;
     }
   };
@@ -227,7 +226,8 @@ const CourierDashboard = () => {
     ready: (orderId) =>
       updateOrderStatus(orderId, "READY_FOR_PICKUP", "Paket siap diambil"),
     pickup: (orderId) => markAsPickedUp(orderId),
-    delivered: (orderId) => markAsDelivered(orderId),
+    arrived: (orderId) => markAsArrived(orderId),
+    DELIVERED: (orderId) => markAsDeliveredFromHook(orderId),
   };
 
   const handleOrderAction = async (orderId, action) => {
@@ -275,7 +275,11 @@ const CourierDashboard = () => {
         color: "bg-purple-100 text-purple-800",
         text: "In Transit",
       },
-      DELIVERED: { color: "bg-blue-100 text-blue-800", text: "Delivered" },
+      ARRIVED_AT_DESTINATION: {
+        color: "bg-blue-100 text-blue-800",
+        text: "Arrived",
+      },
+      DELIVERED: { color: "bg-green-100 text-green-800", text: "Delivered" },
       COMPLETED: { color: "bg-green-100 text-green-800", text: "Completed" },
       CANCELED: { color: "bg-red-100 text-red-800", text: "Cancelled" },
       DISPUTED: { color: "bg-red-100 text-red-800", text: "Disputed" },
@@ -376,8 +380,27 @@ const CourierDashboard = () => {
     ),
 
     OUT_FOR_DELIVERY: (order, isUpdating) => {
-      // ✅ FIX: Use Set lookup instead of function call - no re-render
-      const awaitingProof = awaitingProofMap.has(order.id);
+      return (
+        <div className="flex space-x-2">
+          {createNavigateButton(
+            `/courier/customer-location/order/${order.id}`,
+            "Customer",
+            Navigation
+          )}
+          {createActionButton(
+            () => handleOrderAction(order.id, "arrived"),
+            isUpdating,
+            "bg-green-600 hover:bg-green-700",
+            "Mark as Arrived",
+            CheckCircle2
+          )}
+        </div>
+      );
+    },
+
+    ARRIVED_AT_DESTINATION: (order, isUpdating) => {
+      // ✅ Use Set.has() directly - O(1) lookup, no unnecessary memoization
+      const awaitingProof = awaitingProofOrders.has(order.id);
 
       return (
         <div className="flex space-x-2">
@@ -396,10 +419,10 @@ const CourierDashboard = () => {
                 isUpdating
               )
             : createActionButton(
-                () => handleOrderAction(order.id, "delivered"),
+                () => handleOrderAction(order.id, "DELIVERED"),
                 isUpdating,
-                "bg-green-600 hover:bg-green-700",
-                "Mark Delivered",
+                "bg-purple-600 hover:bg-purple-700",
+                "Mark as Delivered",
                 CheckCircle2
               )}
         </div>

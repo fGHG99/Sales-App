@@ -110,15 +110,6 @@ const AddressSearchWithHandler = () => {
     };
   }, [throttledSearchQuery]);
 
-  const handleSelectAddress = (addressId) => {
-    setAddresses((prev) =>
-      prev.map((addr) => ({
-        ...addr,
-        isSelected: addr.id === addressId,
-      }))
-    );
-  };
-
   const handleDeleteAddress = async (addressId) => {
     try {
       await api.delete(`/address/${addressId}`);
@@ -176,7 +167,7 @@ const AddressSearchWithHandler = () => {
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search Bar with Location Results */}
-          <div className="flex-1 relative">
+          {/* <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 z-10" />
             <Input
               type="text"
@@ -220,17 +211,28 @@ const AddressSearchWithHandler = () => {
                 )}
               </div>
             )}
-          </div>
+          {/* </div>  */}
 
           {/* Add Address Button */}
-          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+          <Dialog
+            open={isAddModalOpen}
+            onOpenChange={(open) => {
+              setIsAddModalOpen(open);
+              if (!open) {
+                setEditingAddress(null);
+              }
+            }}
+          >
             <DialogTrigger asChild>
-              <Button className="h-12 px-6 bg-slate-900 hover:bg-slate-800 text-white">
+              <Button
+                className="h-12 px-6 bg-slate-900 hover:bg-slate-800 text-white"
+                onClick={() => setEditingAddress(null)}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Tambah Alamat
               </Button>
             </DialogTrigger>
-            <DialogContent className="w-full max-w-full sm:max-w-2xl lg:max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="w-full max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingAddress ? "Edit Alamat" : "Tambah Alamat Baru"}
@@ -286,23 +288,39 @@ const AddressSearchWithHandler = () => {
             return (
               <Card
                 key={address.id}
-                className={`transition-all duration-200 hover:shadow-md ${
-                  address.isSelected
-                    ? "ring-2 ring-slate-900 border-slate-900"
-                    : "border-gray-200"
-                }`}
+                className="transition-all duration-200 hover:shadow-md border-gray-200"
               >
                 <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      {address.isSelected && (
-                        <div className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
-                          Alamat Terpilih
+                  <div className="flex justify-between items-start">
+                    {/* Address Info */}
+                    <div className="flex-1 space-y-3">
+                      {/* Recipient Info */}
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span className="font-medium text-gray-900">
+                            {address.recipientName}
+                          </span>
                         </div>
-                      )}
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-600">
+                            {address.recipientPhone}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Address */}
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 text-gray-400 mt-1 flex-shrink-0" />
+                        <p className="text-gray-700 leading-relaxed">
+                          {address.fullAddress}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 ml-4">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -319,49 +337,6 @@ const AddressSearchWithHandler = () => {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {/* Recipient Info */}
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium text-gray-900">
-                          {address.recipientName}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-600">
-                          {address.recipientPhone}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Address */}
-                    <div className="flex items-start gap-2">
-                      <MapPin className="h-4 w-4 text-gray-400 mt-1 flex-shrink-0" />
-                      <p className="text-gray-700 leading-relaxed">
-                        {address.fullAddress}
-                      </p>
-                    </div>
-
-                    {/* Select Button */}
-                    <div className="pt-3 border-t">
-                      {address.isSelected ? (
-                        <p className="text-sm text-green-600 font-medium">
-                          ✓ Alamat ini akan digunakan untuk pengiriman
-                        </p>
-                      ) : (
-                        <Button
-                          onClick={() => handleSelectAddress(address.id)}
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                        >
-                          Pilih Alamat Ini
-                        </Button>
-                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -382,7 +357,10 @@ const AddressSearchWithHandler = () => {
                 : "Tambahkan alamat pertama Anda untuk memulai"}
             </p>
             <Button
-              onClick={() => setIsAddModalOpen(true)}
+              onClick={() => {
+                setEditingAddress(null);
+                setIsAddModalOpen(true);
+              }}
               className="bg-slate-900 hover:bg-slate-800 text-white"
             >
               <Plus className="h-4 w-4 mr-2" />

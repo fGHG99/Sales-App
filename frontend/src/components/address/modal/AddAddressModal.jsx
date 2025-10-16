@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { MapPin, Plus, Check } from "lucide-react";
+import { MapPin, Plus, Check, X } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Card, CardContent } from "../../ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
-import AddressForm from "../pages/AddressForm";
+import AddressFormCompact from "../components/AddressFormCompact";
 import MapTilerForModal from "../pages/MapTilerForModal";
 import {
   getCurrentLocation,
@@ -34,11 +34,15 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
 
   const handleLocationSelect = (location) => {
     setSelectedLocation(location);
-    // setActiveTab('form');
+    setActiveTab("form");
   };
 
   const handleConfirmLocation = () => {
     setActiveTab("form");
+  };
+
+  const handleEditLocation = () => {
+    setActiveTab("location");
   };
 
   const handleSearch = () => {
@@ -134,20 +138,12 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
   console.log("address data :", selectedLocation);
 
   return (
-    <div className="w-full max-w-4xl">
+    <div className="w-full max-w-md mx-auto">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        {/* <TabsList className="grid w-full grid-cols-2">
-          {/* <TabsTrigger value="location" disabled={editingAddress}>
-            <MapPin className="h-4 w-4 mr-2" />
-            Pilih Lokasi
-          </TabsTrigger>
-          <TabsTrigger value="form">
-            <Plus className="h-4 w-4 mr-2" />
-            Isi Detail Alamat
-          </TabsTrigger> */}
-        {/* </TabsList> */}
-
-        <TabsContent value="location" className="space-y-6">
+        <TabsContent
+          value="location"
+          className="space-y-6 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        >
           <div className="text-center space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">
               Pilih Lokasi Alamat
@@ -204,7 +200,10 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
           )}
         </TabsContent>
 
-        <TabsContent value="form" className="space-y-6">
+        <TabsContent
+          value="form"
+          className="space-y-6 overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        >
           <div className="text-center space-y-2">
             <h3 className="text-lg font-semibold text-gray-900">
               Detail Alamat
@@ -214,24 +213,12 @@ const AddAddressModal = ({ onAddAddress, editingAddress, onClose }) => {
             </p>
           </div>
 
-          {selectedLocation && (
-            <Card className="bg-green-50 border-green-200">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-green-800">
-                  <MapPin className="h-4 w-4" />
-                  <span className="text-sm font-medium">
-                    Lokasi: {selectedLocation.address}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <AddressForm
+          <AddressFormCompact
             onSubmit={handleAddressSubmit}
             initialData={addressData}
             selectedLocation={selectedLocation}
             isSubmitting={isSubmitting}
+            onEditLocation={handleEditLocation}
           />
         </TabsContent>
       </Tabs>

@@ -4,15 +4,22 @@ const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-gray-900 text-white">
+    <footer className="bg-gray-60 text-black border-t-2 border-white-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        {/* Main Footer Content */}
+        <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
           {/* Company Info */}
-          <div className="space-y-4">
+          <div className="space-y-4 lg:w-1/2">
             <div className="flex items-center space-x-2">
-              <img src="/image/logo.png" alt="Logo" className="w-40 h-40" />
+              <div className="w-32 h-auto">
+                <img
+                  src="/image/logo-crop.png"
+                  alt="Geek Sales Logo"
+                  className="w-full h-auto object-contain max-h-12"
+                />
               </div>
-            <p className="text-gray-400 leading-relaxed">
+            </div>
+            <p className="text-gray-400 leading-relaxed text-sm">
               Platform e-commerce terpercaya yang menyediakan berbagai produk
               berkualitas dengan layanan terbaik untuk pelanggan di seluruh
               Indonesia.
@@ -20,7 +27,7 @@ const Footer = () => {
             <div className="flex space-x-4">
               <a
                 href="#"
-                className="text-gray-400 hover:text-white transition-colors duration-200"
+                className="text-gray-400 hover:text-blue-600 transition-colors duration-200"
                 aria-label="Facebook"
               >
                 <svg
@@ -37,7 +44,7 @@ const Footer = () => {
               </a>
               <a
                 href="#"
-                className="text-gray-400 hover:text-white transition-colors duration-200"
+                className="text-gray-400 hover:text-blue-600 transition-colors duration-200"
                 aria-label="Instagram"
               >
                 <svg
@@ -54,7 +61,7 @@ const Footer = () => {
               </a>
               <a
                 href="#"
-                className="text-gray-400 hover:text-white transition-colors duration-200"
+                className="text-gray-400 hover:text-blue-600 transition-colors duration-200"
                 aria-label="Twitter"
               >
                 <svg
@@ -67,108 +74,33 @@ const Footer = () => {
               </a>
             </div>
           </div>
-
-          {/* Quick Links */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Tautan Cepat</h3>
-            <ul className="space-y-3">
-              {["Tentang Kami", "Kontak", "Karir", "Blog", "FAQ"].map(
-                (link) => (
-                  <li key={link}>
-                    <a
-                      href="#"
-                      className="text-gray-400 hover:text-white transition-colors duration-200 hover:underline"
-                    >
-                      {link}
-                    </a>
-                  </li>
-                )
-              )}
-            </ul>
-          </div>
-
-          {/* Customer Service */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Layanan Pelanggan</h3>
-            <ul className="space-y-3">
-              {[
-                "Bantuan & Dukungan",
-                "Kebijakan Pengembalian",
-                "Syarat & Ketentuan",
-                "Kebijakan Privasi",
-                "Panduan Belanja",
-              ].map((link) => (
-                <li key={link}>
-                  <a
-                    href="#"
-                    className="text-gray-400 hover:text-white transition-colors duration-200 hover:underline"
-                  >
-                    {link}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Contact Info */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Hubungi Kami</h3>
-            <div className="space-y-3">
-              <div className="flex items-start space-x-3">
-                <MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="text-gray-400 text-sm">
-                  <p>Jl. Sudirman No. 123</p>
-                  <p>Jakarta Pusat 10220</p>
-                  <p>Indonesia</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Phone className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                <a
-                  href="tel:+621234567890"
-                  className="text-gray-400 hover:text-white transition-colors duration-200"
-                >
-                  +62 123 456 7890
-                </a>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Mail className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                <a
-                  href="mailto:info@geeksales.com"
-                  className="text-gray-400 hover:text-white transition-colors duration-200"
-                >
-                  info@Geeksales.com
-                </a>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-12 pt-8 border-t border-gray-800">
+        <div className="mt-12 pt-8 border-t border-gray-200">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <p className="text-gray-400 text-sm text-center md:text-left">
+            <p className="text-gray-500 text-sm text-center md:text-left">
               © {currentYear} Geek Sales. Seluruh hak cipta dilindungi
               undang-undang.
             </p>
-            <div className="flex items-center space-x-6 text-sm text-gray-400">
+            <div className="flex items-center space-x-4 text-sm text-gray-500">
               <a
                 href="#"
-                className="hover:text-white transition-colors duration-200"
+                className="hover:text-blue-600 transition-colors duration-200 whitespace-nowrap"
               >
                 Kebijakan Privasi
               </a>
-              <span>|</span>
+              <span className="text-gray-300">|</span>
               <a
                 href="#"
-                className="hover:text-white transition-colors duration-200"
+                className="hover:text-blue-600 transition-colors duration-200 whitespace-nowrap"
               >
                 Syarat Layanan
               </a>
-              <span>|</span>
+              <span className="text-gray-300">|</span>
               <a
                 href="#"
-                className="hover:text-white transition-colors duration-200"
+                className="hover:text-blue-600 transition-colors duration-200 whitespace-nowrap"
               >
                 Sitemap
               </a>

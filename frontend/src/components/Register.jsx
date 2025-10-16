@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, User } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, ArrowRight, User, Phone } from "lucide-react";
 
 export default function Register() {
   const [formData, setFormData] = useState({
     name: "",
+    phone: "",
     email: "",
     password: "",
   });
@@ -113,6 +114,31 @@ export default function Register() {
                   onChange={handleInputChange}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-white text-sm sm:text-base"
                   placeholder="Enter your full name"
+                />
+              </div>
+            </div>
+
+            {/* Phone Number */}
+            <div>
+              <label
+                htmlFor="phone"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Phone Number{" "}
+                <span className="text-gray-500 text-xs">(Optional)</span>
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors bg-white text-sm sm:text-base"
+                  placeholder="08xxxxxxxxxx"
+                  pattern="[0-9]{10,13}"
+                  title="Phone number must be 10-13 digits"
                 />
               </div>
             </div>

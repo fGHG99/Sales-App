@@ -5,22 +5,17 @@ import SearchBar from "./SearchBar";
 import AuthSection from "./AuthSection";
 import LoginRequiredModal from "./modal/LoginRequiredModal";
 import api from "../utils/api";
+import { getCategoriesName } from "../services/userService";
 
-const categories = [
-  "Elektronik",
-  "Fashion",
-  "Rumah & Taman",
-  "Olahraga",
-  "Kecantikan",
-];
-
-const Navbar = () => {
+const UserNavbar = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [userData, setUserData] = useState(null);
   const [cartCount, setCartCount] = useState(0);
+  const [categories, setCategories] = useState([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
@@ -34,6 +29,33 @@ const Navbar = () => {
         console.error("Error parsing user data:", error);
       }
     }
+  }, []);
+
+  // Fetch categories from API
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setIsLoadingCategories(true);
+
+        const response = await getCategoriesName();
+
+        if (response.categories && Array.isArray(response.categories)) {
+          // Extract category names from the response
+          const categoryNames = response.categories.map(
+            (category) => category.name
+          );
+          setCategories(categoryNames);
+        } else {
+          setCategories([]);
+        }
+      } catch (error) {
+        setCategories([]);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   // Check authentication using accessToken from localStorage
@@ -91,7 +113,9 @@ const Navbar = () => {
   };
 
   const handleCategoryClick = (category) => {
-    navigate(`/category/${category.toLowerCase()}`);
+    // Convert spaces to hyphens for URL
+    const categorySlug = category.toLowerCase().replace(/\s+/g, "-");
+    navigate(`/category/${categorySlug}`);
     setIsDropdownOpen(false);
     setIsMobileMenuOpen(false);
   };
@@ -102,14 +126,14 @@ const Navbar = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center space-x-2">
-              {/* !IMPORANT! ganti logo untuk mobile  */}
-              <img
-                src="/image/logo.png"
-                alt="Geek Sales"
-                className="w-40 h-40"
-              />
+              <div className="w-32 h-auto">
+                <img
+                  src="/image/logo-crop.png"
+                  alt="Geek Sales Logo"
+                  className="w-full h-auto object-contain max-h-12"
+                />
+              </div>
             </Link>
-
             {/* !IMPORTANT! buat agar kategori tersebut menggunakan on hover bukan on click dan buat agar dropdown menjadi lebih baik */}
             <div className="hidden lg:flex items-center flex-1 mx-2">
               {/* Categories Dropdown - moved closer to logo */}
@@ -130,15 +154,25 @@ const Navbar = () => {
 
                 {isDropdownOpen && (
                   <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg py-2 z-50">
-                    {categories.map((category) => (
-                      <button
-                        key={category}
-                        onClick={() => handleCategoryClick(category)}
-                        className="w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors duration-200 font-inter"
-                      >
-                        {category}
-                      </button>
-                    ))}
+                    {isLoadingCategories ? (
+                      <div className="px-4 py-2 text-gray-500 text-center">
+                        Loading...
+                      </div>
+                    ) : categories.length > 0 ? (
+                      categories.map((category) => (
+                        <button
+                          key={category}
+                          onClick={() => handleCategoryClick(category)}
+                          className="w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors duration-200 font-inter"
+                        >
+                          {category}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-2 text-gray-500 text-center">
+                        No categories available
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -203,15 +237,25 @@ const Navbar = () => {
               {/* Mobile Categories */}
               <div className="space-y-2">
                 <p className="font-medium text-gray-900 font-inter">Kategori</p>
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => handleCategoryClick(category)}
-                    className="block w-full text-left px-2 py-2 text-gray-600 hover:text-blue-600 transition-colors duration-200 font-inter"
-                  >
-                    {category}
-                  </button>
-                ))}
+                {isLoadingCategories ? (
+                  <div className="px-2 py-2 text-gray-500 text-center">
+                    Loading...
+                  </div>
+                ) : categories.length > 0 ? (
+                  categories.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => handleCategoryClick(category)}
+                      className="block w-full text-left px-2 py-2 text-gray-600 hover:text-blue-600 transition-colors duration-200 font-inter"
+                    >
+                      {category}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-2 py-2 text-gray-500 text-center">
+                    No categories available
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
@@ -261,4 +305,4 @@ const Navbar = () => {
   );
 };
 
-export default Navbar;
+export default UserNavbar;

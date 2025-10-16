@@ -11,6 +11,7 @@ import {
   FileText,
   ClipboardList,
   X,
+  Image,
 } from "lucide-react";
 import { Button } from "../../ui/button";
 
@@ -49,6 +50,12 @@ const SuperAdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
       label: "Global Reports",
       icon: FileText,
       href: "/s-admin/reports",
+    },
+    {
+      id: "promotional",
+      label: "Promotional",
+      icon: Image,
+      href: "/s-admin/promotional",
     },
     // {
     //   id: "audit",

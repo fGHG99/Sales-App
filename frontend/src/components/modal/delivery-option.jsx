@@ -22,6 +22,8 @@ export default function DeliveryOptionsModal({
   onFetchStores,
   currentDeliveryFee = 0,
   isLoadingDeliveryFee = false,
+  currentTime = null,
+  currentHour = null,
 }) {
   const [selectedOption, setSelectedOption] = useState("courier");
   const [selectedStore, setSelectedStore] = useState("");
@@ -56,27 +58,217 @@ export default function DeliveryOptionsModal({
     onFetchStores,
   ]);
 
+  // Helper function to convert UTC to WIB timezone
+  const convertUTCToWIB = (utcTime) => {
+    if (!utcTime) return new Date();
+
+    const utcDate = new Date(utcTime);
+    // Add 7 hours for WIB timezone
+    const wibDate = new Date(utcDate.getTime() + 7 * 60 * 60 * 1000);
+    return wibDate;
+  };
+
+  // Helper function to parse store hours (flexible format support)
+  const parseStoreHours = (openHour, closeHour) => {
+    try {
+      let openH, closeH;
+
+      // Check if format is ISO datetime (e.g., "2025-10-14T19:00:00.000Z")
+      if (openHour.includes("T") && openHour.includes("Z")) {
+        // Format: "2025-10-14T19:00:00.000Z" - Parse as Date and extract hour
+        const openDate = new Date(openHour);
+        const closeDate = new Date(closeHour);
+
+        // Convert to WIB timezone
+        const openWIB = new Date(openDate.getTime() + 7 * 60 * 60 * 1000);
+        const closeWIB = new Date(closeDate.getTime() + 7 * 60 * 60 * 1000);
+
+        openH = openWIB.getHours();
+        closeH = closeWIB.getHours();
+
+        console.log("🕐 Parsed ISO datetime:", {
+          originalOpen: openHour,
+          originalClose: closeHour,
+          openWIB: openWIB.toLocaleString("id-ID"),
+          closeWIB: closeWIB.toLocaleString("id-ID"),
+          parsedHours: { openH, closeH },
+        });
+      }
+      // Check if format is "16:00 - 04:00" (already formatted)
+      else if (openHour.includes(":") && !openHour.includes(" ")) {
+        // Format: "16:00"
+        openH = parseInt(openHour.split(":")[0]);
+        closeH = parseInt(closeHour.split(":")[0]);
+      } else if (openHour.includes(" ")) {
+        // Format: "2025-10-07 09:00:00"
+        const openTime = openHour.split(" ")[1];
+        const closeTime = closeHour.split(" ")[1];
+        openH = parseInt(openTime.split(":")[0]);
+        closeH = parseInt(closeTime.split(":")[0]);
+      } else {
+        console.warn("⚠️ Unknown time format:", { openHour, closeHour });
+        return { openH: 0, closeH: 24 };
+      }
+
+      return { openH, closeH };
+    } catch (error) {
+      console.error("❌ Error parsing store hours:", error, {
+        openHour,
+        closeHour,
+      });
+      return { openH: 0, closeH: 24 };
+    }
+  };
+
+  // Helper function to check if current time is within store hours (handles overnight ranges)
+  const isTimeInRange = (currentHour, openH, closeH) => {
+    // Handle overnight ranges (e.g., 16:00-04:00)
+    if (openH > closeH) {
+      // Store is open overnight: currentHour >= openH OR currentHour < closeH
+      return currentHour >= openH || currentHour < closeH;
+    } else {
+      // Normal range (e.g., 09:00-21:00): openH <= currentHour < closeH
+      return currentHour >= openH && currentHour < closeH;
+    }
+  };
+
+  // Helper function to format store hours for display
+  const formatStoreHours = (openHour, closeHour) => {
+    try {
+      if (!openHour || !closeHour) return "Hours not available";
+
+      // Check if already formatted (e.g., "16:00 - 04:00")
+      if (
+        openHour.includes(":") &&
+        !openHour.includes(" ") &&
+        !openHour.includes("T")
+      ) {
+        return `${openHour} - ${closeHour} WIB`;
+      }
+
+      // Parse datetime format (ISO or other formats)
+      const openTime = new Date(openHour);
+      const closeTime = new Date(closeHour);
+
+      // Convert to WIB timezone
+      const openWIB = new Date(openTime.getTime() + 7 * 60 * 60 * 1000);
+      const closeWIB = new Date(closeTime.getTime() + 7 * 60 * 60 * 1000);
+
+      // Format to HH:MM WIB
+      const openFormatted = openWIB.toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
+      const closeFormatted = closeWIB.toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
+      return `${openFormatted} - ${closeFormatted} WIB`;
+    } catch (error) {
+      console.error("❌ Error formatting store hours:", error, {
+        openHour,
+        closeHour,
+      });
+      return "Hours not available";
+    }
+  };
+
   const generateTimeSlots = (openHour, closeHour) => {
     const slots = [];
 
-    // Parse the time strings (format: "HH:MM")
-    const [openH, openM] = openHour.split(":").map(Number);
-    const [closeH, closeM] = closeHour.split(":").map(Number);
-
-    // Start from opening hour
-    let currentHour = openH;
-
-    // Generate slots with 1-hour intervals
-    while (currentHour < closeH) {
-      const timeString = `${currentHour.toString().padStart(2, "0")}:00`;
-      const displayTime = `${currentHour.toString().padStart(2, "0")}:00`;
-
-      slots.push({
-        value: timeString,
-        display: displayTime,
+    // Validate input parameters
+    if (!openHour || !closeHour) {
+      console.warn("⚠️ Missing openHour or closeHour:", {
+        openHour,
+        closeHour,
       });
+      return slots;
+    }
 
-      currentHour += 1; // 1-hour interval
+    // Parse store hours using flexible parser
+    const { openH, closeH } = parseStoreHours(openHour, closeHour);
+
+    // Get current time in WIB
+    const now = currentTime ? convertUTCToWIB(currentTime) : new Date();
+    const currentHourInWIB = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    console.log("🕐 Current time info:", {
+      currentTime: currentTime,
+      currentHourInWIB: currentHourInWIB,
+      currentMinute: currentMinute,
+      parsedHours: { openH, closeH },
+    });
+
+    try {
+      // Calculate the next available hour (1 hour from now)
+      const nextAvailableHour =
+        currentMinute > 0 ? currentHourInWIB + 2 : currentHourInWIB + 1;
+
+      // Handle overnight ranges (e.g., 16:00-04:00)
+      if (openH > closeH) {
+        // Store is open overnight
+        let startHour;
+
+        if (currentHourInWIB >= openH) {
+          // Current time is after opening hour (e.g., 18:00 after 16:00)
+          startHour = Math.max(nextAvailableHour, openH);
+          // Generate slots until midnight
+          while (startHour < 24) {
+            const timeString = `${startHour.toString().padStart(2, "0")}:00`;
+            slots.push({
+              value: timeString,
+              display: timeString,
+            });
+            startHour += 1;
+          }
+          // Generate slots from midnight to closing hour
+          startHour = 0;
+          while (startHour < closeH) {
+            const timeString = `${startHour.toString().padStart(2, "0")}:00`;
+            slots.push({
+              value: timeString,
+              display: timeString,
+            });
+            startHour += 1;
+          }
+        } else if (currentHourInWIB < closeH) {
+          // Current time is before closing hour (e.g., 02:00 before 04:00)
+          startHour = Math.max(nextAvailableHour, 0);
+          while (startHour < closeH) {
+            const timeString = `${startHour.toString().padStart(2, "0")}:00`;
+            slots.push({
+              value: timeString,
+              display: timeString,
+            });
+            startHour += 1;
+          }
+        }
+      } else {
+        // Normal range (e.g., 09:00-21:00)
+        let startHour = Math.max(nextAvailableHour, openH);
+
+        // Generate slots with 1-hour intervals
+        while (startHour < closeH) {
+          const timeString = `${startHour.toString().padStart(2, "0")}:00`;
+          slots.push({
+            value: timeString,
+            display: timeString,
+          });
+          startHour += 1;
+        }
+      }
+
+      console.log("⏰ Generated time slots:", slots);
+    } catch (error) {
+      console.error("❌ Error generating time slots:", error, {
+        openHour,
+        closeHour,
+      });
     }
 
     return slots;
@@ -97,6 +289,61 @@ export default function DeliveryOptionsModal({
       });
     }
     onOpenChange(false);
+  };
+
+  // Helper function to check if store is currently open
+  const isStoreOpen = (store) => {
+    // Get current time in WIB
+    const now = currentTime ? convertUTCToWIB(currentTime) : new Date();
+    const currentHourInWIB = now.getHours();
+
+    // Validate store data
+    if (!store || !store.openHour || !store.closeHour) {
+      console.warn("⚠️ Missing store hours data:", store);
+      return true; // Default to open if data is missing
+    }
+
+    try {
+      // Parse store hours using flexible parser
+      const { openH, closeH } = parseStoreHours(
+        store.openHour,
+        store.closeHour
+      );
+
+      // Check if current time is within store hours (handles overnight ranges)
+      const isOpen = isTimeInRange(currentHourInWIB, openH, closeH);
+
+      console.log("🏪 Store open check:", {
+        currentHourInWIB,
+        openH,
+        closeH,
+        isOpen,
+        storeHours: `${store.openHour} - ${store.closeHour}`,
+      });
+
+      return isOpen;
+    } catch (error) {
+      console.error(
+        "❌ Error parsing store hours in isStoreOpen:",
+        error,
+        store
+      );
+      return true; // Default to open if parsing fails
+    }
+  };
+
+  // Helper function to check if pickup is available for selected store
+  const isPickupAvailable = () => {
+    if (selectedOption !== "pickup" || !selectedStore) return true;
+
+    const store = nearbyStores.find((s) => s.id === selectedStore);
+    if (!store) return true;
+
+    const storeIsOpen = isStoreOpen(store);
+    const timeSlots = generateTimeSlots(store.openHour, store.closeHour);
+    const hasAvailableSlots = timeSlots.length > 0;
+
+    return storeIsOpen && hasAvailableSlots;
   };
 
   const MapModal = ({ store }) => (
@@ -122,9 +369,7 @@ export default function DeliveryOptionsModal({
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Clock className="w-4 h-4" />
-                <span>
-                  {store.openHour} - {store.closeHour}
-                </span>
+                <span>{formatStoreHours(store.openHour, store.closeHour)}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Navigation className="w-4 h-4" />
@@ -269,17 +514,28 @@ export default function DeliveryOptionsModal({
                   <div className="space-y-3">
                     {nearbyStores.map((store) => {
                       const isExpanded = selectedStore === store.id;
+                      const storeIsOpen = isStoreOpen(store);
+                      const timeSlots = generateTimeSlots(
+                        store.openHour,
+                        store.closeHour
+                      );
+                      const hasAvailableSlots = timeSlots.length > 0;
+
                       return (
                         <Card
                           key={store.id}
                           className={`cursor-pointer transition-all ${
                             isExpanded
                               ? "ring-2 ring-primary bg-accent"
-                              : "hover:bg-accent/50"
+                              : storeIsOpen && hasAvailableSlots
+                              ? "hover:bg-accent/50"
+                              : "opacity-60 cursor-not-allowed"
                           }`}
                           onClick={() => {
-                            setSelectedStore(store.id);
-                            setSelectedTime("");
+                            if (storeIsOpen && hasAvailableSlots) {
+                              setSelectedStore(store.id);
+                              setSelectedTime("");
+                            }
                           }}
                         >
                           <CardContent className="p-4 space-y-3">
@@ -295,6 +551,14 @@ export default function DeliveryOptionsModal({
                                   <Badge variant="outline" className="text-xs">
                                     {store.distance}
                                   </Badge>
+                                  {!storeIsOpen && (
+                                    <Badge
+                                      variant="destructive"
+                                      className="text-xs"
+                                    >
+                                      Closed
+                                    </Badge>
+                                  )}
                                 </div>
                                 <p className="text-sm text-muted-foreground mb-1">
                                   {store.address}
@@ -303,7 +567,10 @@ export default function DeliveryOptionsModal({
                                   <div className="flex items-center gap-1">
                                     <Clock className="w-3 h-3" />
                                     <span>
-                                      {store.openHour} - {store.closeHour}
+                                      {formatStoreHours(
+                                        store.openHour,
+                                        store.closeHour
+                                      )}
                                     </span>
                                   </div>
                                 </div>
@@ -326,27 +593,50 @@ export default function DeliveryOptionsModal({
                                 <h4 className="font-medium mb-2">
                                   Select Pickup Time
                                 </h4>
-                                <Select
-                                  value={selectedTime}
-                                  onValueChange={setSelectedTime}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Choose pickup time" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {generateTimeSlots(
-                                      store.openHour,
-                                      store.closeHour
-                                    ).map((slot) => (
-                                      <SelectItem
-                                        key={slot.value}
-                                        value={slot.value}
-                                      >
-                                        {slot.display}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                {(() => {
+                                  if (!hasAvailableSlots) {
+                                    return (
+                                      <div className="p-4 rounded-lg border border-red-200 bg-red-50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <Badge
+                                            variant="destructive"
+                                            className="text-xs"
+                                          >
+                                            Closed
+                                          </Badge>
+                                          <span className="text-sm font-medium text-red-800">
+                                            No pickup slots available today
+                                          </span>
+                                        </div>
+                                        <p className="text-xs text-red-600">
+                                          Store is closed or no time slots
+                                          available after current time
+                                        </p>
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <Select
+                                      value={selectedTime}
+                                      onValueChange={setSelectedTime}
+                                    >
+                                      <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Choose pickup time" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {timeSlots.map((slot) => (
+                                          <SelectItem
+                                            key={slot.value}
+                                            value={slot.value}
+                                          >
+                                            {slot.display}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  );
+                                })()}
                               </div>
                             )}
                           </CardContent>
@@ -371,7 +661,9 @@ export default function DeliveryOptionsModal({
                 onClick={handleConfirm}
                 disabled={
                   (selectedOption === "pickup" &&
-                    (!selectedStore || !selectedTime)) ||
+                    (!selectedStore ||
+                      !selectedTime ||
+                      !isPickupAvailable())) ||
                   (selectedOption === "courier" && false)
                 }
                 className="flex-1"

@@ -7,7 +7,7 @@ import api from "../utils/api";
 
 const BE_URL = import.meta.env.VITE_BE_API_URL;
 
-const ProductPageResult = () => {
+const CategoryPage = () => {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [products, setProducts] = useState([]);
@@ -27,6 +27,11 @@ const ProductPageResult = () => {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  // ✅ Handle active filter updates from CategoryFilter
+  useEffect(() => {
+    console.log("🔄 Selected categories updated:", selectedCategories);
+  }, [selectedCategories]);
 
   const fetchProducts = async () => {
     try {
@@ -313,4 +318,4 @@ const ProductPageResult = () => {
   );
 };
 
-export default ProductPageResult;
+export default CategoryPage;

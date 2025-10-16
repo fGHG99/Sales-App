@@ -1,43 +1,42 @@
-// src/components/TrendingProducts.jsx
+// src/components/RelatedProduct.jsx
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import ProductCard from "./ProductCard";
-import { getTrendingProducts } from "../services/userService";
+import { getRelatedProducts } from "../services/userService";
 import { Skeleton } from "./ui/skeleton";
 
-export default function TrendingProducts() {
+export default function RelatedProduct({ categoryName = "makanan" }) {
   const scrollRef = useRef(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(true);
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
 
-  // Fetch trending products
+  // Fetch related products
   useEffect(() => {
-    const fetchTrendingProducts = async () => {
+    const fetchRelatedProducts = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await getTrendingProducts();
+
+        // Convert category name to URL format (spaces to hyphens)
+        const categorySlug = categoryName.toLowerCase().replace(/\s+/g, "-");
+
+        // Fetch more products with pagination
+        const response = await getRelatedProducts(categorySlug, 0, 20);
         setProducts(response.products || []);
       } catch (err) {
-        console.error("Error fetching trending products:", err);
-        setError("Failed to load trending products");
+        console.error("Error fetching related products:", err);
+        setError("Failed to load related products");
         setProducts([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchTrendingProducts();
-  }, []);
-
-  const handleNavigate = () => {
-    navigate("/category/trending");
-  };
+    fetchRelatedProducts();
+  }, [categoryName]);
 
   // Drag state
   const isDragging = useRef(false);
@@ -89,14 +88,8 @@ export default function TrendingProducts() {
   return (
     <div className="mt-10 w-full bg-[#]">
       <div className="flex items-center gap-3 mb-8">
-        {/* Logo */}
-        <img
-          src="/assets/Trending_icon.png"
-          alt="Trending Icon"
-          className="w-10 h-10"
-        />
         <h2 className="text-2xl font-extrabold text-gray-900">
-          Sedang Trending
+          Dapat Dibeli Bersamaan
         </h2>
       </div>
 
@@ -133,8 +126,8 @@ export default function TrendingProducts() {
           className="flex gap-4 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overflow-y-visible pb-4 px-2"
         >
           {isLoading ? (
-            // Skeleton loading for trending products
-            Array.from({ length: 5 }).map((_, index) => (
+            // Skeleton loading for related products (more cards for better UX)
+            Array.from({ length: 8 }).map((_, index) => (
               <div key={index} className="flex-shrink-0 w-64">
                 <Skeleton className="h-48 w-full rounded-lg mb-3" />
                 <Skeleton className="h-4 w-3/4 mb-2" />
@@ -164,19 +157,16 @@ export default function TrendingProducts() {
             // No products state
             <div className="flex items-center justify-center w-full py-8">
               <p className="text-gray-500 text-center">
-                No trending products available
+                No related products available
               </p>
             </div>
           )}
         </div>
 
-        {/* Lihat Semua - Only show if more than 5 products */}
-        {!isLoading && products.length >= 5 && (
+        {/* Lihat Semua - Only show if more than 8 products */}
+        {!isLoading && products.length >= 8 && (
           <div className="mt-4 text-left">
-            <button
-              className="px-4 py-2 bg-white text-[#2596be] font-medium rounded-lg shadow hover:bg-gray-100 select-none"
-              onClick={handleNavigate}
-            >
+            <button className="px-4 py-2 bg-white text-[#2596be] font-medium rounded-lg shadow hover:bg-gray-100 select-none">
               Lihat Semua
             </button>
           </div>

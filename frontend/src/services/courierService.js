@@ -60,6 +60,7 @@ export const updateOrderStatus = async (orderId, newStatus, notes = "") => {
 
 /**
  * Upload delivery proof photo
+ * Updates order status to ARRIVED_AT_DESTINATION
  * @param {string} orderId - Order ID
  * @param {File} photoFile - Photo file
  * @returns {Promise} Updated order with delivery proof
@@ -100,9 +101,13 @@ export const getCourierStats = async () => {
     // Calculate stats
     const activeOrders = orders.filter(
       (order) =>
-        !["COMPLETED", "CANCELED", "DISPUTED", "GRACE_PERIOD"].includes(
-          order.orderStatus
-        )
+        ![
+          "COMPLETED",
+          "CANCELED",
+          "DISPUTED",
+          "GRACE_PERIOD",
+          "ARRIVED_AT_DESTINATION",
+        ].includes(order.orderStatus)
     );
 
     const completedToday = orders.filter((order) => {
@@ -290,6 +295,23 @@ export const verifyQrCode = async (qrCode) => {
     return response.data;
   } catch (error) {
     console.error("Error verifying QR code:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update courier's work area postal codes
+ * @param {string[]} postalCodes - Array of postal codes
+ * @returns {Promise} Updated courier data
+ */
+export const updateWorkAreaPostalCodes = async (postalCodes) => {
+  try {
+    const response = await api.patch("/users/courier/work-area", {
+      postalCodes,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error updating work area postal codes:", error);
     throw error;
   }
 };

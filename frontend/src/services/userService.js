@@ -6,6 +6,36 @@ import api from "../utils/api";
  */
 
 /**
+ * Verify email with token
+ * @param {string} token - Email verification token from URL params
+ * @returns {Promise} Verification response
+ */
+export const verifyEmail = async (token) => {
+  try {
+    const response = await api.get(`/auth/verify/${token}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error verifying email:", error);
+    throw error;
+  }
+};
+
+/**
+ * Resend verification email
+ * @param {string} email - User email address
+ * @returns {Promise} Resend verification response
+ */
+export const resendVerificationEmail = async (email) => {
+  try {
+    const response = await api.post("/auth/resend-verification", { email });
+    return response.data;
+  } catch (error) {
+    console.error("Error resending verification email:", error);
+    throw error;
+  }
+};
+
+/**
  * Submit a dispute for an order
  * @param {Object} disputeData - Dispute data
  * @param {string} disputeData.orderId - Order ID
@@ -103,6 +133,100 @@ export const completeOrder = async (orderId) => {
     return response.data;
   } catch (error) {
     console.error("Error completing order:", error);
+    throw error;
+  }
+};
+
+export const getCategoriesName = async () => {
+  try {
+    const response = await api.get("/inventory/categories-name");
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getProducts = async (offset = 0, limit = 18) => {
+  try {
+    const response = await api.get("/inventory/products", {
+      params: {
+        offset,
+        limit,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getProductBySlug = async (slug) => {
+  try {
+    const response = await api.get(`/api/inventory/products/${slug}`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getRelatedProducts = async (
+  categoryName,
+  offset = 0,
+  limit = 20
+) => {
+  try {
+    const response = await api.get(`/inventory/related/${categoryName}`, {
+      params: {
+        offset,
+        limit,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching related products:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get trending products
+ * @returns {Promise} Trending products data
+ */
+export const getTrendingProducts = async () => {
+  try {
+    const response = await api.get("/inventory/trending");
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching trending products:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get newest products
+ * @returns {Promise} Newest products data
+ */
+export const getNewProducts = async () => {
+  try {
+    const response = await api.get("/inventory/new");
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching new products:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get product detail by ID
+ * @param {string} productId - Product ID
+ * @returns {Promise} Product detail data
+ */
+export const getProductById = async (productId) => {
+  try {
+    const response = await api.get(`/inventory/product/${productId}`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching product detail:", error);
     throw error;
   }
 };

@@ -38,9 +38,7 @@ const OrdersPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState("active");
   const [updatingOrder, setUpdatingOrder] = useState(null);
-  // ✅ ADD: Memoized awaiting proof map
-  const [awaitingProofMap, setAwaitingProofMap] = useState(new Set());
-
+  const [isMounted, setIsMounted] = useState(false); // ✅ Add mounted state
   // Use custom hook for cross-component synchronization
   const {
     awaitingProofOrders,
@@ -49,9 +47,11 @@ const OrdersPage = () => {
     isAwaitingProof,
   } = useAwaitingProofOrders();
 
+  // ✅ Component mounting detection
   useEffect(() => {
-    setAwaitingProofMap(new Set(awaitingProofOrders));
-  }, [awaitingProofOrders]);
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
 
   const [pagination, setPagination] = useState({
     page: 1,
@@ -129,16 +129,25 @@ const OrdersPage = () => {
           updatedAt: order.updatedAt,
         }));
 
-        setOrders(mappedOrders);
-        setPagination(response.pagination);
-        setStatusCounts(response.statusCounts || {});
-        setCurrentPage(page);
+        // ✅ Only update state if component is still mounted
+        if (isMounted) {
+          setOrders(mappedOrders);
+          setPagination(response.pagination);
+          setStatusCounts(response.statusCounts || {});
+          setCurrentPage(page);
+        }
       }
     } catch (err) {
       console.error("❌ Failed to fetch orders:", err);
-      setOrders([]);
+      // ✅ Only update state if component is still mounted
+      if (isMounted) {
+        setOrders([]);
+      }
     } finally {
-      setIsLoading(false);
+      // ✅ Only update loading state if component is still mounted
+      if (isMounted) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -146,8 +155,22 @@ const OrdersPage = () => {
    * Fetch orders on component mount and when page or tab changes
    */
   useEffect(() => {
-    fetchOrders(currentPage, activeTab);
-  }, [currentPage, activeTab]);
+    // Only fetch if component is mounted
+    if (!isMounted) return;
+
+    // Force re-render by clearing previous state
+    setOrders([]);
+    setIsLoading(true);
+
+    // Fetch orders with slight delay to ensure proper state reset
+    const timeoutId = setTimeout(() => {
+      if (isMounted) {
+        fetchOrders(currentPage, activeTab);
+      }
+    }, 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [currentPage, activeTab, isMounted]);
 
   /**
    * Handle page change from pagination component
@@ -206,18 +229,24 @@ const OrdersPage = () => {
   };
 
   /**
-   * Mark order as ready for delivery proof upload
-   * This does NOT change the status to DELIVERED yet
-   * Status remains OUT_FOR_DELIVERY until proof is uploaded
+   * Mark order as arrived at destination
+   * This changes status to ARRIVED_AT_DESTINATION
    */
-  const markAsDelivered = async (orderId) => {
+  const markAsArrived = async (orderId) => {
     try {
-      // Add order to awaiting proof set (synced across components)
+      // ✅ FIX: First update backend status via API
+      await updateOrderStatus(
+        orderId,
+        "ARRIVED_AT_DESTINATION",
+        "Order arrived at destination"
+      );
+
+      // ✅ Only update frontend state after successful API call
       addAwaitingProofOrder(orderId);
 
       return { success: true };
     } catch (err) {
-      console.error("Error marking as delivered:", err);
+      console.error("Error marking as arrived:", err);
       throw err;
     }
   };
@@ -259,9 +288,10 @@ const OrdersPage = () => {
     setIsUploadProofModalOpen(false);
     setSelectedOrderForProof(null);
 
+    // Refresh orders after modal closes
     setTimeout(() => {
       fetchOrders(currentPage, activeTab);
-    }, 100); // Small delay to ensure modal is fully unmounted
+    }, 200); // Increased delay to ensure modal is fully unmounted
   };
 
   /**
@@ -277,7 +307,8 @@ const OrdersPage = () => {
 
       // Upload complete, reset state
       setUpdatingOrder(null);
-      return Promise.resolve();
+
+      // Return success to modal
     } catch (err) {
       // Error already handled in uploadDeliveryProof
       setUpdatingOrder(null);
@@ -295,8 +326,8 @@ const OrdersPage = () => {
     pickup: {
       apiCall: markAsPickedUp, // Actual API call
     },
-    complete: {
-      apiCall: markAsDelivered, // Mark as delivered (awaiting proof)
+    arrived: {
+      apiCall: markAsArrived, // Mark as arrived (awaiting proof)
     },
     upload_proof: {
       // This will be handled via file input
@@ -394,7 +425,11 @@ const OrdersPage = () => {
         color: "bg-purple-100 text-purple-800",
         text: "In Transit",
       },
-      DELIVERED: { color: "bg-blue-100 text-blue-800", text: "Delivered" },
+      ARRIVED_AT_DESTINATION: {
+        color: "bg-blue-100 text-blue-800",
+        text: "Arrived",
+      },
+      DELIVERED: { color: "bg-green-100 text-green-800", text: "Delivered" },
       COMPLETED: { color: "bg-green-100 text-green-800", text: "Completed" },
       CANCELED: { color: "bg-red-100 text-red-800", text: "Cancelled" },
       DISPUTED: { color: "bg-red-100 text-red-800", text: "Disputed" },
@@ -529,8 +564,34 @@ const OrdersPage = () => {
     ],
 
     OUT_FOR_DELIVERY: (order, isUpdating) => {
-      // ✅ FIX: Use Set lookup instead of function call - no re-render
-      const awaitingProof = awaitingProofMap.has(order.id);
+      return [
+        createNavigateButton(
+          "navigate-customer",
+          `/courier/customer-location/order/${order.id}`,
+          Navigation,
+          "Navigate to Customer"
+        ),
+        createOutlineButton(
+          "call",
+          () => handleOrderAction(order.id, "call_customer"),
+          "border-gray-600 text-gray-600 hover:bg-gray-50",
+          Phone,
+          "Call Customer"
+        ),
+        createActionButton(
+          "arrived",
+          () => handleOrderAction(order.id, "arrived"),
+          "bg-green-600 hover:bg-green-700",
+          CheckCircle2,
+          "Mark as Arrived",
+          isUpdating
+        ),
+      ];
+    },
+
+    ARRIVED_AT_DESTINATION: (order, isUpdating) => {
+      // ✅ Use Set.has() directly - O(1) lookup, no unnecessary memoization
+      const awaitingProof = awaitingProofOrders.has(order.id);
 
       return [
         createNavigateButton(
@@ -557,11 +618,11 @@ const OrdersPage = () => {
               isUpdating
             )
           : createActionButton(
-              "complete",
-              () => handleOrderAction(order.id, "complete"),
-              "bg-green-600 hover:bg-green-700",
+              "delivered",
+              () => handleOrderAction(order.id, "delivered"),
+              "bg-purple-600 hover:bg-purple-700",
               CheckCircle2,
-              "Mark Delivered",
+              "Mark as Delivered",
               isUpdating
             ),
       ];

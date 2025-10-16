@@ -86,13 +86,14 @@ const UploadDeliveryProofModal = ({
       // Call the upload success callback with the file
       await onUploadSuccess(orderId, selectedFile);
 
-      
-      // Close modal immediately without event dispatch
+      // Reset modal state first
       setIsUploading(false);
+      resetModal();
+
+      // Close modal with proper cleanup
       setTimeout(() => {
-        handleClose();
-        // Show toast AFTER modal is fully closed
-      }, 0);
+        onClose();
+      }, 100);
     } catch (err) {
       console.error("Error uploading delivery proof:", err);
       // Error handling is done in the parent component

@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import RootLayout from "./components/RootLayout";
 import Layout from "./components/Layout";
-import Dashboard from "./components/Dashboard";
+import UserDashboard from "./components/UserDashboard";
 import Register from "./components/Register";
 import Login from "./components/Login";
 import AuthLayout from "./components/AuthLayout";
@@ -24,6 +24,7 @@ import OrderCheckout from "./components/User/user-order/OrderCheckout";
 import CourierTracking from "./components/User/user-order/CourierTracking";
 import AdminLayout from "./components/Admin/Admin-Layout";
 import { EmailVerificationSent } from "./components/EmailVerif";
+import EmailVerification from "./components/EmailVerification";
 import AdminDashboard from "./components/Admin/Pages/AdminDashboard";
 import OrderManagement from "./components/Admin/Pages/OrderManagement";
 import DisputesManagement from "./components/Admin/Pages/DisputeManagement";
@@ -34,12 +35,13 @@ import SuperAdminDashboard from "./components/superAdmin/page/SuperAdminDashboar
 import StoreManagement from "./components/superAdmin/page/StoreManagement";
 import FeeSetup from "./components/superAdmin/page/FeeSetup";
 import GlobalReports from "./components/superAdmin/page/GlobalReports";
+import Promotional from "./components/superAdmin/page/Promotional";
 import CourierDashboard from "./components/courier/pages/DashboardCourier";
 import OrdersPage from "./components/courier/pages/OrdersPage";
 import ProfilePage from "./components/courier/pages/Profile";
 import ForgotPassword from "./components/ForgotPass";
 import MapNavigation from "./components/courier/pages/MapNavigation";
-import Navigation from "./components/courier/pages/CourierNavbar";
+import CourierLayout from "./components/courier/layout/CourierLayout";
 import UserLocation from "./components/courier/pages/UserLocation";
 import StoreLocation from "./components/courier/pages/StoreLocation";
 import SupportDashboard from "./components/it-support/pages/SupportDashboard";
@@ -54,31 +56,32 @@ import RouteRestriction from "./components/middleware/RouteRestriction";
 import AccessDeniedPage from "./components/AccessDeniedPage";
 import ResetPassword from "./components/ResetPassword";
 import CourierNotificationPage from "./components/courier/pages/NotificationsPage";
+import CategoryPage from "./components/CategoryPage";
 
 // Mock category and other pages
-const CategoryPage = () => {
-  const { categoryName } = useParams();
+// const CategoryPage = () => {
+//   const { categoryName } = useParams();
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Kategori: {categoryName}
-          </h1>
-          <p className="text-lg text-gray-600 mb-8">
-            Explore products in the {categoryName} category
-          </p>
-          <div className="bg-white rounded-lg shadow-md p-12">
-            <p className="text-gray-500 text-xl">
-              Coming soon - Products will be displayed here
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+//   return (
+//     <div className="min-h-screen bg-gray-50 py-16">
+//       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+//         <div className="text-center">
+//           <h1 className="text-4xl font-bold text-gray-900 mb-4">
+//             Kategori: {categoryName}
+//           </h1>
+//           <p className="text-lg text-gray-600 mb-8">
+//             Explore products in the {categoryName} category
+//           </p>
+//           <div className="bg-white rounded-lg shadow-md p-12">
+//             <p className="text-gray-500 text-xl">
+//               Coming soon - Products will be displayed here
+//             </p>
+//           </div>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
 
 // Email Verification Page Component
 const EmailVerificationPage = () => {
@@ -123,12 +126,12 @@ const router = createBrowserRouter([
           </RouteRestriction>
         ),
         children: [
-          { index: true, element: <Dashboard /> },
+          { index: true, element: <UserDashboard /> },
           { path: "category/:categoryName", element: <CategoryPage /> },
           { path: "search", element: <ProductPageResult /> },
           { path: "cart", element: <Cart /> },
           { path: "terms-conditions", element: <TermsConditions /> },
-          { path: "p/:productname", element: <ProductDetail /> },
+          { path: "p/:productId", element: <ProductDetail /> },
           { path: "notifications", element: <NotificationsPage /> },
         ],
       },
@@ -139,6 +142,7 @@ const router = createBrowserRouter([
           { path: "signin", element: <Login /> },
           { path: "signup", element: <Register /> },
           { path: "verify-email", element: <EmailVerificationPage /> },
+          { path: "verify/:token", element: <EmailVerification /> },
         ],
       },
       {
@@ -173,7 +177,7 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <PermissionBasedRoute requiredPermissions={["courier.access"]}>
-              <Navigation />
+              <CourierLayout />
             </PermissionBasedRoute>
           </ProtectedRoute>
         ),
@@ -226,6 +230,7 @@ const router = createBrowserRouter([
           { path: "stores", element: <StoreManagement /> },
           { path: "fees", element: <FeeSetup /> },
           { path: "reports", element: <GlobalReports /> },
+          { path: "promotional", element: <Promotional /> },
         ],
       },
       {

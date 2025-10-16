@@ -64,6 +64,7 @@ const OrderManagement = () => {
     { key: "OUT_FOR_DELIVERY", label: "Dalam Perjalanan" },
     { key: "ARRIVED_AT_DESTINATION", label: "Telah Tiba" },
     { key: "DELIVERED", label: "Dikirimkan" },
+    { key: "GRACE_PERIOD", label: "Grace Period" },
     { key: "COMPLETED", label: "Selesai" },
     { key: "DISPUTED", label: "Dalam Sengketa" },
     { key: "CANCELED", label: "Dibatalkan" },

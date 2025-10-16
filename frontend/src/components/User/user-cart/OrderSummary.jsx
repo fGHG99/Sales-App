@@ -397,7 +397,7 @@ export default function OrderSummary({
   };
 
   return (
-    <Card className="bg-card border-border sticky top-22">
+    <Card className="bg-card border-border">
       <CardHeader>
         <CardTitle className="text-card-foreground">Order Summary</CardTitle>
       </CardHeader>

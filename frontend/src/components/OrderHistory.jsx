@@ -155,6 +155,7 @@ const OrderHistory = () => {
     { value: "OUT_FOR_DELIVERY", label: "Out for Delivery" },
     { value: "ARRIVED_AT_DESTINATION", label: "Arrived at Destination" },
     { value: "DELIVERED", label: "Delivered" },
+    { value: "GRACE_PERIOD", label: "Grace Period" },
     { value: "COMPLETED", label: "Completed" },
     { value: "DISPUTED", label: "Disputed" },
     { value: "CANCELED", label: "Canceled" },
@@ -168,10 +169,10 @@ const OrderHistory = () => {
       OUT_FOR_DELIVERY: "bg-orange-100 text-orange-800 border-orange-200",
       ARRIVED_AT_DESTINATION: "bg-indigo-100 text-indigo-800 border-indigo-200",
       DELIVERED: "bg-green-100 text-green-800 border-green-200",
+      GRACE_PERIOD: "bg-amber-100 text-amber-800 border-amber-200",
       COMPLETED: "bg-gray-100 text-gray-800 border-gray-200",
       DISPUTED: "bg-red-100 text-red-800 border-red-200",
       CANCELED: "bg-gray-100 text-gray-800 border-gray-200",
-      GRACE_PERIOD: "bg-yellow-100 text-yellow-800 border-yellow-200",
     };
     return colors[status] || "bg-gray-100 text-gray-800 border-gray-200";
   };
@@ -232,8 +233,10 @@ const OrderHistory = () => {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <Badge className={getStatusColor(order.orderStatus)}>
-            {orderStatuses.find((s) => s.value === order.orderStatus)?.label ||
-              order.orderStatus}
+            {order.orderStatus === "GRACE_PERIOD"
+              ? "Completed by System"
+              : orderStatuses.find((s) => s.value === order.orderStatus)
+                  ?.label || order.orderStatus}
           </Badge>
           <div className="text-sm text-gray-500">
             {format(new Date(order.createdAt), "PPP")} at{" "}
@@ -510,9 +513,11 @@ const OrderHistory = () => {
                           </span>
                         </div>
                         <Badge className={getStatusColor(order.orderStatus)}>
-                          {orderStatuses.find(
-                            (s) => s.value === order.orderStatus
-                          )?.label || order.orderStatus}
+                          {order.orderStatus === "GRACE_PERIOD"
+                            ? "Completed by System"
+                            : orderStatuses.find(
+                                (s) => s.value === order.orderStatus
+                              )?.label || order.orderStatus}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-500">

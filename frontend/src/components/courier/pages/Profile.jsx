@@ -19,12 +19,19 @@ import {
   Upload,
   Trash2,
   AlertCircle,
+  Edit3,
+  Plus,
+  X,
 } from "lucide-react";
 import LogoutModal from "../../modal/logout-confirmation";
 import ChangePasswordModal from "../modal/ChangePasswordModal";
 import ImageCropModal from "../../modal/ImageCropModal";
-import { getCourierProfile } from "@/services/courierService";
+import {
+  getCourierProfile,
+  updateWorkAreaPostalCodes,
+} from "@/services/courierService";
 import api from "@/utils/api";
+import { toast } from "sonner";
 
 const ProfilePage = () => {
   const [courier, setCourier] = useState({});
@@ -33,7 +40,8 @@ const ProfilePage = () => {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
-  const BE_URL = import.meta.env.VITE_BE_API_URL || process.env.REACT_APP_BACKEND_URL;
+  const BE_URL =
+    import.meta.env.VITE_BE_API_URL || process.env.REACT_APP_BACKEND_URL;
 
   // Profile picture states
   const [profilePicture, setProfilePicture] = useState(null);
@@ -41,6 +49,12 @@ const ProfilePage = () => {
   const [tempImageSrc, setTempImageSrc] = useState(null);
   const [tempImageFile, setTempImageFile] = useState(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Postal codes edit states
+  const [isEditingPostalCodes, setIsEditingPostalCodes] = useState(false);
+  const [postalCodes, setPostalCodes] = useState([]);
+  const [newPostalCode, setNewPostalCode] = useState("");
+  const [isUpdatingPostalCodes, setIsUpdatingPostalCodes] = useState(false);
 
   useEffect(() => {
     const fetchCourierData = async () => {
@@ -56,6 +70,9 @@ const ProfilePage = () => {
         } else {
           setProfilePicture(null);
         }
+
+        // Initialize postal codes
+        setPostalCodes(response.courier.workAreaPostalCodes || []);
       } catch (error) {
         console.error(
           "❌ [ProfilePage] Failed to fetch courier profile:",
@@ -265,6 +282,98 @@ const ProfilePage = () => {
     }
   };
 
+  // Postal codes management functions
+  const handleEditPostalCodes = () => {
+    setIsEditingPostalCodes(true);
+    setNewPostalCode("");
+  };
+
+  const handleCancelEditPostalCodes = () => {
+    setIsEditingPostalCodes(false);
+    setNewPostalCode("");
+    // Reset to original postal codes
+    setPostalCodes(courier.workAreaPostalCodes || []);
+  };
+
+  const handleAddPostalCode = () => {
+    if (!newPostalCode.trim()) return;
+
+    // Validate postal code format (5 digits)
+    const postalCodeRegex = /^\d{5}$/;
+    if (!postalCodeRegex.test(newPostalCode.trim())) {
+      toast({
+        title: "Invalid postal code",
+        description: "Postal code must be exactly 5 digits.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const trimmedCode = newPostalCode.trim();
+    if (postalCodes.includes(trimmedCode)) {
+      toast({
+        title: "Duplicate postal code",
+        description: "This postal code is already added.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPostalCodes([...postalCodes, trimmedCode]);
+    setNewPostalCode("");
+  };
+
+  // Handle Enter key press in postal code input
+  const handlePostalCodeKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddPostalCode();
+    }
+  };
+
+  const handleRemovePostalCode = (codeToRemove) => {
+    setPostalCodes(postalCodes.filter((code) => code !== codeToRemove));
+  };
+
+  const handleSavePostalCodes = async () => {
+    try {
+      setIsUpdatingPostalCodes(true);
+
+      const response = await updateWorkAreaPostalCodes(postalCodes);
+
+      // Update courier state
+      setCourier((prev) => ({
+        ...prev,
+        workAreaPostalCodes: postalCodes,
+      }));
+
+      // Update localStorage
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      storedUser.workAreaPostalCodes = postalCodes;
+      localStorage.setItem("user", JSON.stringify(storedUser));
+
+      setIsEditingPostalCodes(false);
+      setNewPostalCode("");
+
+      toast({
+        title: "Work area updated",
+        description:
+          "Your work area postal codes have been updated successfully.",
+      });
+    } catch (error) {
+      console.error("Error updating postal codes:", error);
+      toast({
+        title: "Update failed",
+        description:
+          error.response?.data?.error ||
+          "Failed to update work area postal codes.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingPostalCodes(false);
+    }
+  };
+
   const profileSections = [
     {
       title: "Personal Information",
@@ -369,28 +478,124 @@ const ProfilePage = () => {
           {profileSections.map((section, index) => (
             <Card key={index}>
               <CardHeader className="pb-4">
-                <CardTitle className="flex items-center text-lg">
-                  <section.icon className="h-5 w-5 text-blue-600 mr-2" />
-                  {section.title}
+                <CardTitle className="flex items-center justify-between text-lg">
+                  <div className="flex items-center">
+                    <section.icon className="h-5 w-5 text-blue-600 mr-2" />
+                    {section.title}
+                  </div>
+                  {/* Add edit button for Work Information */}
+                  {section.title === "Work Information" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleEditPostalCodes}
+                      disabled={isEditingPostalCodes}
+                      className="text-gray-500 hover:text-blue-600"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {section.fields.map((field, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0"
-                  >
-                    <div className="flex items-center">
-                      <field.icon className="h-4 w-4 text-gray-500 mr-3" />
-                      <span className="font-medium text-gray-700">
-                        {field.label}
+                {section.title === "Work Information" ? (
+                  // Custom render for Work Information with edit functionality
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                      <div className="flex items-center">
+                        <MapPin className="h-4 w-4 text-gray-500 mr-3" />
+                        <span className="font-medium text-gray-700">
+                          Postal Codes
+                        </span>
+                      </div>
+                      {!isEditingPostalCodes ? (
+                        <span className="font-semibold text-gray-900">
+                          {postalCodes.length > 0
+                            ? postalCodes.join(", ")
+                            : "No postal codes set"}
+                        </span>
+                      ) : (
+                        <div className="flex-1 ml-4">
+                          {/* Display current postal codes */}
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {postalCodes.map((code, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-sm"
+                              >
+                                <span>{code}</span>
+                                <button
+                                  onClick={() => handleRemovePostalCode(code)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Add new postal code */}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newPostalCode}
+                              onChange={(e) => setNewPostalCode(e.target.value)}
+                              onKeyDown={handlePostalCodeKeyDown}
+                              placeholder="Enter 5-digit postal code"
+                              maxLength={5}
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={handleAddPostalCode}
+                              disabled={!newPostalCode.trim()}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex gap-2 mt-3">
+                            <Button
+                              size="sm"
+                              onClick={handleSavePostalCodes}
+                              disabled={isUpdatingPostalCodes}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {isUpdatingPostalCodes ? "Saving..." : "Save"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCancelEditPostalCodes}
+                              disabled={isUpdatingPostalCodes}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  // Default render for other sections
+                  section.fields.map((field, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex items-center">
+                        <field.icon className="h-4 w-4 text-gray-500 mr-3" />
+                        <span className="font-medium text-gray-700">
+                          {field.label}
+                        </span>
+                      </div>
+                      <span className="font-semibold text-gray-900">
+                        {field.value}
                       </span>
                     </div>
-                    <span className="font-semibold text-gray-900">
-                      {field.value}
-                    </span>
-                  </div>
-                ))}
+                  ))
+                )}
               </CardContent>
             </Card>
           ))}
@@ -479,7 +684,9 @@ const ProfilePage = () => {
                       className="object-cover"
                     />
                     <AvatarFallback className="bg-gray-100 text-gray-600 text-2xl font-semibold">
-                      {courier.name ? courier.name.charAt(0).toUpperCase() : "U"}
+                      {courier.name
+                        ? courier.name.charAt(0).toUpperCase()
+                        : "U"}
                     </AvatarFallback>
                   </Avatar>
 
@@ -488,7 +695,9 @@ const ProfilePage = () => {
                     {isUploadingImage ? (
                       <div className="text-white text-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mx-auto mb-1"></div>
-                        <span className="text-xs font-medium">Processing...</span>
+                        <span className="text-xs font-medium">
+                          Processing...
+                        </span>
                       </div>
                     ) : (
                       <div className="text-white text-center">

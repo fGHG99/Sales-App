@@ -7,7 +7,7 @@ const categories = [
   { title: "Dapur & Bahan Masakan", img: "/assets/dapur_logo.png" },
   { title: "Ibu & Anak", img: "/assets/ibu_logo.png" },
   { title: "Kebutuhan Rumah Tangga", img: "/assets/kebutuhan_rumah_logo.png" },
-  // { title: "Lainnya", img: "/assets/more_logo.png" }, // ❌ Dihapus
+  { title: "Lihat semua", img: "/assets/more_logo.png" }, // ❌ Dihapus
 ];
 
 export function CategoryGrid() {

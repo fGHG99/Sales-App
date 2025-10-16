@@ -18,6 +18,7 @@ import StoreSection from "./StoreSection";
 import OrderItemsSection from "./OrderItem";
 import OrderSummary from "./OrderSummary";
 import CartSkeleton from "./CartSkeleton";
+import RelatedProduct from "../../RelatedProduct";
 
 const BE_URL =
   import.meta.env.VITE_BE_API_URL?.replace("/api", "") ||
@@ -58,6 +59,8 @@ export default function Cart() {
   const [nearbyStores, setNearbyStores] = useState([]);
   const [isLoadingStores, setIsLoadingStores] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
+  const [currentTime, setCurrentTime] = useState(null);
+  const [currentHour, setCurrentHour] = useState(null);
 
   // Delivery fee state from API
   const [currentDeliveryFee, setCurrentDeliveryFee] = useState(0);
@@ -311,24 +314,25 @@ export default function Cart() {
 
           console.log("✅ Nearby stores fetched:", response.data);
 
+          // Store current time and hour from API
+          if (
+            response.data.currentTime &&
+            response.data.currentHour !== undefined
+          ) {
+            setCurrentTime(response.data.currentTime);
+            setCurrentHour(response.data.currentHour);
+            console.log("🕐 Current time from database:", {
+              currentTime: response.data.currentTime,
+              currentHour: response.data.currentHour,
+            });
+          }
+
           if (response.data.stores && Array.isArray(response.data.stores)) {
             // Transform stores to match the expected format
             const transformedStores = response.data.stores.map((store) => ({
               id: store.id,
               name: store.name,
               address: store.address?.fullAddress || "Address not available",
-              openHour: new Date(store.openHour).toLocaleTimeString("id-ID", {
-                timeZone: "Asia/Jakarta",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              }),
-              closeHour: new Date(store.closeHour).toLocaleTimeString("id-ID", {
-                timeZone: "Asia/Jakarta",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              }),
               distance: store.distanceDisplay,
               distanceValue: store.distance,
               coordinates: {
@@ -337,6 +341,8 @@ export default function Cart() {
               },
               phoneNumber: store.phoneNumber,
               isActive: store.isActive,
+              openHour: store.openHour,
+              closeHour: store.closeHour,
             }));
 
             setNearbyStores(transformedStores);
@@ -501,7 +507,7 @@ export default function Cart() {
               />
             </div>
 
-            {/* Right side */}
+            {/* Right side - OrderSummary scroll natural bersama konten utama */}
             <div className="lg:col-span-1">
               <OrderSummary
                 deliveryOption={deliveryOption}
@@ -524,6 +530,9 @@ export default function Cart() {
             </div>
           </div>
         )}
+
+        {/* RelatedProduct hanya muncul jika ada items di cart */}
+        {cartItems.length > 0 && <RelatedProduct />}
       </div>
 
       {/* Modals */}
@@ -537,6 +546,8 @@ export default function Cart() {
         onFetchStores={fetchNearbyStores}
         currentDeliveryFee={currentDeliveryFee}
         isLoadingDeliveryFee={isLoadingDeliveryFee}
+        currentTime={currentTime}
+        currentHour={currentHour}
       />
 
       <PaymentOptionsModal

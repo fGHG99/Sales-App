@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, ImageOff } from "lucide-react";
 import LoginRequiredModal from "./modal/LoginRequiredModal";
 import api from "../utils/api";
 
@@ -140,9 +140,10 @@ const ProductCard = ({ product, loading = false }) => {
 
   // Handle product data from Prisma schema
   // Product model fields: id, name, barcode, description, unit, sellingPrice, isPerishable, isActive, isDeleted, createdAt, updatedAt, categoryId, category, images
-  const productImage = product.images?.[0]?.url
+  const hasProductImage = product.images?.[0]?.url;
+  const productImage = hasProductImage
     ? `${BE_URL}${product.images[0].url}`
-    : product.img || "/placeholder-product.png";
+    : null;
 
   // Handle Decimal type from Prisma - sellingPrice is Decimal @db.Decimal(10, 0)
   // Prisma Decimal JSON format: { s: sign, e: exponent, d: [digits] }
@@ -207,15 +208,21 @@ const ProductCard = ({ product, loading = false }) => {
       {/* Product Image */}
       <div className="w-full h-[200px]">
         <Link
-          to={`/p/${productName.replace(/\s+/g, "-").toLowerCase()}`}
+          to={`/p/${product.id}`}
           onMouseDown={(e) => e.preventDefault()} // prevent drag highlighting
         >
-          <img
-            src={productImage}
-            alt={product.images?.[0]?.altText || productName}
-            className="w-full h-full object-cover rounded-t-2xl pointer-events-none select-none"
-            draggable={false} // prevent image dragging
-          />
+          {hasProductImage ? (
+            <img
+              src={productImage}
+              alt={product.images?.[0]?.altText || productName}
+              className="w-full h-full object-cover rounded-t-2xl pointer-events-none select-none"
+              draggable={false} // prevent image dragging
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-100 rounded-t-2xl flex items-center justify-center">
+              <ImageOff size={48} className="text-gray-400" />
+            </div>
+          )}
         </Link>
       </div>
 
@@ -271,10 +278,7 @@ const ProductCard = ({ product, loading = false }) => {
 
       {/* Product Info */}
       <div className="flex flex-col gap-2 px-2 pt-2 pb-2 flex-grow">
-        <Link
-          to={`/p/${productName.replace(/\s+/g, "-").toLowerCase()}`}
-          onMouseDown={(e) => e.preventDefault()}
-        >
+        <Link to={`/p/${product.id}`} onMouseDown={(e) => e.preventDefault()}>
           <h3
             className="text-m font-regular select-none line-clamp-2 min-h-[48px]"
             style={{

@@ -4,6 +4,8 @@ import { ChevronDown } from "lucide-react";
 import NotificationDropdown from "./User/user-dropdown/NotificationDropdown";
 import UserDropdown from "./User/user-dropdown/UserDropdown";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import AuthSectionSkeleton from "./skeleton/AuthSectionSkeleton";
+import AuthButtonsSkeleton from "./skeleton/AuthButtonsSkeleton";
 import api from "../utils/api";
 
 export default function AuthSection({
@@ -20,13 +22,57 @@ export default function AuthSection({
   const BE_URL = import.meta.env.VITE_BE_API_URL;
   const [cartCount, setCartCount] = useState(0);
   const [notifCount, setNotifCount] = useState(0);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+  const [isLoadingCartCount, setIsLoadingCartCount] = useState(true);
+  const [isLoadingNotifCount, setIsLoadingNotifCount] = useState(true);
+  const [isLoadingPendingOrders, setIsLoadingPendingOrders] = useState(true);
+  const [hasVisitedOrdersPage, setHasVisitedOrdersPage] = useState(false);
+
+  // Check if user has visited orders page
+  useEffect(() => {
+    const visited = localStorage.getItem("hasVisitedOrdersPage");
+    setHasVisitedOrdersPage(visited === "true");
+  }, []);
+
+  // Reset visited status when new pending orders appear
+  useEffect(() => {
+    if (pendingOrdersCount > 0 && hasVisitedOrdersPage) {
+      // Check if there are new pending orders since last visit
+      const lastVisitedCount = localStorage.getItem("lastVisitedPendingCount");
+      const currentCount = pendingOrdersCount;
+
+      console.log("🔍 Checking for new pending orders:", {
+        currentCount,
+        lastVisitedCount: lastVisitedCount ? parseInt(lastVisitedCount) : null,
+        hasVisitedOrdersPage,
+      });
+
+      if (!lastVisitedCount || parseInt(lastVisitedCount) < currentCount) {
+        // New orders appeared, reset visited status
+        console.log(
+          "🆕 New pending orders detected - red circle will reappear"
+        );
+        setHasVisitedOrdersPage(false);
+        localStorage.removeItem("hasVisitedOrdersPage");
+        localStorage.setItem(
+          "lastVisitedPendingCount",
+          currentCount.toString()
+        );
+      }
+    }
+  }, [pendingOrdersCount, hasVisitedOrdersPage]);
 
   // Fetch user data from API
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!isAuthenticated) return;
+      if (!isAuthenticated) {
+        setIsLoadingUserData(false);
+        return;
+      }
 
       try {
+        setIsLoadingUserData(true);
         const response = await api.get("/users/me");
         const fetchedUser = response.data.user;
 
@@ -51,6 +97,8 @@ export default function AuthSection({
         if (storedUser.image && storedUser.image.url) {
           setProfilePicture(`${BE_URL}${storedUser.image.url}`);
         }
+      } finally {
+        setIsLoadingUserData(false);
       }
     };
 
@@ -72,16 +120,20 @@ export default function AuthSection({
   useEffect(() => {
     if (!isAuthenticated) {
       setCartCount(0);
+      setIsLoadingCartCount(false);
       return;
     }
 
     const fetchCartCount = async () => {
       try {
+        setIsLoadingCartCount(true);
         const res = await api.get("/cart/get-cart");
         const items = res.data?.cart?.cartItems || [];
         setCartCount(Array.isArray(items) ? items.length : 0);
       } catch (err) {
         setCartCount(0);
+      } finally {
+        setIsLoadingCartCount(false);
       }
     };
 
@@ -96,15 +148,19 @@ export default function AuthSection({
   useEffect(() => {
     if (!isAuthenticated) {
       setNotifCount(0);
+      setIsLoadingNotifCount(false);
       return;
     }
     let cancelled = false;
     const fetchNotifCount = async () => {
       try {
+        setIsLoadingNotifCount(true);
         const res = await api.get("/users/notifications/count");
         if (!cancelled) setNotifCount(Number(res.data?.total || 0));
       } catch (e) {
         if (!cancelled) setNotifCount(0);
+      } finally {
+        if (!cancelled) setIsLoadingNotifCount(false);
       }
     };
 
@@ -116,6 +172,41 @@ export default function AuthSection({
     return () => {
       cancelled = true;
       window.removeEventListener("focus", onFocus);
+    };
+  }, [isAuthenticated]);
+
+  // Fetch pending orders count
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setPendingOrdersCount(0);
+      setIsLoadingPendingOrders(false);
+      return;
+    }
+    let cancelled = false;
+    const fetchPendingOrdersCount = async () => {
+      try {
+        setIsLoadingPendingOrders(true);
+        const res = await api.get("/order/my-orders/status/PENDING");
+        if (!cancelled) {
+          const pendingCount = res.data?.orders?.length || 0;
+          setPendingOrdersCount(pendingCount);
+        }
+      } catch (e) {
+        if (!cancelled) setPendingOrdersCount(0);
+      } finally {
+        if (!cancelled) setIsLoadingPendingOrders(false);
+      }
+    };
+
+    fetchPendingOrdersCount();
+
+    // Listen for order updates
+    const onOrderUpdated = () => fetchPendingOrdersCount();
+    window.addEventListener("orderUpdated", onOrderUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("orderUpdated", onOrderUpdated);
     };
   }, [isAuthenticated]);
 
@@ -159,6 +250,34 @@ export default function AuthSection({
   }, []);
 
   const hasNotification = notifCount > 0;
+  const hasPendingOrders = pendingOrdersCount > 0 && !hasVisitedOrdersPage;
+
+  // Handle order history click
+  const handleOrderHistoryClick = () => {
+    console.log("👆 User clicked order history - red circle will disappear");
+    setHasVisitedOrdersPage(true);
+    localStorage.setItem("hasVisitedOrdersPage", "true");
+    localStorage.setItem(
+      "lastVisitedPendingCount",
+      pendingOrdersCount.toString()
+    );
+  };
+
+  // Show skeleton while loading
+  if (
+    isAuthenticated &&
+    (isLoadingUserData ||
+      isLoadingCartCount ||
+      isLoadingNotifCount ||
+      isLoadingPendingOrders)
+  ) {
+    return <AuthSectionSkeleton />;
+  }
+
+  // Show skeleton for non-authenticated state (while determining auth status)
+  if (!isAuthenticated && isLoadingUserData) {
+    return <AuthButtonsSkeleton />;
+  }
 
   return (
     <div
@@ -239,7 +358,8 @@ export default function AuthSection({
           {/* Order History */}
           <Link
             to="/user/orders"
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+            onClick={handleOrderHistoryClick}
+            className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
             aria-label="Order history"
           >
             <img
@@ -247,6 +367,11 @@ export default function AuthSection({
               alt="Orders"
               className="w-6 h-6 object-contain"
             />
+            {hasPendingOrders && (
+              <span className="absolute -top-[-3px] -right-[-2px] flex items-center justify-center w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white">
+                {pendingOrdersCount}
+              </span>
+            )}
           </Link>
 
           {/* Separator */}

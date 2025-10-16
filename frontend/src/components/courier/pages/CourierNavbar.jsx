@@ -1,11 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  Link,
-  useLocation,
-  useNavigate,
-  Outlet,
-  ScrollRestoration,
-} from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
   Package,
@@ -195,22 +189,23 @@ const Navigation = () => {
     }
   }, [currentPath]);
 
-  const navItems = [
-    {
-      path: "/courier",
-      icon: Home,
-      label: "Dashboard",
-      description: "",
-      badge: 0,
-    },
-    {
-      path: "/courier/orders",
-      icon: Package,
-      label: "Order history",
-      description: "",
-      badge: newOrdersCount, // ✅ Show new orders count
-    },
-  ];
+  // ✅ Removed navItems array - now using separate components
+
+  // ✅ Add navigation state management
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // ✅ Enhanced navigation handler
+  const handleNavigation = (path) => {
+    if (isNavigating) return; // Prevent multiple navigation calls
+
+    setIsNavigating(true);
+
+    // Clear any pending state
+    setTimeout(() => {
+      navigate(path, { replace: true });
+      setIsNavigating(false);
+    }, 50);
+  };
 
   const openNotificationDropdown = () => {
     if (closeTimeoutRef.current) {
@@ -255,12 +250,21 @@ const Navigation = () => {
     setShowNotifications(!showNotifications);
   };
 
-  // Cleanup timer saat component unmount
+  // ✅ Enhanced cleanup untuk mencegah memory leaks
   useEffect(() => {
     return () => {
+      // Clear all timeouts
       if (closeTimeoutRef.current) {
         clearTimeout(closeTimeoutRef.current);
       }
+
+      // Reset navigation state
+      setIsNavigating(false);
+
+      // Clear all dropdown states
+      setShowNotifications(false);
+      setShowDesktopNotifications(false);
+      setIsUserDropdownOpen(false);
     };
   }, []);
 
@@ -305,47 +309,78 @@ const Navigation = () => {
             </div>
             {/* Navigation Items */}
             <div className="flex items-center space-x-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentPath === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`relative group flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      isActive
-                        ? "bg-blue-600 text-white shadow-md"
-                        : "text-gray-600 hover:text-blue-700 hover:bg-blue-50"
+              {/* Dashboard Navigation Item */}
+              <Link
+                to="/courier"
+                className={`relative group flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  currentPath === "/courier"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-gray-600 hover:text-blue-700 hover:bg-blue-50"
+                }`}
+                onClick={() => {
+                  // ✅ Use enhanced navigation handler
+                  if (currentPath !== "/courier") {
+                    handleNavigation("/courier");
+                  }
+                }}
+              >
+                <Home className="h-5 w-5 mr-2" />
+                <div className="flex flex-col">
+                  <span>Dashboard</span>
+                  <span
+                    className={`text-xs ${
+                      currentPath === "/courier"
+                        ? "text-blue-100"
+                        : "text-gray-400 group-hover:text-blue-500"
                     }`}
                   >
-                    <Icon className="h-5 w-5 mr-2" />
-                    <div className="flex flex-col">
-                      <span>{item.label}</span>
-                      <span
-                        className={`text-xs ${
-                          isActive
-                            ? "text-blue-100"
-                            : "text-gray-400 group-hover:text-blue-500"
-                        }`}
-                      >
-                        {item.description}
-                      </span>
-                    </div>
-                    {item.badge > 0 && (
-                      <div className="ml-2 w-2 h-2 bg-red-500 rounded-full"></div>
-                    )}
-                  </Link>
-                );
-              })}
+                    {/* Empty description for dashboard */}
+                  </span>
+                </div>
+              </Link>
+
+              {/* Order History Navigation Item */}
+              <Link
+                to="/courier/orders"
+                className={`relative group flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  currentPath === "/courier/orders"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-gray-600 hover:text-blue-700 hover:bg-blue-50"
+                }`}
+                onClick={() => {
+                  // ✅ Use enhanced navigation handler
+                  if (currentPath !== "/courier/orders") {
+                    handleNavigation("/courier/orders");
+                  }
+                }}
+              >
+                <Package className="h-5 w-5 mr-2" />
+                <div className="flex flex-col">
+                  <span>Order history</span>
+                  <span
+                    className={`text-xs ${
+                      currentPath === "/courier/orders"
+                        ? "text-blue-100"
+                        : "text-gray-400 group-hover:text-blue-500"
+                    }`}
+                  >
+                    {/* Empty description for order history */}
+                  </span>
+                </div>
+                {newOrdersCount > 0 && (
+                  <div className="ml-2 w-2 h-2 bg-red-500 rounded-full"></div>
+                )}
+              </Link>
 
               {/* Desktop Notification Dropdown */}
               <div className="relative" ref={notificationDropdownRef}>
                 <button
                   className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition-colors duration-200"
                   aria-label="Notifications"
-                  onClick={() =>
-                    setShowDesktopNotifications(!showDesktopNotifications)
-                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDesktopNotifications(!showDesktopNotifications);
+                  }}
                 >
                   <Bell className="h-5 w-5" />
                   {unreadCount > 0 && (
@@ -356,7 +391,10 @@ const Navigation = () => {
                 </button>
 
                 {showDesktopNotifications && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div
+                    className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-[9999]"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="p-3 border-b border-gray-200">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold text-gray-900">
@@ -637,27 +675,48 @@ const Navigation = () => {
         {/* Mobile Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
           <div className="grid grid-cols-2 py-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentPath === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex flex-col items-center py-2 px-1 ${
-                    isActive ? "text-blue-600" : "text-gray-600"
-                  }`}
-                >
-                  <div className="relative">
-                    <Icon className="h-6 w-6 mb-1" />
-                    {item.badge > 0 && (
-                      <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
-                    )}
-                  </div>
-                  <span className="text-xs font-medium">{item.label}</span>
-                </Link>
-              );
-            })}
+            {/* Dashboard Mobile Navigation Item */}
+            <Link
+              to="/courier"
+              className={`flex flex-col items-center py-2 px-1 ${
+                currentPath === "/courier" ? "text-blue-600" : "text-gray-600"
+              }`}
+              onClick={() => {
+                // ✅ Use enhanced navigation handler
+                if (currentPath !== "/courier") {
+                  handleNavigation("/courier");
+                }
+              }}
+            >
+              <div className="relative">
+                <Home className="h-6 w-6 mb-1" />
+              </div>
+              <span className="text-xs font-medium">Dashboard</span>
+            </Link>
+
+            {/* Order History Mobile Navigation Item */}
+            <Link
+              to="/courier/orders"
+              className={`flex flex-col items-center py-2 px-1 ${
+                currentPath === "/courier/orders"
+                  ? "text-blue-600"
+                  : "text-gray-600"
+              }`}
+              onClick={() => {
+                // ✅ Use enhanced navigation handler
+                if (currentPath !== "/courier/orders") {
+                  handleNavigation("/courier/orders");
+                }
+              }}
+            >
+              <div className="relative">
+                <Package className="h-6 w-6 mb-1" />
+                {newOrdersCount > 0 && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                )}
+              </div>
+              <span className="text-xs font-medium">Order history</span>
+            </Link>
           </div>
         </nav>
         {/* Add padding for mobile fixed elements */}
@@ -665,17 +724,14 @@ const Navigation = () => {
       </div>
       {/* Add padding for desktop fixed nav */}
       <div className="hidden lg:block h-16"></div>
-      {/* Courier page content */}
-      <main className="min-h-screen bg-gray-50">
-        <LogoutModal
-          isOpen={logoutOpen}
-          onClose={() => setLogoutOpen(false)}
-          onConfirm={handleLogout}
-          isLoading={isLoggingOut}
-        />
-        <ScrollRestoration />
-        <Outlet />
-      </main>
+
+      {/* Logout Modal */}
+      <LogoutModal
+        isOpen={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+        isLoading={isLoggingOut}
+      />
     </>
   );
 };

@@ -76,6 +76,7 @@ export const formatCurrency = (amount) => {
 export const getStatusBadgeColor = (status) => {
   const statusMap = {
     DELIVERED: "bg-green-100 text-green-800",
+    GRACE_PERIOD: "bg-amber-100 text-amber-800",
     COMPLETED: "bg-green-100 text-green-800",
     OUT_FOR_DELIVERY: "bg-blue-100 text-blue-800",
     READY_FOR_PICKUP: "bg-blue-100 text-blue-800",
@@ -102,6 +103,7 @@ export const formatOrderStatus = (status) => {
     OUT_FOR_DELIVERY: "Dalam Perjalanan",
     ARRIVED_AT_DESTINATION: "Telah Tiba",
     DELIVERED: "Dikirimkan",
+    GRACE_PERIOD: "Completed by System",
     COMPLETED: "Selesai",
     DISPUTED: "Dalam Sengketa",
     CANCELED: "Dibatalkan",
@@ -126,7 +128,12 @@ export const getAllOrders = async ({
   try {
     const params = { page, limit };
     if (status) {
-      params.status = status;
+      // Special handling for "COMPLETED" - include both COMPLETED and GRACE_PERIOD
+      if (status === "COMPLETED") {
+        params.status = "COMPLETED"; // Backend will handle including GRACE_PERIOD
+      } else {
+        params.status = status;
+      }
     }
 
     const response = await api.get("/admin/get-all/orders", { params });
