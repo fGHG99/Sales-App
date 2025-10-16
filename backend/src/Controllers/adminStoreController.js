@@ -427,6 +427,7 @@ router.get("/get-all/orders", authenticate, async (req, res) => {
       "OUT_FOR_DELIVERY",
       "ARRIVED_AT_DESTINATION",
       "DELIVERED",
+      "GRACE_PERIOD",
       "COMPLETED",
       "CANCELED",
       "DISPUTED",
@@ -450,7 +451,15 @@ router.get("/get-all/orders", authenticate, async (req, res) => {
           )}`,
         });
       }
-      whereClause.orderStatus = statusFilter;
+
+      // Special handling for "COMPLETED" - include both COMPLETED and GRACE_PERIOD
+      if (statusFilter === "COMPLETED") {
+        whereClause.orderStatus = {
+          in: ["COMPLETED", "GRACE_PERIOD"],
+        };
+      } else {
+        whereClause.orderStatus = statusFilter;
+      }
     }
 
     // Calculate skip for pagination

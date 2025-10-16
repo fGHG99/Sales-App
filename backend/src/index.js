@@ -22,6 +22,7 @@ import disputeManagementRoute from "./Controllers/disputeManagementController.js
 import superAdminAnalyticsRoute from "./Controllers/superAdminAnalyticsController.js";
 import feeRoute from "./Controllers/deliveryFeeRouter.js";
 import auditLogRoute from "./Controllers/auditlogController.js";
+import promotionalRoute from "./Controllers/promotionalController.js";
 import { PORT, HOST } from "../utils/serverConf.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -99,6 +100,12 @@ app.use(
   express.static(path.join(__dirname, "../uploads/delivery-proofs"))
 );
 
+// Promotional images - Publicly accessible
+app.use(
+  "/uploads/promotionals",
+  express.static(path.join(__dirname, "../uploads/promotionals"))
+);
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -119,6 +126,7 @@ app.use("/super-admin", superAdminAnalyticsRoute); // Super admin analytics
 app.use("/fee", feeRoute);
 app.use("/audit", auditLogRoute); // Audit log management
 app.use("/address", addressRoute);
+app.use("/promotionals", promotionalRoute); // Promotional management
 
 // Start the server
 server.listen(PORT, HOST, () => {

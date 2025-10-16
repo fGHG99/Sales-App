@@ -283,13 +283,7 @@ router.post("/addresses", async (req, res) => {
       "Address",
       newAddress.id,
       {
-        recipientName: newAddress.recipientName,
-        recipientPhone: newAddress.recipientPhone,
-        label: newAddress.label,
         fullAddress: newAddress.fullAddress,
-        city: newAddress.city,
-        province: newAddress.province,
-        postalCode: newAddress.postalCode,
       },
       userId
     );

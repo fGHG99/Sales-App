@@ -5,6 +5,10 @@ import { getIO } from "../../utils/socket.js";
 import { logCreate, logUpdate } from "../../utils/auditlog.js";
 import { findBestCourier } from "../../utils/courierAssignment.js";
 import { getCurrentDeliveryFee } from "../../utils/deliveryFeeHelper.js";
+import {
+  setOrderToGracePeriod,
+  cancelAutoComplete,
+} from "../../utils/gracePeriodHelper.js";
 
 // ==================== GET ORDER ROUTES ====================
 
@@ -46,7 +50,14 @@ router.get("/my-orders", authenticate, async (req, res) => {
       ];
 
       if (validStatuses.includes(status.toUpperCase())) {
-        whereClause.orderStatus = status.toUpperCase();
+        // Special handling for "COMPLETED" - include both COMPLETED and GRACE_PERIOD
+        if (status.toUpperCase() === "COMPLETED") {
+          whereClause.orderStatus = {
+            in: ["COMPLETED", "GRACE_PERIOD"],
+          };
+        } else {
+          whereClause.orderStatus = status.toUpperCase();
+        }
       }
     }
 
@@ -364,6 +375,7 @@ router.get("/my-orders/status/:status", authenticate, async (req, res) => {
       "IN_PREPARATION",
       "READY_FOR_PICKUP",
       "OUT_FOR_DELIVERY",
+      "ARRIVED_AT_DESTINATION",
       "DELIVERED",
       "COMPLETED",
       "DISPUTED",
@@ -590,14 +602,68 @@ router.post("/checkout", async (req, res) => {
       return res.status(400).json({ message: "Pickup store is not active" });
     }
 
-    // Validasi khusus untuk PICKUP_TO_STORE
+    // Validasi dan parsing pickupTime
+    let pickupTimeDate = null;
     if (deliveryType === "PICKUP_TO_STORE") {
       if (!pickupTime) {
         return res.status(400).json({
           message: "Pickup time is required for pickup orders",
         });
       }
+
+      // Handle different pickupTime formats
+      if (typeof pickupTime === "string") {
+        // Check if it's a simple time format like "10:00"
+        if (pickupTime.match(/^\d{1,2}:\d{2}$/)) {
+          // Convert "10:00" to today's date with that time
+          const today = new Date();
+          const [hours, minutes] = pickupTime.split(":").map(Number);
+
+          pickupTimeDate = new Date(today);
+          pickupTimeDate.setHours(hours, minutes, 0, 0);
+
+          // If the time has already passed today, set it for tomorrow
+          const now = new Date();
+          if (pickupTimeDate < now) {
+            pickupTimeDate.setDate(pickupTimeDate.getDate() + 1);
+          }
+        } else {
+          // Try to parse as full datetime
+          pickupTimeDate = new Date(pickupTime);
+        }
+      } else {
+        // If it's already a Date object
+        pickupTimeDate = new Date(pickupTime);
+      }
+
+      // Validasi format pickupTime
+      if (isNaN(pickupTimeDate.getTime())) {
+        return res.status(400).json({
+          message:
+            "Invalid pickup time format. Please provide a valid date/time.",
+          provided: pickupTime,
+        });
+      }
+
+      // Validasi pickupTime tidak boleh di masa lalu
+      const now = new Date();
+      if (pickupTimeDate < now) {
+        return res.status(400).json({
+          message: "Pickup time cannot be in the past",
+          provided: pickupTime,
+          currentTime: now.toISOString(),
+        });
+      }
     }
+
+    console.log("📦 Checkout request:", {
+      userId,
+      deliveryType,
+      pickupTime: pickupTime,
+      pickupTimeDate: pickupTimeDate,
+      pickupTimeFormatted: pickupTimeDate ? pickupTimeDate.toISOString() : null,
+      pickupStoreId,
+    });
 
     // Fetch cart user
     const cart = await prisma.cart.findUnique({
@@ -714,7 +780,7 @@ router.post("/checkout", async (req, res) => {
             pickupStoreId: pickupStoreId, // ✅ Always set for both DELIVERY and PICKUP_TO_STORE
             pickupTime:
               deliveryType === "PICKUP_TO_STORE" && pickupTime
-                ? new Date(pickupTime)
+                ? pickupTimeDate
                 : null,
             paymentStatus: "PENDING",
             orderStatus: "PENDING",
@@ -1200,6 +1266,320 @@ router.patch("/complete-order/:orderId", authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error("Error completing order:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// ==================== UPDATE ORDER STATUS (COURIER) ====================
+
+/**
+ * PATCH /update-status/:orderId
+ * Update order status (Courier endpoint)
+ * Handles DELIVERED → GRACE_PERIOD transition automatically
+ */
+router.patch("/update-status/:orderId", authenticate, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { newStatus } = req.body;
+    const courierId = req.user.id;
+
+    // Validasi format UUID
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID format. Must be a valid UUID.",
+      });
+    }
+
+    // Validasi status
+    const validStatuses = [
+      "PENDING",
+      "IN_PREPARATION",
+      "READY_FOR_PICKUP",
+      "OUT_FOR_DELIVERY",
+      "ARRIVED_AT_DESTINATION",
+      "DELIVERED",
+      "COMPLETED",
+      "DISPUTED",
+      "CANCELED",
+      "GRACE_PERIOD",
+    ];
+
+    if (!validStatuses.includes(newStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order status",
+        validStatuses,
+      });
+    }
+
+    // Cek apakah courier memiliki akses ke order ini
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        courierId: courierId, // Pastikan order ditugaskan ke courier ini
+      },
+      select: {
+        id: true,
+        orderStatus: true,
+        courierId: true,
+        userId: true,
+      },
+    });
+
+    if (!order) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Order not found or you don't have permission to update this order",
+      });
+    }
+
+    // Update order status
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        orderStatus: newStatus,
+        updatedAt: new Date(),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        courier: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    // Audit log
+    logUpdate(
+      "Order",
+      orderId,
+      { orderStatus: order.orderStatus },
+      {
+        orderStatus: newStatus,
+        updatedBy: courierId,
+        updatedAt: new Date().toISOString(),
+      },
+      courierId
+    );
+
+    // Handle special case: DELIVERED → GRACE_PERIOD
+    if (newStatus === "DELIVERED") {
+      try {
+        setTimeout(async () => {
+          await setOrderToGracePeriod(orderId, courierId);
+          // `}, `3 * 60 * 60 * 1000); // 3 jam dalam milliseconds
+        }, 30 * 1000); //30 detik untuk testing
+
+        console.log(`⏰ Grace period timer set for order ${orderId} (3 hours)`);
+      } catch (graceError) {
+        console.error(
+          `❌ Error setting grace period for order ${orderId}:`,
+          graceError
+        );
+        // Don't fail the request, just log the error
+      }
+    }
+
+    // Create notification untuk user
+    const statusMessages = {
+      IN_PREPARATION: "Pesanan sedang disiapkan",
+      READY_FOR_PICKUP: "Pesanan siap diambil",
+      OUT_FOR_DELIVERY: "Pesanan sedang dalam perjalanan",
+      ARRIVED_AT_DESTINATION: "Pesanan telah sampai di tujuan",
+      DELIVERED: "Pesanan telah dikirim",
+      COMPLETED: "Pesanan telah selesai",
+      DISPUTED: "Pesanan dalam sengketa",
+      CANCELED: "Pesanan dibatalkan",
+    };
+
+    const notification = await prisma.notification.create({
+      data: {
+        userId: order.userId,
+        type: "ORDER",
+        title: statusMessages[newStatus] || "Status Pesanan Diperbarui",
+        message: `Pesanan #${orderId.slice(0, 8)} status diperbarui menjadi: ${
+          statusMessages[newStatus] || newStatus
+        }`,
+        metadata: {
+          orderId: orderId,
+          orderStatus: newStatus,
+          updatedBy: courierId,
+          courier: updatedOrder.courier,
+        },
+      },
+    });
+
+    // Emit realtime notification ke user
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(`user:${order.userId}`).emit("notification:new", notification);
+        console.log(
+          `📱 Status update notification sent to user ${updatedOrder.user.name}`
+        );
+      }
+    } catch (emitErr) {
+      console.warn("Socket emit failed:", emitErr?.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+      data: {
+        orderId: updatedOrder.id,
+        orderStatus: updatedOrder.orderStatus,
+        updatedAt: updatedOrder.updatedAt,
+        courier: updatedOrder.courier,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating order status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+});
+
+// ==================== DISPUTE HANDLING ====================
+
+/**
+ * POST /submit-dispute/:orderId
+ * Submit dispute untuk order (User endpoint)
+ * Automatically cancels auto-complete if order is in GRACE_PERIOD
+ */
+router.post("/submit-dispute/:orderId", authenticate, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason, description } = req.body;
+    const userId = req.user.id;
+
+    // Validasi format UUID
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID format. Must be a valid UUID.",
+      });
+    }
+
+    // Validasi input
+    if (!reason || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Reason and description are required for dispute submission",
+      });
+    }
+
+    // Cek apakah order exists dan belongs to user
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId: userId,
+      },
+      select: {
+        id: true,
+        orderStatus: true,
+        userId: true,
+      },
+    });
+
+    if (!order) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Order not found or you don't have permission to submit dispute for this order",
+      });
+    }
+
+    // Cek apakah order dalam status yang bisa di-dispute
+    const disputableStatuses = [
+      "ARRIVED_AT_DESTINATION",
+      "DELIVERED",
+      "GRACE_PERIOD",
+    ];
+    if (!disputableStatuses.includes(order.orderStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Order with status ${order.orderStatus} cannot be disputed`,
+        disputableStatuses,
+      });
+    }
+
+    // Create dispute
+    const dispute = await prisma.dispute.create({
+      data: {
+        orderId: orderId,
+        userId: userId,
+        reason: reason,
+        description: description,
+        status: "PENDING",
+      },
+    });
+
+    // Update order status ke DISPUTED jika masih dalam GRACE_PERIOD
+    if (order.orderStatus === "GRACE_PERIOD") {
+      await cancelAutoComplete(orderId);
+      console.log(
+        `🔄 Auto-complete canceled for order ${orderId} due to dispute`
+      );
+    }
+
+    // Update order status ke DISPUTED
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        orderStatus: "DISPUTED",
+        updatedAt: new Date(),
+      },
+    });
+
+    // Audit log
+    logUpdate(
+      "Order",
+      orderId,
+      { orderStatus: order.orderStatus },
+      {
+        orderStatus: "DISPUTED",
+        updatedBy: userId,
+        updatedAt: new Date().toISOString(),
+        reason: "User submitted dispute",
+        disputeId: dispute.id,
+      },
+      userId
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Dispute submitted successfully",
+      data: {
+        disputeId: dispute.id,
+        orderId: orderId,
+        orderStatus: "DISPUTED",
+        submittedAt: dispute.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Error submitting dispute:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

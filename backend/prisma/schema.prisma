@@ -160,7 +160,7 @@ model Address {
   recipientName String  @db.VarChar(100)
   recipientPhone String  @db.VarChar(20)
   label       String  @db.VarChar(100)
-  fullAddress String  @db.VarChar(100)
+  fullAddress String  @db.VarChar(200)
   subDistrict String? @db.VarChar(100)
   district    String? @db.VarChar(100)
   city        String? @db.VarChar(100)
@@ -420,6 +420,16 @@ model Dispute {
   @@index([status])
   @@index([createdAt])
   @@map("disputes")
+}
+
+model Promotional {
+  id        String   @id @default(uuid()) @db.Uuid
+  imageUrl  String   @db.VarChar(500)
+  altText   String   @db.VarChar(200)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("promotionals")
 }
 
 model AuditLog {

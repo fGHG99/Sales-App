@@ -16,6 +16,7 @@ import {
 /**
  * !IMPORTANT PAKE ADD ERROR HANDLING UNTUK VALIDATOR EMAIL, PASSWORD DLL
  */
+const FE_URL = process.env.FE_URL;
 
 // setup transporter
 const transporter = nodemailer.createTransport({
@@ -29,7 +30,7 @@ const transporter = nodemailer.createTransport({
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
-    const { email, name, password } = req.body;
+    const { email, name, password, phone } = req.body;
 
     // cek kalau email sudah ada
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -58,6 +59,7 @@ router.post("/register", async (req, res) => {
         data: {
           name,
           email,
+          phone: phone || null,
           password: hashedPassword,
           isVerified: false,
           roleId: userRole.id,
@@ -77,7 +79,7 @@ router.post("/register", async (req, res) => {
         { expiresIn: "1h" }
       );
 
-      const verifyUrl = `http://localhost:3000/auth/verify/${token}`;
+      const verifyUrl = `${FE_URL}/auth/verify/${token}`;
 
       // kirim email → kalau gagal, lempar error biar trx rollback
       await transporter.sendMail({
@@ -129,7 +131,7 @@ router.post("/resend-verification", async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    const verifyUrl = `http://localhost:3000/auth/verify/${token}`;
+    const verifyUrl = `${FE_URL}/auth/verify/${token}`;
 
     await transporter.sendMail({
       from: `"Sales App" <${process.env.EMAIL_USER}>`,
@@ -394,6 +396,31 @@ router.post("/change-password", authenticate, async (req, res) => {
       { action: "password_changed", timestamp: nowWIB },
       userId
     );
+
+    // Create notification for password change
+    try {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: userId,
+          type: "INFO",
+          title: "Password Berhasil Diubah",
+          message: `Password Anda telah berhasil diubah pada ${nowWIB} WIB. Email konfirmasi telah dikirim.`,
+          metadata: {
+            action: "password_changed",
+            timestamp: nowWIB,
+            emailSent: true,
+          },
+        },
+      });
+
+      console.log(`📱 Password change notification created for user ${userId}`);
+    } catch (notifError) {
+      console.warn(
+        "Failed to create password change notification:",
+        notifError
+      );
+      // Don't fail the request if notification creation fails
+    }
 
     return res.json({
       message: "Password berhasil diubah. Email konfirmasi telah dikirim.",

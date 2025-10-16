@@ -3,6 +3,7 @@ import prisma from "../../utils/prisma.js";
 import { authenticate, authorize } from "../Middlewares/accessControl.js";
 import { getIO } from "../../utils/socket.js";
 import { logCreate, logUpdate } from "../../utils/auditlog.js";
+import { setOrderToGracePeriod } from "../../utils/gracePeriodHelper.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -72,6 +73,7 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
       "IN_PREPARATION",
       "READY_FOR_PICKUP",
       "OUT_FOR_DELIVERY",
+      "ARRIVED_AT_DESTINATION",
       "DELIVERED",
       "COMPLETED",
     ];
@@ -116,7 +118,8 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
     const validTransitions = {
       IN_PREPARATION: ["READY_FOR_PICKUP"],
       READY_FOR_PICKUP: ["OUT_FOR_DELIVERY"],
-      OUT_FOR_DELIVERY: ["DELIVERED"],
+      OUT_FOR_DELIVERY: ["ARRIVED_AT_DESTINATION"],
+      ARRIVED_AT_DESTINATION: ["DELIVERED"],
       DELIVERED: ["COMPLETED"],
     };
 
@@ -138,12 +141,20 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
       });
     }
 
-    // Update order status
+    // Prepare update data
+    const updateData = {
+      orderStatus: newStatus,
+    };
+
+    // If status is DELIVERED, also mark payment as COMPLETED
+    if (newStatus === "DELIVERED") {
+      updateData.paymentStatus = "COMPLETED";
+    }
+
+    // Update order status (and payment status if DELIVERED)
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
-      data: {
-        orderStatus: newStatus,
-      },
+      data: updateData,
       include: {
         courier: {
           select: {
@@ -157,22 +168,73 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
     });
 
     // Audit log untuk perubahan status order
-    logUpdate(
-      "Order",
-      orderId,
-      { orderStatus: currentStatus },
-      { orderStatus: newStatus },
-      courierId
-    );
+    const auditLogOldData = { orderStatus: currentStatus };
+    const auditLogNewData = { orderStatus: newStatus };
+
+    // Include payment status change in audit log if updated
+    if (newStatus === "DELIVERED") {
+      auditLogOldData.paymentStatus = order.paymentStatus;
+      auditLogNewData.paymentStatus = "COMPLETED";
+    }
+
+    logUpdate("Order", orderId, auditLogOldData, auditLogNewData, courierId);
+
+    // Handle special case: DELIVERED → Automatic GRACE_PERIOD transition
+    if (newStatus === "DELIVERED") {
+      try {
+        // Set timeout untuk auto-transition ke GRACE_PERIOD
+        // Note: 30 detik untuk testing, production should be 3 hours (3 * 60 * 60 * 1000)
+        setTimeout(async () => {
+          try {
+            await setOrderToGracePeriod(orderId, courierId);
+            console.log(
+              `✅ Order ${orderId} automatically transitioned to GRACE_PERIOD after 3 hours`
+            );
+          } catch (gracePeriodError) {
+            console.error(
+              `❌ Error transitioning order ${orderId} to GRACE_PERIOD:`,
+              gracePeriodError
+            );
+          }
+        }, 30 * 1000); // 30 seconds for testing (production: 3 * 60 * 60 * 1000 = 3 hours)
+
+        console.log(
+          `⏰ Grace period timer set for order ${orderId} (will transition in 30 seconds for testing)`
+        );
+      } catch (timerError) {
+        console.error(
+          `❌ Error setting grace period timer for order ${orderId}:`,
+          timerError
+        );
+        // Don't fail the request, just log the error
+      }
+    }
 
     // Create notification for customer
     const statusMessages = {
       IN_PREPARATION: "Pesanan Anda sedang disiapkan",
       READY_FOR_PICKUP: "Pesanan siap untuk diambil kurir",
       OUT_FOR_DELIVERY: "Pesanan dalam perjalanan",
-      DELIVERED: "Pesanan telah sampai",
+      ARRIVED_AT_DESTINATION: "Pesanan telah sampai di tujuan",
+      DELIVERED: "Pesanan telah dikirim",
       COMPLETED: "Pesanan selesai",
     };
+
+    // Prepare notification metadata
+    const notificationMetadata = {
+      orderId: order.id,
+      oldStatus: currentStatus,
+      newStatus: newStatus,
+      courierName: order.courier?.name,
+      notes: notes || null,
+    };
+
+    // Include payment status change if order is DELIVERED
+    if (newStatus === "DELIVERED") {
+      notificationMetadata.paymentStatus = "COMPLETED";
+      notificationMetadata.paymentMessage =
+        "Pembayaran telah diselesaikan setelah pengiriman";
+    }
 
     const notification = await prisma.notification.create({
       data: {
@@ -180,13 +242,7 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
         type: "ORDER",
         title: "Status Pesanan Diperbarui",
         message: statusMessages[newStatus] || "Status pesanan diperbarui",
-        metadata: {
-          orderId: order.id,
-          oldStatus: currentStatus,
-          newStatus: newStatus,
-          courierName: order.courier?.name,
-          notes: notes || null,
-        },
+        metadata: notificationMetadata,
       },
     });
 
@@ -199,6 +255,7 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
           order: {
             id: updatedOrder.id,
             orderStatus: updatedOrder.orderStatus,
+            paymentStatus: updatedOrder.paymentStatus,
             courier: updatedOrder.courier,
           },
         });
@@ -215,6 +272,7 @@ router.put("/:orderId/status", authenticate, async (req, res) => {
       order: {
         id: updatedOrder.id,
         orderStatus: updatedOrder.orderStatus,
+        paymentStatus: updatedOrder.paymentStatus,
         previousStatus: currentStatus,
         courier: updatedOrder.courier,
         deliveryAddress: updatedOrder.deliveryAddress,
@@ -298,7 +356,13 @@ router.get("/courier", authenticate, async (req, res) => {
       where: {
         courierId,
         orderStatus: {
-          notIn: ["COMPLETED", "CANCELED", "DISPUTED", "GRACE_PERIOD"],
+          notIn: [
+            "COMPLETED",
+            "CANCELED",
+            "DISPUTED",
+            "GRACE_PERIOD",
+            "ARRIVED_AT_DESTINATION",
+          ],
         },
       },
     });
@@ -310,6 +374,7 @@ router.get("/courier", authenticate, async (req, res) => {
       IN_PREPARATION: 0,
       READY_FOR_PICKUP: 0,
       OUT_FOR_DELIVERY: 0,
+      ARRIVED_AT_DESTINATION: 0,
       DELIVERED: 0,
       COMPLETED: 0,
       CANCELED: 0,
@@ -463,8 +528,8 @@ router.post(
         });
       }
 
-      // Only allow upload when status is DELIVERED
-      if (order.orderStatus !== "OUT_FOR_DELIVERY") {
+      // Only allow upload when status is OUT_FOR_DELIVERY
+      if (order.orderStatus !== "ARRIVED_AT_DESTINATION") {
         // Delete uploaded file
         fs.unlinkSync(req.file.path);
         return res.status(400).json({
@@ -487,7 +552,7 @@ router.post(
         where: { id: orderId },
         data: {
           deliveryProof: filePath,
-          orderStatus: "DELIVERED",
+          orderStatus: "ARRIVED_AT_DESTINATION",
         },
         include: {
           courier: {
@@ -508,7 +573,7 @@ router.post(
         { orderStatus: "OUT_FOR_DELIVERY" },
         {
           deliveryProof: filePath,
-          orderStatus: "DELIVERED",
+          orderStatus: "ARRIVED_AT_DESTINATION",
         },
         courierId
       );
@@ -518,12 +583,13 @@ router.post(
         data: {
           userId: order.userId,
           type: "ORDER",
-          title: "Bukti Pengiriman Diunggah",
-          message: `Kurir telah mengunggah foto bukti pengiriman untuk pesanan Anda`,
+          title: "Pesanan Telah Sampai",
+          message: `Kurir telah mengunggah foto bukti pengiriman. Pesanan Anda telah sampai di tujuan.`,
           metadata: {
             orderId: order.id,
             deliveryProof: filePath,
             courierName: order.courier?.name,
+            orderStatus: "ARRIVED_AT_DESTINATION",
           },
         },
       });
@@ -548,7 +614,8 @@ router.post(
       }
 
       return res.status(200).json({
-        message: "Delivery proof uploaded successfully",
+        message:
+          "Delivery proof uploaded successfully. Order status updated to ARRIVED_AT_DESTINATION",
         order: {
           id: updatedOrder.id,
           deliveryProof: updatedOrder.deliveryProof,
@@ -632,7 +699,13 @@ router.get("/courier", authenticate, async (req, res) => {
       where: {
         courierId,
         orderStatus: {
-          notIn: ["COMPLETED", "CANCELED", "DISPUTED", "GRACE_PERIOD"],
+          notIn: [
+            "COMPLETED",
+            "CANCELED",
+            "DISPUTED",
+            "GRACE_PERIOD",
+            "ARRIVED_AT_DESTINATION",
+          ],
         },
       },
     });
@@ -644,6 +717,7 @@ router.get("/courier", authenticate, async (req, res) => {
       IN_PREPARATION: 0,
       READY_FOR_PICKUP: 0,
       OUT_FOR_DELIVERY: 0,
+      ARRIVED_AT_DESTINATION: 0,
       DELIVERED: 0,
       COMPLETED: 0,
       CANCELED: 0,
@@ -1107,7 +1181,13 @@ router.get("/performance/today", authenticate, async (req, res) => {
       where: {
         courierId,
         orderStatus: {
-          notIn: ["COMPLETED", "CANCELED", "DISPUTED", "GRACE_PERIOD"],
+          notIn: [
+            "COMPLETED",
+            "CANCELED",
+            "DISPUTED",
+            "GRACE_PERIOD",
+            "ARRIVED_AT_DESTINATION",
+          ],
         },
         createdAt: {
           gte: today,

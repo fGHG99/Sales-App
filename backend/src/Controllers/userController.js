@@ -446,6 +446,27 @@ router.put("/profile", authenticate, async (req, res) => {
 
     logUpdate("User", userId, oldValues, newValues, userId);
 
+    // Create notification for profile update
+    try {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: userId,
+          type: "INFO",
+          title: "Profil Berhasil Diperbarui",
+          message: "Data profil Anda telah berhasil diperbarui",
+          metadata: {
+            updatedFields: Object.keys(updateData),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+      console.log(`📱 Profile update notification created for user ${userId}`);
+    } catch (notifError) {
+      console.warn("Failed to create profile update notification:", notifError);
+      // Don't fail the request if notification creation fails
+    }
+
     res.json({
       message: "Profile updated successfully",
       user: updatedUser,
@@ -631,6 +652,99 @@ router.get("/admin", authenticate, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch admin users",
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * PATCH /users/courier/work-area
+ * Update courier's work area postal codes
+ * Body: { postalCodes: string[] }
+ */
+router.patch("/courier/work-area", authenticate, async (req, res) => {
+  try {
+    const courierId = req.user.id;
+    const { postalCodes } = req.body;
+
+    // Validate input
+    if (!postalCodes || !Array.isArray(postalCodes)) {
+      return res.status(400).json({
+        success: false,
+        error: "Postal codes must be provided as an array",
+      });
+    }
+
+    // Validate postal codes format (Indonesian postal codes are 5 digits)
+    const postalCodeRegex = /^\d{5}$/;
+    const invalidCodes = postalCodes.filter(
+      (code) => typeof code !== "string" || !postalCodeRegex.test(code)
+    );
+
+    if (invalidCodes.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "All postal codes must be 5-digit strings",
+        invalidCodes,
+      });
+    }
+
+    // Remove duplicates
+    const uniquePostalCodes = [...new Set(postalCodes)];
+
+    // Check if courier exists and has courier role
+    const courier = await prisma.user.findUnique({
+      where: { id: courierId },
+      include: { role: true },
+    });
+
+    if (!courier) {
+      return res.status(404).json({
+        success: false,
+        error: "Courier not found",
+      });
+    }
+
+    if (courier.role?.roleType !== "courier") {
+      return res.status(403).json({
+        success: false,
+        error: "Only couriers can update work area postal codes",
+      });
+    }
+
+    // Update courier's work area postal codes
+    const updatedCourier = await prisma.user.update({
+      where: { id: courierId },
+      data: {
+        workAreaPostalCodes: uniquePostalCodes,
+      },
+      select: {
+        id: true,
+        name: true,
+        workAreaPostalCodes: true,
+        updatedAt: true,
+      },
+    });
+
+    // Audit log
+    logUpdate(
+      "CourierWorkArea",
+      courierId,
+      { postalCodes: courier.workAreaPostalCodes },
+      { postalCodes: uniquePostalCodes },
+      courierId
+    );
+
+    res.json({
+      success: true,
+      message: "Work area postal codes updated successfully",
+      courier: updatedCourier,
+    });
+  } catch (error) {
+    console.error("Error updating courier work area:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update work area postal codes",
       details: error.message,
     });
   }

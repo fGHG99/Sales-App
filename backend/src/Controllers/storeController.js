@@ -1052,11 +1052,24 @@ router.get("/by-location", authenticate, async (req, res) => {
       }))
     );
 
+    // Get current time from database
+    const currentTimeResult =
+      await prisma.$queryRaw`SELECT NOW() as current_time`;
+    const currentTime = currentTimeResult[0].current_time;
+    const currentHour = currentTime.getHours();
+
+    console.log("🕐 Current database time:", {
+      currentTime: currentTime.toISOString(),
+      currentHour: currentHour,
+    });
+
     res.json({
       userLocation: {
         latitude: userLat,
         longitude: userLng,
       },
+      currentTime: currentTime,
+      currentHour: currentHour,
       stores: storesWithDistance,
       count: storesWithDistance.length,
     });
