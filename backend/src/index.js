@@ -30,10 +30,14 @@ import { fileURLToPath } from "url";
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  "*"
+];
+
 // Initialize Socket.IO with WebSocket-first configuration
 const io = new SocketIOServer(server, {
-  cors: {
-    origin: ["http://localhost:5173"],
+  cors: { 
+    origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST"],
   },
@@ -44,7 +48,6 @@ const io = new SocketIOServer(server, {
   pingInterval: 25000, // How often to send ping
   upgradeTimeout: 10000, // How long to wait for upgrade
   maxHttpBufferSize: 1e6, // 1MB max message size
-  // ✅ Performance
   perMessageDeflate: {
     threshold: 1024, // Compress messages > 1KB
   },
@@ -72,7 +75,7 @@ connectRedis()
 // ✅ Tambahkan konfigurasi CORS
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: allowedOrigins,
     credentials: true, // agar bisa kirim cookie/token antar origin
   })
 );
