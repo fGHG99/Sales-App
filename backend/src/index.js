@@ -52,9 +52,7 @@ const corsOptions = {
     // Check wildcard patterns (e.g., *.railway.app)
     const isAllowed = allowedOrigins.some((allowed) => {
       if (allowed.includes("*")) {
-        const pattern = allowed
-          .replace(/\./g, "\\.")
-          .replace(/\*/g, ".*");
+        const pattern = allowed.replace(/\./g, "\\.").replace(/\*/g, ".*");
         const regex = new RegExp(`^${pattern}$`);
         return regex.test(origin);
       }
