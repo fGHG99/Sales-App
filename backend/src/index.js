@@ -42,8 +42,27 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, Postman, curl, server-to-server)
     if (!origin) return callback(null, true);
 
+    // Check exact match
     if (allowedOrigins.indexOf(origin) !== -1) {
       console.log("✅ CORS allowed origin:", origin);
+      callback(null, true);
+      return;
+    }
+
+    // Check wildcard patterns (e.g., *.railway.app)
+    const isAllowed = allowedOrigins.some((allowed) => {
+      if (allowed.includes("*")) {
+        const pattern = allowed
+          .replace(/\./g, "\\.")
+          .replace(/\*/g, ".*");
+        const regex = new RegExp(`^${pattern}$`);
+        return regex.test(origin);
+      }
+      return false;
+    });
+
+    if (isAllowed) {
+      console.log("✅ CORS allowed origin (wildcard):", origin);
       callback(null, true);
     } else {
       console.log("❌ CORS blocked origin:", origin);
