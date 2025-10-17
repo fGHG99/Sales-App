@@ -30,44 +30,48 @@ import { fileURLToPath } from "url";
 const app = express();
 const server = http.createServer(app);
 
-// ✅ CORS Configuration
-const allowedOrigins = [
-  "https://chic-bravery-production.up.railway.app",
-  "http://localhost:5173", // jika pakai Vite
-];
+// ✅ CORS Configuration - Dynamic from environment variable
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : ["http://localhost:5173"]; // fallback untuk development
+
+console.log("🌐 Allowed CORS origins:", allowedOrigins);
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, curl)
+    // Allow requests with no origin (mobile apps, Postman, curl, server-to-server)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log("✅ CORS allowed origin:", origin);
       callback(null, true);
     } else {
       console.log("❌ CORS blocked origin:", origin);
-      callback(new Error('Not allowed by CORS'));
+      console.log("   Allowed origins:", allowedOrigins);
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With',
-    'Accept',
-    'Origin'
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
   ],
-  exposedHeaders: ['set-cookie'],
+  exposedHeaders: ["set-cookie"],
   maxAge: 86400, // 24 hours
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  preflightContinue: false,
 };
 
 // ✅ Apply CORS middleware BEFORE other middlewares
 app.use(cors(corsOptions));
 // Initialize Socket.IO with WebSocket-first configuration
 const io = new SocketIOServer(server, {
-  cors: { 
-    origin: allowedOrigins,
+  cors: {
+    origin: allowedOrigins, // Menggunakan allowedOrigins yang sama dari environment variable
     credentials: true,
     methods: ["GET", "POST"],
   },
@@ -136,7 +140,7 @@ app.use(cookieParser());
 
 // ✅ Request logging middleware (helpful for debugging)
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path} - Origin: ${req.get('origin')}`);
+  console.log(`${req.method} ${req.path} - Origin: ${req.get("origin")}`);
   next();
 });
 
@@ -172,10 +176,11 @@ app.use((req, res) => {
 // ✅ Error handler
 app.use((err, req, res, next) => {
   console.error("Error:", err.message);
-  res.status(500).json({ 
-    error: process.env.NODE_ENV === 'production' 
-      ? "Internal server error" 
-      : err.message 
+  res.status(500).json({
+    error:
+      process.env.NODE_ENV === "production"
+        ? "Internal server error"
+        : err.message,
   });
 });
 
