@@ -2,8 +2,87 @@
 import prisma from "../utils/prisma.js";
 import bcrypt from "bcrypt";
 
+// Function to clear existing data before seeding
+async function clearDatabase() {
+  console.log("🧹 Clearing existing data...");
+
+  try {
+    // Delete in reverse dependency order to avoid foreign key constraints
+    await prisma.auditLog.deleteMany({});
+    console.log("   ✅ Cleared audit logs");
+
+    await prisma.promotional.deleteMany({});
+    console.log("   ✅ Cleared promotionals");
+
+    await prisma.notification.deleteMany({});
+    console.log("   ✅ Cleared notifications");
+
+    await prisma.dispute.deleteMany({});
+    console.log("   ✅ Cleared disputes");
+
+    await prisma.order.deleteMany({});
+    console.log("   ✅ Cleared orders");
+
+    await prisma.cart.deleteMany({});
+    console.log("   ✅ Cleared carts");
+
+    await prisma.deliveryFeeSettings.deleteMany({});
+    console.log("   ✅ Cleared delivery fee settings");
+
+    await prisma.store.deleteMany({});
+    console.log("   ✅ Cleared stores");
+
+    await prisma.storeAddress.deleteMany({});
+    console.log("   ✅ Cleared store addresses");
+
+    await prisma.address.deleteMany({});
+    console.log("   ✅ Cleared addresses");
+
+    await prisma.stockMovement.deleteMany({});
+    console.log("   ✅ Cleared stock movements");
+
+    await prisma.productBatch.deleteMany({});
+    console.log("   ✅ Cleared product batches");
+
+    await prisma.image.deleteMany({});
+    console.log("   ✅ Cleared images");
+
+    await prisma.product.deleteMany({});
+    console.log("   ✅ Cleared products");
+
+    await prisma.category.deleteMany({});
+    console.log("   ✅ Cleared categories");
+
+    await prisma.user.deleteMany({});
+    console.log("   ✅ Cleared users");
+
+    // Disconnect all roles from permissions before deleting
+    const roles = await prisma.role.findMany();
+    for (const role of roles) {
+      await prisma.role.update({
+        where: { id: role.id },
+        data: { permissions: { set: [] } },
+      });
+    }
+
+    await prisma.role.deleteMany({});
+    console.log("   ✅ Cleared roles");
+
+    await prisma.accessPermission.deleteMany({});
+    console.log("   ✅ Cleared permissions");
+
+    console.log("✅ Database cleared successfully!\n");
+  } catch (error) {
+    console.error("❌ Error clearing database:", error);
+    throw error;
+  }
+}
+
 async function main() {
   console.log("🌱 Seeding database...");
+
+  // Clear existing data first
+  await clearDatabase();
 
   // ============================================================
   // 1. Seed Roles and Access Permissions (including IT Support)
