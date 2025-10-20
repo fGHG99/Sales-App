@@ -120,6 +120,7 @@ async function main() {
         "dispute.delete",
         "audit.read",
         "system.manage",
+        "superadmin.access",
       ],
     },
     {
@@ -140,12 +141,18 @@ async function main() {
         "dispute.read",
         "dispute.update",
         "audit.read",
+        "admin.access",
       ],
     },
     {
       name: "courier",
       roleType: "courier",
-      permissions: ["order.read", "order.update", "user.read"],
+      permissions: [
+        "order.read",
+        "order.update",
+        "user.read",
+        "courier.access",
+      ],
     },
     {
       name: "user",
