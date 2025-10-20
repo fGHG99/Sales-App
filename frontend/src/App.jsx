@@ -162,9 +162,7 @@ const router = createBrowserRouter([
         path: "/order",
         element: (
           <ProtectedRoute>
-            {/* <PermissionBasedRoute requiredPermissions={["order.create"]}> */}
             <Layout />
-            {/* </PermissionBasedRoute> */}
           </ProtectedRoute>
         ),
         children: [
