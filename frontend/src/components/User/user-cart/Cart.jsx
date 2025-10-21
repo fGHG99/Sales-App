@@ -65,7 +65,6 @@ export default function Cart() {
   // Delivery fee state from API
   const [currentDeliveryFee, setCurrentDeliveryFee] = useState(0);
   const [isLoadingDeliveryFee, setIsLoadingDeliveryFee] = useState(true);
-
   // Fetch cart data and addresses on component mount
   useEffect(() => {
     fetchCartData();

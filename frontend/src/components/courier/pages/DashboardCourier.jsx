@@ -84,16 +84,16 @@ const CourierDashboard = () => {
   // }, [refresh]);
 
   // QR Code handlers
-  const handleGenerateQr = async (orderId) => {
-    try {
-      const result = await generateQrCode(orderId);
-      return result;
-    } catch (err) {
-      console.error("Error generating QR code:", err);
-      toast.error(err.response?.data?.message || "Gagal generate QR code");
-      throw err;
-    }
-  };
+  // const handleGenerateQr = async (orderId) => {
+  //   try {
+  //     const result = await generateQrCode(orderId);
+  //     return result;
+  //   } catch (err) {
+  //     console.error("Error generating QR code:", err);
+  //     toast.error(err.response?.data?.message || "Gagal generate QR code");
+  //     throw err;
+  //   }
+  // };
 
   const handleScanSuccess = async (qrCodeString) => {
     try {
@@ -362,72 +362,26 @@ const CourierDashboard = () => {
         null
       ),
 
-    READY_FOR_PICKUP: (order, isUpdating) => (
-      <div className="flex space-x-2">
-        {createNavigateButton(
-          `/courier/store-location/order/${order.id}`,
-          "Navigate to store",
-          MapPin
-        )}
-        {createActionButton(
-          () => handleOrderAction(order.id, "pickup"),
-          isUpdating,
-          "bg-purple-600 hover:bg-purple-700",
-          "Pick Up",
-          Package
-        )}
-      </div>
-    ),
+    READY_FOR_PICKUP: (order, isUpdating) =>
+      createNavigateButton(
+        `/courier/store-location/order/${order.id}`,
+        "Navigate to store",
+        MapPin
+      ),
 
-    OUT_FOR_DELIVERY: (order, isUpdating) => {
-      return (
-        <div className="flex space-x-2">
-          {createNavigateButton(
-            `/courier/customer-location/order/${order.id}`,
-            "Customer",
-            Navigation
-          )}
-          {createActionButton(
-            () => handleOrderAction(order.id, "arrived"),
-            isUpdating,
-            "bg-green-600 hover:bg-green-700",
-            "Mark as Arrived",
-            CheckCircle2
-          )}
-        </div>
-      );
-    },
+    OUT_FOR_DELIVERY: (order, isUpdating) =>
+      createNavigateButton(
+        `/courier/customer-location/order/${order.id}`,
+        "Customer",
+        Navigation
+      ),
 
-    ARRIVED_AT_DESTINATION: (order, isUpdating) => {
-      // ✅ Use Set.has() directly - O(1) lookup, no unnecessary memoization
-      const awaitingProof = awaitingProofOrders.has(order.id);
-
-      return (
-        <div className="flex space-x-2">
-          {createNavigateButton(
-            `/courier/customer-location/order/${order.id}`,
-            "Customer",
-            Navigation
-          )}
-          {/* Show different button based on whether awaiting proof upload */}
-          {awaitingProof
-            ? createUploadProofButton(
-                order.id,
-                "bg-blue-600 hover:bg-blue-700",
-                "Upload Proof",
-                Upload,
-                isUpdating
-              )
-            : createActionButton(
-                () => handleOrderAction(order.id, "DELIVERED"),
-                isUpdating,
-                "bg-purple-600 hover:bg-purple-700",
-                "Mark as Delivered",
-                CheckCircle2
-              )}
-        </div>
-      );
-    },
+    ARRIVED_AT_DESTINATION: (order, isUpdating) =>
+      createNavigateButton(
+        `/courier/customer-location/order/${order.id}`,
+        "Customer",
+        Navigation
+      ),
 
     DELIVERED: (order) => null,
   };

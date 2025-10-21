@@ -11,41 +11,18 @@ import {
   Navigation,
   CheckCircle2,
   Truck,
-  AlertTriangle,
-  X,
-  Loader2,
   Store,
-  RefreshCw,
-  Upload,
 } from "lucide-react";
-import CancelOrderModal from "../modal/CancelOrderModal";
-import UploadDeliveryProofModal from "../modal/UploadDeliveryProofModal";
 import OrderCardSkeleton from "../../skeleton/OrderCardSkeleton";
 import Pagination from "../../Pagination";
-import {
-  getCourierOrders,
-  updateOrderStatus as updateOrderStatusAPI,
-  uploadDeliveryProof as uploadDeliveryProofAPI,
-} from "../../../services/courierService";
-import useAwaitingProofOrders from "../../../hooks/useAwaitingProofOrders";
+import { getCourierOrders } from "../../../services/courierService";
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
-  const [cancelModalOrder, setCancelModalOrder] = useState(null);
-  const [isUploadProofModalOpen, setIsUploadProofModalOpen] = useState(false);
-  const [selectedOrderForProof, setSelectedOrderForProof] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState("active");
-  const [updatingOrder, setUpdatingOrder] = useState(null);
   const [isMounted, setIsMounted] = useState(false); // ✅ Add mounted state
-  // Use custom hook for cross-component synchronization
-  const {
-    awaitingProofOrders,
-    addAwaitingProofOrder,
-    removeAwaitingProofOrder,
-    isAwaitingProof,
-  } = useAwaitingProofOrders();
 
   // ✅ Component mounting detection
   useEffect(() => {
@@ -90,8 +67,12 @@ const OrdersPage = () => {
   const fetchOrders = async (page = 1, filter = "active") => {
     try {
       setIsLoading(true);
+
+      // For "active" tab (All), fetch without filter to get ALL orders
+      const filterParam = filter === "active" ? null : filter;
+
       const response = await getCourierOrders({
-        filter,
+        filter: filterParam,
         page,
         limit: 5,
         enablePagination: true,
@@ -189,227 +170,6 @@ const OrdersPage = () => {
     setCurrentPage(1); // Reset to page 1 when changing tabs
   };
 
-  /**
-   * Update order status via API
-   */
-  const updateOrderStatus = async (orderId, newStatus, notes = "") => {
-    try {
-      const response = await updateOrderStatusAPI(orderId, newStatus, notes);
-
-      // Update local state
-      setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order.id === orderId
-            ? { ...order, status: newStatus, updatedAt: new Date() }
-            : order
-        )
-      );
-
-      // Refresh to get latest data
-      await fetchOrders(currentPage, activeTab);
-
-      return response;
-    } catch (err) {
-      console.error("Error updating order status:", err);
-      const errorMsg =
-        err.response?.data?.message || "Failed to update order status";
-      throw err;
-    }
-  };
-
-  /**
-   * Mark order as picked up (READY_FOR_PICKUP => OUT_FOR_DELIVERY)
-   */
-  const markAsPickedUp = async (orderId) => {
-    return await updateOrderStatus(
-      orderId,
-      "OUT_FOR_DELIVERY",
-      "Paket telah diambil dan sedang dalam perjalanan"
-    );
-  };
-
-  /**
-   * Mark order as arrived at destination
-   * This changes status to ARRIVED_AT_DESTINATION
-   */
-  const markAsArrived = async (orderId) => {
-    try {
-      // ✅ FIX: First update backend status via API
-      await updateOrderStatus(
-        orderId,
-        "ARRIVED_AT_DESTINATION",
-        "Order arrived at destination"
-      );
-
-      // ✅ Only update frontend state after successful API call
-      addAwaitingProofOrder(orderId);
-
-      return { success: true };
-    } catch (err) {
-      console.error("Error marking as arrived:", err);
-      throw err;
-    }
-  };
-
-  /**
-   * Upload delivery proof and change status to DELIVERED
-   * This is the final step that actually completes the delivery
-   */
-  const uploadDeliveryProof = async (orderId, photoFile) => {
-    try {
-      // Upload the photo
-      const response = await uploadDeliveryProofAPI(orderId, photoFile);
-
-      // Remove from awaiting proof set (synced across components)
-      removeAwaitingProofOrder(orderId);
-
-      // Don't update local state here - let refresh handle it
-      return response;
-    } catch (err) {
-      console.error("Error uploading delivery proof:", err);
-      const errorMsg =
-        err.response?.data?.message || "Failed to upload delivery proof";
-      throw err;
-    }
-  };
-
-  /**
-   * Open upload proof modal
-   */
-  const handleOpenUploadModal = (orderId) => {
-    setSelectedOrderForProof(orderId);
-    setIsUploadProofModalOpen(true);
-  };
-
-  /**
-   * Close upload proof modal
-   */
-  const handleCloseUploadModal = () => {
-    setIsUploadProofModalOpen(false);
-    setSelectedOrderForProof(null);
-
-    // Refresh orders after modal closes
-    setTimeout(() => {
-      fetchOrders(currentPage, activeTab);
-    }, 200); // Increased delay to ensure modal is fully unmounted
-  };
-
-  /**
-   * Handle upload from modal
-   * ✅ FIX: Proper async handling with refresh after modal closes
-   */
-  const handleUploadFromModal = async (orderId, file) => {
-    try {
-      setUpdatingOrder(orderId);
-
-      // Upload delivery proof
-      await uploadDeliveryProof(orderId, file);
-
-      // Upload complete, reset state
-      setUpdatingOrder(null);
-
-      // Return success to modal
-    } catch (err) {
-      // Error already handled in uploadDeliveryProof
-      setUpdatingOrder(null);
-      throw err; // Re-throw to let modal know
-    }
-  };
-
-  // Order action configuration map
-  const ACTION_CONFIG = {
-    accept: {
-      status: "IN_PREPARATION",
-      message: "Order accepted successfully!",
-      optimisticOnly: true, // Just optimistic update for now
-    },
-    pickup: {
-      apiCall: markAsPickedUp, // Actual API call
-    },
-    arrived: {
-      apiCall: markAsArrived, // Mark as arrived (awaiting proof)
-    },
-    upload_proof: {
-      // This will be handled via file input
-      requiresFileInput: true,
-    },
-    call_customer: {
-      customHandler: () => {
-        console.log("Calling customer...");
-      },
-    },
-  };
-
-  const handleOrderAction = async (orderId, action) => {
-    const config = ACTION_CONFIG[action];
-
-    if (!config) {
-      console.warn(`Unknown action: ${action}`);
-      return;
-    }
-
-    // Handle custom actions (like call_customer)
-    if (config.customHandler) {
-      config.customHandler();
-      return;
-    }
-
-    try {
-      setUpdatingOrder(orderId);
-
-      // Handle API calls (pickup, complete)
-      if (config.apiCall) {
-        await config.apiCall(orderId);
-        return;
-      }
-
-      // Handle optimistic-only updates (accept)
-      if (config.optimisticOnly) {
-        setOrders((prevOrders) =>
-          prevOrders.map((order) =>
-            order.id === orderId ? { ...order, status: config.status } : order
-          )
-        );
-        // TODO: Call actual backend API for accept when available
-      }
-    } catch (err) {
-      console.error("❌ Failed to update order:", err);
-      // API calls already show toast errors, only handle optimistic updates
-      if (config.optimisticOnly) {
-        fetchOrders(currentPage, activeTab);
-      }
-    } finally {
-      setUpdatingOrder(null);
-    }
-  };
-
-  const handleCancelOrder = async (orderId, cancelData) => {
-    try {
-      // Optimistic UI update
-      setOrders((prevOrders) =>
-        prevOrders.map((order) => {
-          if (order.id === orderId) {
-            return {
-              ...order,
-              status: "CANCELED",
-              cancelReason: cancelData.reasonLabel,
-              cancelNotes: cancelData.notes,
-              cancelledAt: cancelData.timestamp,
-            };
-          }
-          return order;
-        })
-      );
-
-      // TODO: Call actual backend API when available
-      // await api.put(`/orders/${orderId}/cancel`, cancelData);
-    } catch (err) {
-      console.error("❌ Failed to cancel order:", err);
-      // Revert optimistic update on error
-      fetchOrders();
-    }
-  };
-
   const getStatusBadge = (status) => {
     const statusConfig = {
       PENDING: { color: "bg-gray-100 text-gray-800", text: "Pending" },
@@ -443,42 +203,7 @@ const OrdersPage = () => {
     return <Badge className={config.color}>{config.text}</Badge>;
   };
 
-  // Button factory functions for reusable components
-  const createActionButton = (
-    key,
-    onClick,
-    className,
-    Icon,
-    label,
-    isUpdating = false
-  ) => (
-    <Button
-      key={key}
-      onClick={onClick}
-      className={className}
-      disabled={isUpdating}
-    >
-      {isUpdating ? (
-        <>
-          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-          Updating...
-        </>
-      ) : (
-        <>
-          <Icon className="w-4 h-4 mr-2" />
-          {label}
-        </>
-      )}
-    </Button>
-  );
-
-  const createOutlineButton = (key, onClick, className, Icon, label) => (
-    <Button key={key} onClick={onClick} variant="outline" className={className}>
-      <Icon className="w-4 h-4 mr-2" />
-      {label}
-    </Button>
-  );
-
+  // Button factory function for navigation
   const createNavigateButton = (key, to, Icon, label) => (
     <Link key={key} to={to}>
       <Button
@@ -491,142 +216,31 @@ const OrdersPage = () => {
     </Link>
   );
 
-  const createUploadProofButton = (
-    key,
-    orderId,
-    className,
-    Icon,
-    label,
-    isUpdating = false
-  ) => (
-    <Button
-      key={key}
-      onClick={() => handleOpenUploadModal(orderId)}
-      className={className}
-      disabled={isUpdating}
-    >
-      {isUpdating ? (
-        <>
-          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-          Uploading...
-        </>
-      ) : (
-        <>
-          <Icon className="w-4 h-4 mr-2" />
-          {label}
-        </>
-      )}
-    </Button>
-  );
-
   // Order actions configuration map
   const ORDER_ACTIONS_CONFIG = {
-    PENDING: (order, isUpdating) => [
-      createActionButton(
-        "accept",
-        () => handleOrderAction(order.id, "accept"),
-        "bg-blue-600 hover:bg-blue-700",
-        CheckCircle2,
-        "Accept Order",
-        isUpdating
-      ),
-      createOutlineButton(
-        "cancel",
-        () => setCancelModalOrder(order),
-        "border-red-600 text-red-600 hover:bg-red-50",
-        X,
-        "Cancel Order"
-      ),
-    ],
-
-    IN_PREPARATION: (order, isUpdating) => [
+    IN_PREPARATION: (order) =>
       createNavigateButton(
         "navigate-store",
         `/courier/store-location/order/${order.id}`,
         Navigation,
         "Navigate to Store"
       ),
-      createActionButton(
-        "pickup",
-        () => handleOrderAction(order.id, "pickup"),
-        "bg-orange-600 hover:bg-orange-700",
-        Package,
-        "Mark Picked Up",
-        isUpdating
+
+    OUT_FOR_DELIVERY: (order) =>
+      createNavigateButton(
+        "navigate-customer",
+        `/courier/customer-location/order/${order.id}`,
+        Navigation,
+        "Navigate to Customer"
       ),
-      createOutlineButton(
-        "cancel",
-        () => setCancelModalOrder(order),
-        "border-red-600 text-red-600 hover:bg-red-50",
-        X,
-        "Cancel"
+
+    ARRIVED_AT_DESTINATION: (order) =>
+      createNavigateButton(
+        "navigate-customer",
+        `/courier/customer-location/order/${order.id}`,
+        Navigation,
+        "Navigate to Customer"
       ),
-    ],
-
-    OUT_FOR_DELIVERY: (order, isUpdating) => {
-      return [
-        createNavigateButton(
-          "navigate-customer",
-          `/courier/customer-location/order/${order.id}`,
-          Navigation,
-          "Navigate to Customer"
-        ),
-        createOutlineButton(
-          "call",
-          () => handleOrderAction(order.id, "call_customer"),
-          "border-gray-600 text-gray-600 hover:bg-gray-50",
-          Phone,
-          "Call Customer"
-        ),
-        createActionButton(
-          "arrived",
-          () => handleOrderAction(order.id, "arrived"),
-          "bg-green-600 hover:bg-green-700",
-          CheckCircle2,
-          "Mark as Arrived",
-          isUpdating
-        ),
-      ];
-    },
-
-    ARRIVED_AT_DESTINATION: (order, isUpdating) => {
-      // ✅ Use Set.has() directly - O(1) lookup, no unnecessary memoization
-      const awaitingProof = awaitingProofOrders.has(order.id);
-
-      return [
-        createNavigateButton(
-          "navigate-customer",
-          `/courier/customer-location/order/${order.id}`,
-          Navigation,
-          "Navigate to Customer"
-        ),
-        createOutlineButton(
-          "call",
-          () => handleOrderAction(order.id, "call_customer"),
-          "border-gray-600 text-gray-600 hover:bg-gray-50",
-          Phone,
-          "Call Customer"
-        ),
-        // Show different button based on whether awaiting proof upload
-        awaitingProof
-          ? createUploadProofButton(
-              "upload-proof",
-              order.id,
-              "bg-blue-600 hover:bg-blue-700",
-              Upload,
-              "Upload Proof",
-              isUpdating
-            )
-          : createActionButton(
-              "delivered",
-              () => handleOrderAction(order.id, "delivered"),
-              "bg-purple-600 hover:bg-purple-700",
-              CheckCircle2,
-              "Mark as Delivered",
-              isUpdating
-            ),
-      ];
-    },
   };
 
   // Assign shared configurations
@@ -640,9 +254,8 @@ const OrdersPage = () => {
       return [];
     }
 
-    const isUpdating = updatingOrder === order.id;
     const actionsFactory = ORDER_ACTIONS_CONFIG[order.status];
-    return actionsFactory ? actionsFactory(order, isUpdating) : [];
+    return actionsFactory ? actionsFactory(order) : [];
   };
 
   const OrderCard = ({ order }) => (
@@ -845,10 +458,10 @@ const OrdersPage = () => {
                 <div className="text-center py-12">
                   <Package className="h-16 w-16 mx-auto text-gray-300 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No Active Orders
+                    No Orders
                   </h3>
                   <p className="text-gray-600">
-                    All your orders are completed. Great job!
+                    You have no orders at the moment.
                   </p>
                 </div>
               )}
@@ -871,7 +484,7 @@ const OrdersPage = () => {
               ))}
               {orders.length === 0 && (
                 <div className="text-center py-12">
-                  <AlertTriangle className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                  <Package className="h-16 w-16 mx-auto text-gray-300 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
                     No Pending Orders
                   </h3>
@@ -1027,22 +640,6 @@ const OrdersPage = () => {
           </TabsContent>
         </Tabs>
       )}
-
-      {/* Cancel Order Modal */}
-      <CancelOrderModal
-        isOpen={!!cancelModalOrder}
-        onClose={() => setCancelModalOrder(null)}
-        order={cancelModalOrder}
-        onConfirm={handleCancelOrder}
-      />
-
-      {/* Upload Delivery Proof Modal */}
-      <UploadDeliveryProofModal
-        isOpen={isUploadProofModalOpen}
-        onClose={handleCloseUploadModal}
-        orderId={selectedOrderForProof}
-        onUploadSuccess={handleUploadFromModal}
-      />
     </div>
   );
 };

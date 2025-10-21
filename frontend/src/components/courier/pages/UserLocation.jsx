@@ -11,10 +11,17 @@ import {
   AlertCircle,
   RefreshCw,
   CheckCircle2,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../../../utils/api";
 import CourierNavigationMap from "../maps/CourierNavigationMap";
+import UploadDeliveryProofModal from "../modal/UploadDeliveryProofModal";
+import useAwaitingProofOrders from "../../../hooks/useAwaitingProofOrders";
+import {
+  updateOrderStatus as updateOrderStatusAPI,
+  uploadDeliveryProof as uploadDeliveryProofAPI,
+} from "../../../services/courierService";
 
 /**
  * User Location Page - Courier Navigation to Customer
@@ -28,6 +35,15 @@ const UserLocation = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasArrived, setHasArrived] = useState(false); // ✅ Track arrival state
+  const [updatingOrder, setUpdatingOrder] = useState(false);
+  const [isUploadProofModalOpen, setIsUploadProofModalOpen] = useState(false);
+
+  // Use custom hook for cross-component synchronization
+  const {
+    awaitingProofOrders,
+    addAwaitingProofOrder,
+    removeAwaitingProofOrder,
+  } = useAwaitingProofOrders();
 
   /**
    * Fetch order details
@@ -83,6 +99,114 @@ const UserLocation = () => {
         "Navigasi akan otomatis berhenti dalam 3 detik. Silakan hubungi customer untuk pengiriman paket.",
       duration: 6000,
     });
+  };
+
+  /**
+   * Fetch fresh order data
+   */
+  const refreshOrderData = async () => {
+    try {
+      const response = await api.get(`/orders/detail/${orderId}`);
+      if (response.data?.order) {
+        setOrder(response.data.order);
+      }
+    } catch (err) {
+      console.error("Error refreshing order data:", err);
+    }
+  };
+
+  /**
+   * Mark order as arrived at destination
+   * This changes status to ARRIVED_AT_DESTINATION
+   */
+  const markAsArrived = async () => {
+    try {
+      setUpdatingOrder(true);
+
+      // Update backend status via API
+      await updateOrderStatusAPI(
+        orderId,
+        "ARRIVED_AT_DESTINATION",
+        "Order arrived at destination"
+      );
+
+      // Update frontend state after successful API call
+      addAwaitingProofOrder(orderId);
+
+      // Refresh order data to get updated status
+      await refreshOrderData();
+
+      toast.success(
+        "Order marked as arrived. Please upload delivery proof to complete."
+      );
+
+      return { success: true };
+    } catch (err) {
+      console.error("Error marking as arrived:", err);
+      toast.error("Failed to mark order as arrived");
+      throw err;
+    } finally {
+      setUpdatingOrder(false);
+    }
+  };
+
+  /**
+   * Upload delivery proof and change status to DELIVERED
+   */
+  const uploadDeliveryProof = async (photoFile) => {
+    try {
+      setUpdatingOrder(true);
+
+      // Upload the photo
+      const response = await uploadDeliveryProofAPI(orderId, photoFile);
+
+      // Remove from awaiting proof set (synced across components)
+      removeAwaitingProofOrder(orderId);
+
+      // Refresh order data
+      await refreshOrderData();
+
+      toast.success("Delivery proof uploaded successfully!");
+
+      return response;
+    } catch (err) {
+      console.error("Error uploading delivery proof:", err);
+      const errorMsg =
+        err.response?.data?.message || "Failed to upload delivery proof";
+      toast.error(errorMsg);
+      throw err;
+    } finally {
+      setUpdatingOrder(false);
+    }
+  };
+
+  /**
+   * Open upload proof modal
+   */
+  const handleOpenUploadModal = () => {
+    setIsUploadProofModalOpen(true);
+  };
+
+  /**
+   * Close upload proof modal
+   */
+  const handleCloseUploadModal = () => {
+    setIsUploadProofModalOpen(false);
+  };
+
+  /**
+   * Handle upload from modal
+   */
+  const handleUploadFromModal = async (orderIdParam, file) => {
+    try {
+      // Upload delivery proof
+      await uploadDeliveryProof(file);
+
+      // Return success to modal
+      return Promise.resolve();
+    } catch (err) {
+      throw err;
+    }
   };
 
   if (isLoading) {
@@ -167,9 +291,10 @@ const UserLocation = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Navigation Map - Only show when OUT_FOR_DELIVERY */}
+        {/* Navigation Map - Available for OUT_FOR_DELIVERY and ARRIVED_AT_DESTINATION */}
         <div className="lg:col-span-2">
-          {order.orderStatus === "OUT_FOR_DELIVERY" ? (
+          {order.orderStatus === "OUT_FOR_DELIVERY" ||
+          order.orderStatus === "ARRIVED_AT_DESTINATION" ? (
             <CourierNavigationMap
               destination={{
                 latitude: order.deliveryAddress.latitude,
@@ -327,27 +452,94 @@ const UserLocation = () => {
             </CardContent>
           </Card>
 
-          {/* Order Status */}
+          {/* Action & Status */}
           <Card>
-            <CardContent className="pt-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Action & Status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Status Order</span>
                 <Badge
                   className={
                     order.orderStatus === "OUT_FOR_DELIVERY"
                       ? "bg-purple-100 text-purple-800"
+                      : order.orderStatus === "ARRIVED_AT_DESTINATION"
+                      ? "bg-blue-100 text-blue-800"
+                      : order.orderStatus === "DELIVERED"
+                      ? "bg-green-100 text-green-800"
                       : "bg-orange-100 text-orange-800"
                   }
                 >
                   {order.orderStatus === "OUT_FOR_DELIVERY"
                     ? "Dalam Perjalanan"
+                    : order.orderStatus === "ARRIVED_AT_DESTINATION"
+                    ? "Tiba di Lokasi"
+                    : order.orderStatus === "DELIVERED"
+                    ? "Terkirim"
                     : order.orderStatus}
                 </Badge>
               </div>
+
+              {/* Action Buttons - Conditional based on status */}
+              {order.orderStatus === "OUT_FOR_DELIVERY" && (
+                <Button
+                  onClick={markAsArrived}
+                  disabled={updatingOrder}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  {updatingOrder ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Mark as Arrived
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {order.orderStatus === "ARRIVED_AT_DESTINATION" &&
+                awaitingProofOrders.has(orderId) && (
+                  <Button
+                    onClick={handleOpenUploadModal}
+                    disabled={updatingOrder}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    {updatingOrder ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Proof
+                      </>
+                    )}
+                  </Button>
+                )}
+
+              {order.orderStatus === "DELIVERED" && (
+                <div className="text-center text-sm text-green-700 bg-green-50 p-3 rounded-lg">
+                  ✓ Delivery completed successfully
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Upload Delivery Proof Modal */}
+      <UploadDeliveryProofModal
+        isOpen={isUploadProofModalOpen}
+        onClose={handleCloseUploadModal}
+        orderId={orderId}
+        onUploadSuccess={handleUploadFromModal}
+      />
     </div>
   );
 };

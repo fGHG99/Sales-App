@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
@@ -21,6 +22,7 @@ const CourierSearchModal = ({
   province,
   checkoutData, // Add checkoutData prop to trigger actual API call
 }) => {
+  const navigate = useNavigate();
   const [searchStatus, setSearchStatus] = useState("searching"); // searching, found, error
   const [courierData, setCourierData] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -121,6 +123,7 @@ const CourierSearchModal = ({
       onError({ message: errorMessage });
     }
     onClose();
+    navigate("/user/orders");
   };
 
   const handleRetry = () => {
@@ -266,11 +269,6 @@ const CourierSearchModal = ({
                     </span>
                     <span className="text-sm text-gray-900">
                       {courierData.vehicleType}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">
-                      Estimasi:
                     </span>
                   </div>
                 </div>

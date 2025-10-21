@@ -10,7 +10,7 @@ export const usePromotionalImages = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const BE_URL = import.meta.env.VITE_BE_API_URL || "";
+  const BE_URL = import.meta.env.VITE_BE_API_URL;
 
   const fetchImages = async () => {
     try {
