@@ -479,7 +479,9 @@ router.get("/courier", authenticate, async (req, res) => {
  * POST /orders/:orderId/delivery-proof
  *
  * Courier uploads photo of delivered package at customer's address
- * This is required before marking order as COMPLETED
+ * Uses Prisma transaction to ensure atomic operations:
+ * 1. Update order to DELIVERED with delivery proof
+ * 2. Trigger grace period transition
  */
 router.post(
   "/:orderId/delivery-proof",
@@ -528,12 +530,12 @@ router.post(
         });
       }
 
-      // Only allow upload when status is OUT_FOR_DELIVERY
+      // Only allow upload when status is ARRIVED_AT_DESTINATION
       if (order.orderStatus !== "ARRIVED_AT_DESTINATION") {
         // Delete uploaded file
         fs.unlinkSync(req.file.path);
         return res.status(400).json({
-          message: `Cannot upload delivery proof. Order status must be OUT_FOR_DELIVERY (current: ${order.orderStatus})`,
+          message: `Cannot upload delivery proof. Order status must be ARRIVED_AT_DESTINATION (current: ${order.orderStatus})`,
         });
       }
 
@@ -548,61 +550,75 @@ router.post(
       // Save file path to database (relative path)
       const filePath = `/uploads/delivery-proofs/${req.file.filename}`;
 
-      const updatedOrder = await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          deliveryProof: filePath,
-          orderStatus: "ARRIVED_AT_DESTINATION",
-        },
-        include: {
-          courier: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
+      // Use Prisma transaction to ensure atomic operations
+      const result = await prisma.$transaction(async (trx) => {
+        // Update order status to DELIVERED and save delivery proof
+        const updatedOrder = await trx.order.update({
+          where: { id: orderId },
+          data: {
+            deliveryProof: filePath,
+            orderStatus: "DELIVERED",
+            paymentStatus: "COMPLETED",
+            updatedAt: new Date(),
+          },
+          include: {
+            courier: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+              },
+            },
+            deliveryAddress: true,
+          },
+        });
+
+        // Create notification for customer
+        const notification = await trx.notification.create({
+          data: {
+            userId: order.userId,
+            type: "ORDER",
+            title: "Pesanan Telah Diterima",
+            message: `Kurir telah mengunggah foto bukti pengiriman. Pesanan Anda telah diterima.`,
+            metadata: {
+              orderId: order.id,
+              deliveryProof: filePath,
+              courierName: order.courier?.name,
+              orderStatus: "DELIVERED",
             },
           },
-          deliveryAddress: true,
-        },
+        });
+
+        return { updatedOrder, notification };
       });
 
-      // Audit log untuk upload delivery proof
+      // Audit log untuk upload delivery proof (outside transaction)
       logUpdate(
         "Order",
         orderId,
-        { orderStatus: "OUT_FOR_DELIVERY" },
+        {
+          orderStatus: "ARRIVED_AT_DESTINATION",
+          paymentStatus: order.paymentStatus,
+        },
         {
           deliveryProof: filePath,
-          orderStatus: "ARRIVED_AT_DESTINATION",
+          orderStatus: "DELIVERED",
+          paymentStatus: "COMPLETED",
         },
         courierId
       );
-
-      // Create notification for customer
-      const notification = await prisma.notification.create({
-        data: {
-          userId: order.userId,
-          type: "ORDER",
-          title: "Pesanan Telah Sampai",
-          message: `Kurir telah mengunggah foto bukti pengiriman. Pesanan Anda telah sampai di tujuan.`,
-          metadata: {
-            orderId: order.id,
-            deliveryProof: filePath,
-            courierName: order.courier?.name,
-            orderStatus: "ARRIVED_AT_DESTINATION",
-          },
-        },
-      });
 
       // Send real-time notification to customer
       try {
         const io = getIO();
         if (io) {
           io.to(`user:${order.userId}`).emit("delivery-proof-uploaded", {
-            notification,
+            notification: result.notification,
             order: {
-              id: updatedOrder.id,
-              deliveryProof: updatedOrder.deliveryProof,
+              id: result.updatedOrder.id,
+              deliveryProof: result.updatedOrder.deliveryProof,
+              orderStatus: result.updatedOrder.orderStatus,
+              paymentStatus: result.updatedOrder.paymentStatus,
             },
           });
           console.log(
@@ -613,14 +629,45 @@ router.post(
         console.warn("Socket emit failed:", emitErr?.message);
       }
 
+      // Trigger grace period transition after successful delivery
+      // This runs outside transaction to avoid blocking the response
+      try {
+        // Set timeout untuk auto-transition ke GRACE_PERIOD
+        // Note: 30 detik untuk testing, production should be 3 hours (3 * 60 * 60 * 1000)
+        setTimeout(async () => {
+          try {
+            await setOrderToGracePeriod(orderId, courierId);
+            console.log(
+              `✅ Order ${orderId} automatically transitioned to GRACE_PERIOD after delivery`
+            );
+          } catch (gracePeriodError) {
+            console.error(
+              `❌ Error transitioning order ${orderId} to GRACE_PERIOD:`,
+              gracePeriodError
+            );
+          }
+        }, 30 * 1000); // 30 seconds for testing (production: 3 * 60 * 60 * 1000 = 3 hours)
+
+        console.log(
+          `⏰ Grace period timer set for order ${orderId} (will transition in 30 seconds for testing)`
+        );
+      } catch (timerError) {
+        console.error(
+          `❌ Error setting grace period timer for order ${orderId}:`,
+          timerError
+        );
+        // Don't fail the request, just log the error
+      }
+
       return res.status(200).json({
         message:
-          "Delivery proof uploaded successfully. Order status updated to ARRIVED_AT_DESTINATION",
+          "Delivery proof uploaded successfully. Order status updated to DELIVERED",
         order: {
-          id: updatedOrder.id,
-          deliveryProof: updatedOrder.deliveryProof,
-          orderStatus: updatedOrder.orderStatus,
-          updatedAt: updatedOrder.updatedAt,
+          id: result.updatedOrder.id,
+          deliveryProof: result.updatedOrder.deliveryProof,
+          orderStatus: result.updatedOrder.orderStatus,
+          paymentStatus: result.updatedOrder.paymentStatus,
+          updatedAt: result.updatedOrder.updatedAt,
         },
       });
     } catch (error) {
